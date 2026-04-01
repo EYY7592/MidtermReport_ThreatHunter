@@ -97,7 +97,7 @@ ThreatHunter:
 | LLM | Llama 3.3 70B via vLLM on AMD Cloud |
 | Threat Data | NVD API, AlienVault OTX |
 | Risk Validation | CISA KEV, GitHub Exploit DB |
-| Memory | JSON-based persistent storage |
+| Memory & Learning | JSON-based persistent storage |
 | UI | Streamlit |
 | Methodology | Harness Engineering (OpenAI) |
 
@@ -212,7 +212,7 @@ ThreatHunter：
 | LLM | Llama 3.3 70B，透過 vLLM 部署於 AMD Cloud |
 | 威脅資料 | NVD API、AlienVault OTX |
 | 風險驗證 | CISA KEV、GitHub Exploit DB |
-| 記憶系統 | JSON 持久化儲存 |
+| 記憶學習系統 | JSON 持久化儲存 |
 | 介面 | Streamlit |
 | 開發方法論 | Harness Engineering（OpenAI） |
 
