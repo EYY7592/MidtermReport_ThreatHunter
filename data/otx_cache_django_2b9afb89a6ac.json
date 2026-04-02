@@ -1,0 +1,79 @@
+{
+  "package": "django",
+  "source": "OTX",
+  "pulse_count": 10,
+  "threat_level": "inactive",
+  "pulses": [
+    {
+      "name": "Malicious sites  from .cc",
+      "description": "Hosted in the Cocos Islands USA.CC is a new player who provides free US-friendly domains through a clean, Django-powered interface. USA.cc and .de sites",
+      "created": "2018-12-21",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "Threat Actor “Cold River”: Network Traffic Analysis and a Deep Dive on Agent Drable | Lastline",
+      "description": "The campaign targets Middle Eastern organizations largely from the Lebanon and United Arab Emirates, though, Indian and Canadian companies with interests in those Middle Eastern countries are also targeted. There are new TTPs used in this attack – for example Agent_Drable is leveraging the Django py",
+      "created": "2019-01-13",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "Crypto Mining Pool Hostnames",
+      "description": "",
+      "created": "2020-08-28",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "Malware - Malware Domain Feed V2 - November 03 2020",
+      "description": "Command and Control domains for Malware. These domains are extracted from a number of sources, and are suspicious.",
+      "created": "2020-11-03",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "Malware - Malware Domain Feed V2 - November 03 2020",
+      "description": "Command and Control domains for Malware. These domains are extracted from a number of sources, and are suspicious.",
+      "created": "2020-11-03",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "ACTUALIZACIÓN DE SEGURIDAD DE RED HAT OPENSTACK PLATFORM 16.1 (PYTHON-DJANGO20)",
+      "description": "Una actualización para python-django20 ahora está disponible para Red Hat OpenStack\nPlatform 16.1 (Train).",
+      "created": "2021-12-11",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "Django Multiple Vulnerabilities",
+      "description": "Two vulnerabilities have been identified in Django {Python-based open-source web framework}, leading to XSS and DoS attacks.\n\nHow it can be Exploited\nCVE-2022-22818: The cross-site scripting vulnerability exists in Django due to improper validation of user-supplied input.\n\nCVE-2022-23833: The denial",
+      "created": "2022-02-03",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "Crowdstrike - ewe",
+      "description": "",
+      "created": "2022-02-15",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "CrowdStriken it hard",
+      "description": "",
+      "created": "2022-02-15",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "donaldtrump.digital",
+      "description": "",
+      "created": "2022-03-01",
+      "tags": [],
+      "indicator_count": 0
+    }
+  ],
+  "_cached_at": 1775159708.4836395
+}

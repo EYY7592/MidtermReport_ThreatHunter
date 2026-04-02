@@ -1,0 +1,18 @@
+{
+  "package": "mock_pkg_ok",
+  "source": "OTX",
+  "pulse_count": 1,
+  "threat_level": "active",
+  "pulses": [
+    {
+      "name": "Test Pulse",
+      "description": "test",
+      "created": "2026-03-23",
+      "tags": [
+        "test"
+      ],
+      "indicator_count": 1
+    }
+  ],
+  "_cached_at": 1775163153.1748817
+}
