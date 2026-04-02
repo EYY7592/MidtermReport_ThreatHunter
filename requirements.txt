@@ -17,6 +17,13 @@ requests>=2.31.0,<3.0.0
 # ── 資料驗證 ────────────────────────────────────────────────
 jsonschema>=4.17.0,<5.0.0
 
+# ── LlamaIndex RAG（Layer 2 記憶學習：語義搜尋歷史報告）──────
+llama-index-core>=0.12.0,<1.0.0
+llama-index-embeddings-huggingface>=0.5.0,<1.0.0
+
+# ── 向量約束（Embedding 禁區偵測，Constraints 支柱）──────────
+sentence-transformers>=3.0.0,<4.0.0
+
 # ── 測試 ────────────────────────────────────────────────────
 pytest>=7.4.0,<9.0.0
 
