@@ -1,2 +1,2 @@
-# tools/__init__.py
-# 工具模組初始化
+# ThreatHunter Tools 模組
+# CrewAI @tool 裝飾器函式集合

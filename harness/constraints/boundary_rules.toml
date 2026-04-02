@@ -1,0 +1,41 @@
+# ThreatHunter Harness Engineering 邊界規則定義
+# 嚴格層次邊界 — 用 AST Linter 機械性強制，非 prompt 依賴
+#
+# 遵循文件：HARNESS_ENGINEERING.md §5（柱 2：架構約束）
+
+[meta]
+mode = "strict"
+version = "1.0.0"
+description = "ThreatHunter 嚴格層次邊界規則"
+created_at = "2026-04-03"
+
+# ── Harness 三柱邊界 ─────────────────────────────────────────
+
+[[layers]]
+name = "context"
+path_pattern = "harness/context"
+level = 1
+description = "柱 1：情境工程（最底層）— AGENTS.md 解析 + 文件索引"
+forbidden_imports_from = [
+    "harness.constraints",
+    "harness.entropy",
+]
+severity = "error"
+
+[[layers]]
+name = "constraints"
+path_pattern = "harness/constraints"
+level = 2
+description = "柱 2：架構約束 — AST Linter + 邊界規則"
+forbidden_imports_from = [
+    "harness.entropy",
+]
+severity = "error"
+
+[[layers]]
+name = "entropy"
+path_pattern = "harness/entropy"
+level = 3
+description = "柱 3：熵防管理（最高層）— 掃描 + UNTIL CLEAN"
+forbidden_imports_from = []
+severity = "error"

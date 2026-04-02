@@ -1,2 +1,2 @@
-# agents/__init__.py
-# Agent 模組初始化
+# ThreatHunter Agents 模組
+# CrewAI Agent 定義

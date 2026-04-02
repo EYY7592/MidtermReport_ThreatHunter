@@ -1,18 +1,26 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
+*$py.class
+*.so
 *.egg-info/
 dist/
 build/
+*.egg
 
 # 虛擬環境
 .venv/
 venv/
 env/
 
-# 環境變數（含 API Key，不上傳）
+# 環境變數（敏感資訊）
 .env
+
+# 記憶資料（執行時產生）
+memory/*.json
+memory/vector_store/*
+!memory/.gitkeep
+!memory/vector_store/.gitkeep
 
 # IDE
 .vscode/
@@ -20,13 +28,12 @@ env/
 *.swp
 *.swo
 
+# pytest
+.pytest_cache/
+
 # OS
 .DS_Store
 Thumbs.db
 
-# pytest
-.pytest_cache/
-
-# logs
-logs/
-*.log
+# Antigravity
+.gemini/

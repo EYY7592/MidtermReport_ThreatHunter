@@ -1,296 +1,234 @@
-# tools/memory_tool.py
-# 功能：雙層記憶學習系統（JSON 穩底 + LlamaIndex RAG 增值）
-# Harness 支柱：Feedback Loops（回饋閉環）+ Graceful Degradation（降級）
-# 擁有者：組長
-#
-# 使用方式（成員 B、C 直接 import）：
-#   from tools.memory_tool import read_memory, write_memory
-#
-# 雙層設計原理（見 FINAL_PLAN.md 支柱 3）：
-#   Layer 1: JSON 持久化 — Day 1 起可用，精確取值，絕不出錯
-#   Layer 2: LlamaIndex RAG — 第 3+ 次掃描展示語義搜尋能力
-#   寫入時「雙寫」：JSON + LlamaIndex 同時寫入
-#   讀取時「JSON 保底」：即使 LlamaIndex 掛掉，JSON 一定有結果
+"""
+ThreatHunter 雙層記憶學習 Tool
+==============================
+
+Layer 1: JSON 持久化（穩定保底，Day 1 起可用）
+Layer 2: LlamaIndex RAG（語義搜尋，ENABLE_MEMORY_RAG=true 啟用）
+
+遵循文件：
+  - FINAL_PLAN.md §支柱 3（Feedback Loops：雙層記憶學習系統）
+  - leader_plan.md §記憶學習系統
+"""
 
 import json
-import os
 import logging
-from datetime import datetime
+from pathlib import Path
+from datetime import datetime, timezone
+from typing import Any
 
-logger = logging.getLogger("ThreatHunter")
+from crewai.tools import tool
 
-# ── 常數 ────────────────────────────────────────────────────
-MEMORY_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "memory")
-VECTOR_STORE_DIR = os.path.join(MEMORY_DIR, "vector_store")
-MAX_HISTORY = 10  # 保留最近 10 次掃描記錄
-RAG_SIMILARITY_THRESHOLD = 0.3  # 語義搜尋最低相關度閾值
+from config import MEMORY_DIR, ENABLE_MEMORY_RAG, SIMILARITY_THRESHOLD
 
+logger = logging.getLogger("threathunter.memory")
 
-def _get_memory_path(agent_name: str) -> str:
-    """取得 memory 檔案路徑，同時確保目錄存在"""
-    os.makedirs(MEMORY_DIR, exist_ok=True)
-    return os.path.join(MEMORY_DIR, f"{agent_name}_memory.json")
+# ── 常數 ─────────────────────────────────────────────────────
+VALID_AGENT_NAMES = {"scout", "analyst", "advisor", "critic"}
 
 
-# ══════════════════════════════════════════════════════════════
-# Layer 1: JSON 持久化（穩定保底，Day 1 起可用）
-# ══════════════════════════════════════════════════════════════
+# ── Layer 1: JSON 持久化工具函式 ─────────────────────────────
+def _get_memory_path(agent_name: str) -> Path:
+    """取得指定 Agent 的記憶 JSON 路徑"""
+    return MEMORY_DIR / f"{agent_name}_memory.json"
 
-def _read_memory_impl(agent_name: str) -> str:
-    """
-    讀取指定 Agent 的歷史記憶（Layer 1: JSON），回傳 JSON 字串。
 
-    保證：
-      - 檔案不存在 → "{}"
-      - 檔案損壞 → "{}"（Graceful Degradation）
-      - 絕對不會拋出例外
-    """
-    path = _get_memory_path(agent_name)
+def _load_json(path: Path) -> dict:
+    """安全載入 JSON，檔案不存在或損壞時回傳空 dict"""
+    if not path.exists():
+        return {}
     try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if not content:
-                    return "{}"
-                json.loads(content)  # 驗證合法 JSON
-                return content
-        return "{}"
-    except (json.JSONDecodeError, IOError, PermissionError):
-        return "{}"
+        content = path.read_text(encoding="utf-8")
+        if not content.strip():
+            return {}
+        return json.loads(content)
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"記憶檔案讀取失敗 {path}: {e}，回傳空記憶")
+        return {}
 
 
-def _write_memory_impl(agent_name: str, data: str) -> str:
-    """
-    寫入指定 Agent 的記憶（雙寫：JSON + LlamaIndex）。
-
-    流程：
-      1. 驗證 JSON 格式
-      2. 寫入 Layer 1（JSON 檔案）← 保底，必須成功
-      3. 寫入 Layer 2（LlamaIndex）← 增值，失敗不影響
-    """
-    path = _get_memory_path(agent_name)
+def _save_json(path: Path, data: dict) -> None:
+    """安全寫入 JSON（先寫臨時檔再 rename，防止寫入中斷導致損壞）"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_suffix(".tmp")
     try:
-        new_entry = json.loads(data)
-        new_entry["timestamp"] = datetime.now().isoformat()
-        new_entry["agent"] = agent_name
-
-        # ── Layer 1: JSON 寫入（必須成功）──────────────────
-        existing = {}
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    existing = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                existing = {}  # 損壞 → 清空重建
-
-        existing["latest"] = new_entry
-        if "history" not in existing:
-            existing["history"] = []
-        existing["history"].append(new_entry)
-
-        if len(existing["history"]) > MAX_HISTORY:
-            existing["history"] = existing["history"][-MAX_HISTORY:]
-
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(existing, f, ensure_ascii=False, indent=2)
-
-        # ── Layer 2: LlamaIndex 雙寫（增值，失敗不影響）────
-        _write_to_vector_store(agent_name, new_entry)
-
-        return "Memory saved successfully"
-
-    except json.JSONDecodeError as e:
-        return f"Memory save failed: invalid JSON - {e}"
-    except (IOError, PermissionError) as e:
-        return f"Memory save failed: file error - {e}"
-    except Exception as e:
-        return f"Memory save failed: {e}"
-
-
-# ══════════════════════════════════════════════════════════════
-# Layer 2: LlamaIndex RAG（增值層，越用越好）
-# ══════════════════════════════════════════════════════════════
-#
-# 為什麼不能只用 LlamaIndex？（Cold Start 問題）
-#   0 份歷史 → 引擎報錯或回傳空值（致命！Demo 直接掛）
-#   1 份歷史 → 語義搜尋無統計意義
-#   所以 JSON 必須保底，LlamaIndex 只是增值
-
-_vector_indices = {}  # 快取：{agent_name: VectorStoreIndex}
-
-
-def _get_vector_index(agent_name: str):
-    """
-    取得或建立指定 Agent 的 LlamaIndex 向量索引。
-
-    安全閥：
-      - LlamaIndex 未安裝 → 回傳 None
-      - 索引建立失敗 → 回傳 None
-      - 絕不影響 Layer 1 運作
-    """
-    if agent_name in _vector_indices:
-        return _vector_indices[agent_name]
-
-    try:
-        from llama_index.core import (
-            VectorStoreIndex,
-            StorageContext,
-            load_index_from_storage,
+        temp_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
+        temp_path.replace(path)
+    except OSError as e:
+        logger.error(f"記憶檔案寫入失敗 {path}: {e}")
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
 
-        agent_store_dir = os.path.join(VECTOR_STORE_DIR, agent_name)
 
-        if os.path.exists(os.path.join(agent_store_dir, "docstore.json")):
-            # 已有持久化索引 → 載入
-            storage_context = StorageContext.from_defaults(persist_dir=agent_store_dir)
-            index = load_index_from_storage(storage_context)
-            logger.info(f"✅ Layer 2: 載入 {agent_name} 向量索引")
+# ── Layer 2: LlamaIndex RAG（條件性啟用）─────────────────────
+_rag_index = None
+_rag_query_engine = None
+
+
+def _init_rag() -> None:
+    """延遲初始化 LlamaIndex RAG（只在第一次呼叫時執行）"""
+    global _rag_index, _rag_query_engine
+
+    if not ENABLE_MEMORY_RAG:
+        return
+    if _rag_index is not None:
+        return
+
+    try:
+        from llama_index.core import VectorStoreIndex, StorageContext
+        from llama_index.core import load_index_from_storage
+
+        vector_store_path = MEMORY_DIR / "vector_store"
+
+        if (vector_store_path / "docstore.json").exists():
+            storage_context = StorageContext.from_defaults(
+                persist_dir=str(vector_store_path)
+            )
+            _rag_index = load_index_from_storage(storage_context)
+            logger.info("✅ LlamaIndex 向量索引已載入")
         else:
-            # 全新索引
-            index = VectorStoreIndex([])
-            os.makedirs(agent_store_dir, exist_ok=True)
-            logger.info(f"✅ Layer 2: 建立 {agent_name} 新向量索引")
+            _rag_index = VectorStoreIndex([])
+            logger.info("✅ LlamaIndex 向量索引已建立（空）")
 
-        _vector_indices[agent_name] = index
-        return index
+        _rag_query_engine = _rag_index.as_query_engine(similarity_top_k=3)
 
     except ImportError:
-        logger.info("ℹ️ LlamaIndex 未安裝，Layer 2 停用（JSON 保底）")
-        _vector_indices[agent_name] = None
-        return None
+        logger.warning("⚠️ LlamaIndex 未安裝，RAG 功能停用")
     except Exception as e:
-        logger.warning(f"⚠️ Layer 2 索引載入失敗：{e}（JSON 保底）")
-        _vector_indices[agent_name] = None
-        return None
+        logger.warning(f"⚠️ LlamaIndex 初始化失敗：{e}")
 
 
-def _write_to_vector_store(agent_name: str, entry: dict):
-    """
-    將記憶條目寫入 LlamaIndex 向量索引（雙寫的 Layer 2 部分）。
-    失敗時靜默記錄 log，不影響主流程。
-    """
-    index = _get_vector_index(agent_name)
-    if index is None:
-        return  # Layer 2 停用，靜默跳過
-
+def _rag_insert(agent_name: str, data: dict) -> None:
+    """將資料插入 LlamaIndex 向量索引（雙寫的 Layer 2）"""
+    if not ENABLE_MEMORY_RAG or _rag_index is None:
+        return
     try:
         from llama_index.core import Document
 
-        # 將 dict 轉成有意義的文件文字（Agent 語義搜尋用）
-        text = json.dumps(entry, ensure_ascii=False, indent=2)
         doc = Document(
-            text=text,
+            text=json.dumps(data, ensure_ascii=False),
             metadata={
                 "agent": agent_name,
-                "timestamp": entry.get("timestamp", ""),
+                "timestamp": data.get("timestamp", ""),
+                "scan_id": data.get("scan_id", ""),
             },
         )
-        index.insert(doc)
-
-        # 持久化到磁碟
-        agent_store_dir = os.path.join(VECTOR_STORE_DIR, agent_name)
-        os.makedirs(agent_store_dir, exist_ok=True)
-        index.storage_context.persist(persist_dir=agent_store_dir)
-
+        _rag_index.insert(doc)
+        vector_store_path = MEMORY_DIR / "vector_store"
+        _rag_index.storage_context.persist(persist_dir=str(vector_store_path))
+        logger.info(f"✅ RAG 索引已更新：{agent_name}")
     except Exception as e:
-        # Graceful Degradation：Layer 2 寫入失敗不影響主流程
-        logger.warning(f"⚠️ Layer 2 寫入失敗（{agent_name}）：{e}")
+        logger.warning(f"⚠️ RAG 寫入失敗（不影響 JSON 層）：{e}")
 
 
-def _search_history_impl(agent_name: str, query: str) -> str:
-    """
-    語義搜尋歷史報告（Layer 2: LlamaIndex RAG）。
+def _rag_search(query: str) -> str:
+    """語義搜尋（帶安全閥）"""
+    if not ENABLE_MEMORY_RAG:
+        return "RAG 功能未啟用（ENABLE_MEMORY_RAG=false）"
 
-    安全閥設計（避免 Cold Start）：
-      - 0 份文件 → 回傳 "No history available"
-      - 搜尋結果分數太低 → 回傳 "No relevant history found"
-      - LlamaIndex 未安裝/掛掉 → 回傳 "History search unavailable"
-    """
-    index = _get_vector_index(agent_name)
-    if index is None:
-        return "History search unavailable (Layer 2 disabled)"
+    _init_rag()
+    if _rag_index is None:
+        return "RAG 索引不可用"
 
     try:
-        # 安全閥 1：檢查文件數量（Cold Start 防護）
-        doc_count = len(index.docstore.docs) if hasattr(index, 'docstore') else 0
+        doc_count = len(_rag_index.docstore.docs) if hasattr(_rag_index, "docstore") else 0
         if doc_count == 0:
-            return "No history available"
+            return "No history available（向量索引為空）"
 
-        # 執行語義搜尋
-        query_engine = index.as_query_engine(similarity_top_k=3)
-        response = query_engine.query(query)
+        response = _rag_query_engine.query(query)
 
-        # 安全閥 2：檢查結果品質
-        result_text = str(response).strip()
-        if not result_text or result_text.lower() in ["empty response", "none", ""]:
-            return "No relevant history found"
-
-        return result_text
+        if hasattr(response, "source_nodes") and response.source_nodes:
+            scores = [n.score for n in response.source_nodes if n.score is not None]
+            max_score = max(scores) if scores else 0
+            if max_score < SIMILARITY_THRESHOLD:
+                return (
+                    f"No relevant history found"
+                    f"（最高相關性 {max_score:.2f} < 閾值 {SIMILARITY_THRESHOLD}）"
+                )
+        return str(response)
 
     except Exception as e:
-        logger.warning(f"⚠️ Layer 2 搜尋失敗（{agent_name}）：{e}")
-        return f"History search failed: {e}"
+        logger.warning(f"⚠️ RAG 搜尋失敗：{e}")
+        return f"RAG 搜尋失敗：{e}"
 
 
-# ══════════════════════════════════════════════════════════════
-# CrewAI @tool 包裝（Agent 呼叫用）
-# ══════════════════════════════════════════════════════════════
-# 延遲 import，避免在測試時拉入整個 CrewAI
+# ── CrewAI Tool 定義 ─────────────────────────────────────────
+@tool("read_memory")
+def read_memory(agent_name: str) -> str:
+    """
+    讀取指定 Agent 的歷史記憶（JSON Layer 1：穩定保底）。
+    0 份歷史回傳空 JSON，Agent 可據此判斷是否為第一次掃描。
 
-def _create_tools():
-    """延遲建立 CrewAI Tool，僅在 Agent 實際使用時才 import"""
-    from crewai.tools import tool
+    Args:
+        agent_name: Agent 名稱（scout / analyst / advisor / critic）
 
-    @tool("read_memory")
-    def read_memory(agent_name: str) -> str:
-        """讀取指定 Agent 的歷史記憶。agent_name 可選：scout、analyst、advisor。回傳 JSON 字串。"""
-        return _read_memory_impl(agent_name)
+    Returns:
+        JSON 字串格式的歷史記憶
+    """
+    agent_name = agent_name.strip().lower()
+    if agent_name not in VALID_AGENT_NAMES:
+        logger.warning(f"非法的 agent 名稱：{agent_name}")
+        return json.dumps({}, ensure_ascii=False)
 
-    @tool("write_memory")
-    def write_memory(agent_name: str, data: str) -> str:
-        """寫入指定 Agent 的記憶並保留歷史（雙寫 JSON + 向量索引）。agent_name：scout、analyst、advisor。data：JSON 字串。"""
-        return _write_memory_impl(agent_name)
+    data = _load_json(_get_memory_path(agent_name))
 
-    @tool("search_history")
-    def search_history(agent_name: str, query: str) -> str:
-        """語義搜尋歷史安全報告。用自然語言查問過去的掃描結果。agent_name：scout、analyst、advisor。query：搜尋問題。"""
-        return _search_history_impl(agent_name, query)
+    if not data:
+        logger.info(f"📭 {agent_name} 無歷史記憶（第一次掃描）")
+    else:
+        logger.info(f"📬 {agent_name} 記憶已載入（scan_id: {data.get('scan_id', 'N/A')}）")
 
-    return read_memory, write_memory, search_history
+    return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-class _LazyToolLoader:
-    """延遲載入 CrewAI Tool 的包裝器"""
-    def __init__(self):
-        self._tools = None
+@tool("write_memory")
+def write_memory(agent_name: str, data: str) -> str:
+    """
+    寫入 Agent 記憶（雙寫：JSON + LlamaIndex）。自動添加 timestamp。
 
-    def _load(self):
-        if self._tools is None:
-            self._tools = _create_tools()
+    Args:
+        agent_name: Agent 名稱（scout / analyst / advisor / critic）
+        data: JSON 字串格式的記憶資料
 
-    @property
-    def read_memory(self):
-        self._load()
-        return self._tools[0]
+    Returns:
+        寫入結果訊息
+    """
+    agent_name = agent_name.strip().lower()
+    if agent_name not in VALID_AGENT_NAMES:
+        return f"❌ 非法的 agent 名稱：{agent_name}（允許：{VALID_AGENT_NAMES}）"
 
-    @property
-    def write_memory(self):
-        self._load()
-        return self._tools[1]
+    try:
+        memory_data = json.loads(data) if isinstance(data, str) else data
+    except json.JSONDecodeError as e:
+        return f"❌ JSON 格式錯誤：{e}"
 
-    @property
-    def search_history(self):
-        self._load()
-        return self._tools[2]
+    memory_data["timestamp"] = datetime.now(timezone.utc).isoformat()
 
-_loader = _LazyToolLoader()
+    # Layer 1: JSON
+    try:
+        _save_json(_get_memory_path(agent_name), memory_data)
+        logger.info(f"💾 {agent_name} 記憶已寫入 JSON（Layer 1）")
+    except Exception as e:
+        return f"❌ JSON 寫入失敗：{e}"
 
-def __getattr__(name):
-    """模組層級 __getattr__，支援 from tools.memory_tool import read_memory"""
-    if name == "read_memory":
-        return _loader.read_memory
-    elif name == "write_memory":
-        return _loader.write_memory
-    elif name == "search_history":
-        return _loader.search_history
-    raise AttributeError(f"module 'tools.memory_tool' has no attribute {name!r}")
+    # Layer 2: LlamaIndex（雙寫）
+    _rag_insert(agent_name, memory_data)
+
+    return f"✅ {agent_name} 記憶已寫入（timestamp: {memory_data['timestamp']}）"
+
+
+@tool("history_search")
+def history_search(query: str) -> str:
+    """
+    語義搜尋歷史安全報告（LlamaIndex RAG Layer 2）。
+    帶安全閥：索引為空 / 分數太低 / RAG 未啟用 → 回傳提示。
+
+    Args:
+        query: 搜尋查詢（例如："Django SSRF 歷史"）
+
+    Returns:
+        搜尋結果或安全提示
+    """
+    return _rag_search(query)
