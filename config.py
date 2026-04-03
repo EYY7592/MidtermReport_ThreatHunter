@@ -160,8 +160,8 @@ def _build_provider_chain() -> list[tuple[str, dict]]:
                 "base_url": VLLM_BASE_URL,
             }))
         if OPENROUTER_API_KEY:
-            chain.append(("OpenRouter (Llama 3.3 70B)", {
-                "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+            chain.append(("OpenRouter (Llama 3.3 70B Free)", {
+                "model": "openrouter/meta-llama/llama-3.3-70b-instruct:free",
                 "api_key": OPENROUTER_API_KEY,
                 "base_url": "https://openrouter.ai/api/v1",
             }))
@@ -173,8 +173,8 @@ def _build_provider_chain() -> list[tuple[str, dict]]:
 
     elif LLM_PROVIDER == "openrouter":
         if OPENROUTER_API_KEY:
-            chain.append(("OpenRouter (Llama 3.3 70B)", {
-                "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+            chain.append(("OpenRouter (Llama 3.3 70B Free)", {
+                "model": "openrouter/meta-llama/llama-3.3-70b-instruct:free",
                 "api_key": OPENROUTER_API_KEY,
                 "base_url": "https://openrouter.ai/api/v1",
             }))

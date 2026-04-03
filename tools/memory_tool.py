@@ -78,8 +78,26 @@ def _init_rag() -> None:
         return
 
     try:
-        from llama_index.core import VectorStoreIndex, StorageContext
+        from llama_index.core import VectorStoreIndex, StorageContext, Settings
         from llama_index.core import load_index_from_storage
+
+        # ── 設定 Free Local Embedding（不需要 OpenAI API Key）──
+        # 使用 HuggingFace BAAI/bge-small-en-v1.5：輕量、快速、免費
+        try:
+            from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+            Settings.embed_model = HuggingFaceEmbedding(
+                model_name="BAAI/bge-small-en-v1.5"
+            )
+            logger.info("✅ Embedding: HuggingFace BAAI/bge-small-en-v1.5（本地免費）")
+        except ImportError:
+            logger.warning("⚠️ HuggingFace embedding 未安裝，嘗試 OpenAI embedding")
+
+        # 停用 LLM（RAG 記憶層只需要 embedding，不需要 LLM 生成）
+        try:
+            from llama_index.core.llms import MockLLM
+            Settings.llm = MockLLM()
+        except Exception:
+            Settings.llm = None  # type: ignore
 
         vector_store_path = MEMORY_DIR / "vector_store"
 
@@ -89,16 +107,58 @@ def _init_rag() -> None:
             )
             _rag_index = load_index_from_storage(storage_context)
             logger.info("✅ LlamaIndex 向量索引已載入")
+            _rag_query_engine = _rag_index.as_query_engine(similarity_top_k=3)
         else:
             _rag_index = VectorStoreIndex([])
             logger.info("✅ LlamaIndex 向量索引已建立（空）")
-
-        _rag_query_engine = _rag_index.as_query_engine(similarity_top_k=3)
+            # 先設 query_engine，再回填（_backfill 需要 _rag_index 已就緒）
+            _rag_query_engine = _rag_index.as_query_engine(similarity_top_k=3)
+            _backfill_from_json_history()
+            # 回填後重建 query_engine（索引已有資料）
+            _rag_query_engine = _rag_index.as_query_engine(similarity_top_k=3)
 
     except ImportError:
         logger.warning("⚠️ LlamaIndex 未安裝，RAG 功能停用")
     except Exception as e:
         logger.warning(f"⚠️ LlamaIndex 初始化失敗：{e}")
+
+
+def _backfill_from_json_history() -> None:
+    """
+    首次啟用 RAG 時，將所有已有的 *_memory.json 批次回填進 LlamaIndex。
+    只在 vector_store 新建（非載入）時執行一次，之後透過 persist 保存。
+
+    設計原則（Harness Engineering — Feedback Loops 支柱）：
+    - 確保歷史掃描記錄不因 RAG 冷啟動而遺失語義感知
+    - 失敗不阻塞（Graceful Degradation）
+    """
+    if _rag_index is None:
+        return
+
+    total_inserted = 0
+    for agent_name in VALID_AGENT_NAMES:
+        json_path = _get_memory_path(agent_name)
+        if not json_path.exists():
+            continue
+
+        data = _load_json(json_path)
+        if not data:
+            continue
+
+        # 回填 latest（最新掃描）
+        _rag_insert(agent_name, data)
+        total_inserted += 1
+
+        # 回填 history[] 陣列中的每一筆歷史掃描
+        for hist_scan in data.get("history", []):
+            if isinstance(hist_scan, dict) and hist_scan:
+                _rag_insert(agent_name, hist_scan)
+                total_inserted += 1
+
+    if total_inserted > 0:
+        logger.info(f"✅ RAG 歷史回填完成：{total_inserted} 筆掃描記錄已向量化")
+    else:
+        logger.info("ℹ️ RAG 回填：無歷史 JSON 記憶可回填（首次掃描）")
 
 
 def _rag_insert(agent_name: str, data: dict) -> None:
@@ -206,13 +266,23 @@ def write_memory(agent_name: str, data: str) -> str:
 
     memory_data["timestamp"] = datetime.now(timezone.utc).isoformat()
 
-    # Layer 1: JSON
+    # Layer 1: JSON — 累積 history[] 陣列
     try:
+        existing = _load_json(_get_memory_path(agent_name))
+        history = existing.get("history", [])
+
+        # 若已有舊的 latest，推入 history（最多保留 50 筆，防止無限增長）
+        if existing and "scan_id" in existing:
+            old_entry = {k: v for k, v in existing.items() if k != "history"}
+            history.append(old_entry)
+            if len(history) > 50:
+                history = history[-50:]  # 保留最新 50 筆
+
+        memory_data["history"] = history
         _save_json(_get_memory_path(agent_name), memory_data)
-        logger.info(f"💾 {agent_name} 記憶已寫入 JSON（Layer 1）")
+        logger.info(f"💾 {agent_name} 記憶已寫入 JSON（Layer 1｜history={len(history)} 筆）")
     except Exception as e:
         return f"❌ JSON 寫入失敗：{e}"
-
     # Layer 2: LlamaIndex（雙寫）
     _rag_insert(agent_name, memory_data)
 

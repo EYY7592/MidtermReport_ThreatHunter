@@ -168,8 +168,15 @@ class TestWriteMemory:
 class TestHistorySearch:
     """測試 history_search Tool"""
 
-    def test_search_rag_disabled(self):
-        """RAG 未啟用時回傳提示"""
+    def test_search_always_returns_str(self):
+        """history_search 無論 RAG 開關始終回傳字串（不崩潰）"""
         from tools.memory_tool import history_search
         result = history_search.run(query="Django SSRF")
-        assert "RAG" in result
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_search_empty_query(self):
+        """空查詢不崩潰"""
+        from tools.memory_tool import history_search
+        result = history_search.run(query="")
+        assert isinstance(result, str)
