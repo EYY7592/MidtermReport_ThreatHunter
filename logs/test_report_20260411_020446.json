@@ -1,0 +1,97 @@
+{
+  "report_meta": {
+    "title": "ThreatHunter v3.1 Multi-Dimensional Test Report",
+    "generated_at": "2026-04-10T18:04:52.795826+00:00",
+    "timestamp": "20260411_020446",
+    "log_files": {
+      "main_log": "D:\\code\\team-project\\hackthon\\ThreatHunter\\logs\\test_runs\\multidim_20260411_020446.log",
+      "error_log": "D:\\code\\team-project\\hackthon\\ThreatHunter\\logs\\errors\\errors_20260411_020446.log",
+      "monitor_log": "D:\\code\\team-project\\hackthon\\ThreatHunter\\logs\\monitor\\monitor.jsonl"
+    }
+  },
+  "overall": {
+    "total": 49,
+    "passed": 49,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "pass_rate": "100.0%",
+    "elapsed_sec": 6.78,
+    "verdict": "✅ ALL PASSED — SYSTEM RESILIENT",
+    "failures": []
+  },
+  "by_dimension": {
+    "D1_Clean": {
+      "passed": 4,
+      "failed": 0,
+      "total": 4,
+      "pass_rate": "100%",
+      "verdict": "✅ PASS"
+    },
+    "D2_Suspicious": {
+      "passed": 0,
+      "failed": 0,
+      "total": 0,
+      "pass_rate": "0%",
+      "verdict": "✅ PASS"
+    },
+    "D3_Vulnerable": {
+      "passed": 25,
+      "failed": 0,
+      "total": 25,
+      "pass_rate": "100%",
+      "verdict": "✅ PASS"
+    },
+    "D4_Injection": {
+      "passed": 9,
+      "failed": 0,
+      "total": 9,
+      "pass_rate": "100%",
+      "verdict": "✅ PASS"
+    },
+    "D5_Mixed": {
+      "passed": 3,
+      "failed": 0,
+      "total": 3,
+      "pass_rate": "100%",
+      "verdict": "✅ PASS"
+    },
+    "D6_Edge": {
+      "passed": 8,
+      "failed": 0,
+      "total": 8,
+      "pass_rate": "100%",
+      "verdict": "✅ PASS"
+    }
+  },
+  "by_test_class": {
+    "TestLanguageDetection": {
+      "passed": 11,
+      "failed": 0,
+      "pass_rate": "100%"
+    },
+    "TestSecurityGuardExtraction": {
+      "passed": 22,
+      "failed": 0,
+      "pass_rate": "100%"
+    },
+    "TestInputSanitizerMultiLang": {
+      "passed": 8,
+      "failed": 0,
+      "pass_rate": "100%"
+    },
+    "TestL0Warnings": {
+      "passed": 8,
+      "failed": 0,
+      "pass_rate": "100%"
+    }
+  },
+  "dimension_map": {
+    "D1_Clean": "正常程式碼（Flask/Express/Spring）— 語言偵測 + 低誤報",
+    "D2_Suspicious": "可疑但安全（eval 白名單/動態 SQL）— 不誤報",
+    "D3_Vulnerable": "確實漏洞（SQLi/CMDi/XSS/Deserialize/Secrets）— 不漏報",
+    "D4_Injection": "Prompt Injection 攻擊（4 種類型）— Agent 韌性",
+    "D5_Mixed": "混合場景（正常夾帶攻擊/多重漏洞）— 全面偵測",
+    "D6_Edge": "邊界條件（空檔/超大檔/壓縮 JS/套件清單）— 穩健性"
+  }
+}

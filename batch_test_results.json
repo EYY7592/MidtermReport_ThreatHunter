@@ -1,0 +1,72 @@
+﻿[
+    {
+        "Scenario":  1,
+        "Name":  "傳統電商 WordPress",
+        "ScanId":  "5f5d7362",
+        "RiskScore":  null,
+        "Critical":  null,
+        "High":  null,
+        "Urgent":  0,
+        "Important":  0,
+        "Duration":  null,
+        "Verdict":  null,
+        "Score":  null,
+        "Summary":  null
+    },
+    {
+        "Scenario":  2,
+        "Name":  "FinTech Spring Boot",
+        "ScanId":  "cacef41e",
+        "RiskScore":  null,
+        "Critical":  null,
+        "High":  null,
+        "Urgent":  0,
+        "Important":  0,
+        "Duration":  null,
+        "Verdict":  null,
+        "Score":  null,
+        "Summary":  null
+    },
+    {
+        "Scenario":  3,
+        "Name":  "醫療SaaS Django",
+        "ScanId":  "671a666f",
+        "RiskScore":  null,
+        "Critical":  null,
+        "High":  null,
+        "Urgent":  0,
+        "Important":  0,
+        "Duration":  null,
+        "Verdict":  null,
+        "Score":  null,
+        "Summary":  null
+    },
+    {
+        "Scenario":  4,
+        "Name":  "行動後端 Node.js",
+        "ScanId":  "34400538",
+        "RiskScore":  null,
+        "Critical":  null,
+        "High":  null,
+        "Urgent":  0,
+        "Important":  0,
+        "Duration":  null,
+        "Verdict":  null,
+        "Score":  null,
+        "Summary":  null
+    },
+    {
+        "Scenario":  5,
+        "Name":  "DevOps 基礎設施",
+        "ScanId":  "fca9dae7",
+        "RiskScore":  null,
+        "Critical":  null,
+        "High":  null,
+        "Urgent":  0,
+        "Important":  0,
+        "Duration":  null,
+        "Verdict":  null,
+        "Score":  null,
+        "Summary":  null
+    }
+]

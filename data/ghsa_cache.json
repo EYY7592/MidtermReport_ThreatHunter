@@ -1,0 +1,12 @@
+{
+  "python:pip": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for python)",
+    "_cached_at": 1776002013.8451793
+  }
+}

@@ -1,0 +1,66 @@
+
+======================================================================
+  ThreatHunter Multi-Dimensional Test Run
+  Started : 2026-04-11 02:04:46
+  Command : D:\code\team-project\hackthon\ThreatHunter\.venv\Scripts\python.exe -m pytest tests/test_multidim.py -v --tb=short -k not e2e --no-header
+======================================================================
+[02:04:46.481] ============================= test session starts =============================
+[02:04:46.510] collecting ... collected 55 items / 6 deselected / 49 selected
+[02:04:46.510] 
+[02:04:51.616] tests/test_multidim.py::TestLanguageDetection::test_python_detected PASSED [  2%]
+[02:04:51.619] tests/test_multidim.py::TestLanguageDetection::test_javascript_detected PASSED [  4%]
+[02:04:51.621] tests/test_multidim.py::TestLanguageDetection::test_java_detected PASSED [  6%]
+[02:04:51.621] tests/test_multidim.py::TestLanguageDetection::test_go_detected PASSED   [  8%]
+[02:04:51.622] tests/test_multidim.py::TestLanguageDetection::test_php_detected PASSED  [ 10%]
+[02:04:51.623] tests/test_multidim.py::TestLanguageDetection::test_package_list_unknown PASSED [ 12%]
+[02:04:51.624] tests/test_multidim.py::TestLanguageDetection::test_empty_file_unknown PASSED [ 14%]
+[02:04:51.625] tests/test_multidim.py::TestLanguageDetection::test_injection_code_still_detected_as_python PASSED [ 16%]
+[02:04:51.626] tests/test_multidim.py::TestLanguageDetection::test_chinese_injection_detected_as_python PASSED [ 18%]
+[02:04:51.627] tests/test_multidim.py::TestLanguageDetection::test_js_jailbreak_detected_as_javascript PASSED [ 20%]
+[02:04:51.628] tests/test_multidim.py::TestLanguageDetection::test_minified_js_detected PASSED [ 22%]
+[02:04:51.633] tests/test_multidim.py::TestSecurityGuardExtraction::test_clean_flask_no_dangerous_patterns PASSED [ 24%]
+[02:04:51.635] tests/test_multidim.py::TestSecurityGuardExtraction::test_clean_express_extracts_functions PASSED [ 26%]
+[02:04:51.638] tests/test_multidim.py::TestSecurityGuardExtraction::test_clean_spring_extracts_imports PASSED [ 28%]
+[02:04:51.640] tests/test_multidim.py::TestSecurityGuardExtraction::test_sqli_python_detected PASSED [ 30%]
+[02:04:51.643] tests/test_multidim.py::TestSecurityGuardExtraction::test_cmdi_python_detected PASSED [ 32%]
+[02:04:51.646] tests/test_multidim.py::TestSecurityGuardExtraction::test_xss_js_detected PASSED [ 34%]
+[02:04:51.649] tests/test_multidim.py::TestSecurityGuardExtraction::test_java_deserialization_detected PASSED [ 36%]
+[02:04:51.652] tests/test_multidim.py::TestSecurityGuardExtraction::test_go_cmdi_detected PASSED [ 38%]
+[02:04:51.654] tests/test_multidim.py::TestSecurityGuardExtraction::test_php_multi_vuln_detected PASSED [ 40%]
+[02:04:51.656] tests/test_multidim.py::TestSecurityGuardExtraction::test_secret_leak_hardcoded_detected PASSED [ 42%]
+[02:04:51.658] tests/test_multidim.py::TestSecurityGuardExtraction::test_pi_injection_still_extracts_code PASSED [ 44%]
+[02:04:51.660] tests/test_multidim.py::TestSecurityGuardExtraction::test_pi_injection_detected_in_comment PASSED [ 46%]
+[02:04:51.661] tests/test_multidim.py::TestSecurityGuardExtraction::test_pi_chinese_attack_extracts_normally PASSED [ 48%]
+[02:04:51.664] tests/test_multidim.py::TestSecurityGuardExtraction::test_pi_docstring_exfil_extracts_secrets PASSED [ 51%]
+[02:04:51.665] tests/test_multidim.py::TestSecurityGuardExtraction::test_js_jailbreak_extracts_vulnerabilities PASSED [ 53%]
+[02:04:51.667] tests/test_multidim.py::TestSecurityGuardExtraction::test_mixed_legit_poison_detects_sqli PASSED [ 55%]
+[02:04:51.670] tests/test_multidim.py::TestSecurityGuardExtraction::test_multi_vuln_all_detected PASSED [ 57%]
+[02:04:51.671] tests/test_multidim.py::TestSecurityGuardExtraction::test_empty_file_no_crash PASSED [ 59%]
+[02:04:51.701] tests/test_multidim.py::TestSecurityGuardExtraction::test_huge_file_truncated_no_crash PASSED [ 61%]
+[02:04:51.702] tests/test_multidim.py::TestSecurityGuardExtraction::test_minified_js_detects_vuln PASSED [ 63%]
+[02:04:51.714] tests/test_multidim.py::TestSecurityGuardExtraction::test_output_always_json_serializable PASSED [ 65%]
+[02:04:51.722] tests/test_multidim.py::TestSecurityGuardExtraction::test_language_field_always_present PASSED [ 67%]
+[02:04:51.728] tests/test_multidim.py::TestInputSanitizerMultiLang::test_python_code_is_source_code PASSED [ 69%]
+[02:04:51.730] tests/test_multidim.py::TestInputSanitizerMultiLang::test_js_code_is_source_code PASSED [ 71%]
+[02:04:51.732] tests/test_multidim.py::TestInputSanitizerMultiLang::test_java_code_is_source_code PASSED [ 73%]
+[02:04:51.733] tests/test_multidim.py::TestInputSanitizerMultiLang::test_go_code_is_source_code PASSED [ 75%]
+[02:04:51.735] tests/test_multidim.py::TestInputSanitizerMultiLang::test_php_code_is_source_code PASSED [ 77%]
+[02:04:51.736] tests/test_multidim.py::TestInputSanitizerMultiLang::test_package_list_is_package_list PASSED [ 79%]
+[02:04:51.737] tests/test_multidim.py::TestInputSanitizerMultiLang::test_injection_code_is_source_code PASSED [ 81%]
+[02:04:51.739] tests/test_multidim.py::TestInputSanitizerMultiLang::test_mixed_code_is_source_code PASSED [ 83%]
+[02:04:51.740] tests/test_multidim.py::TestL0Warnings::test_sqli_code_has_l0_findings PASSED [ 85%]
+[02:04:51.742] tests/test_multidim.py::TestL0Warnings::test_cmdi_code_has_l0_findings PASSED [ 87%]
+[02:04:51.743] tests/test_multidim.py::TestL0Warnings::test_clean_code_has_low_l0_findings PASSED [ 89%]
+[02:04:51.745] tests/test_multidim.py::TestL0Warnings::test_prompt_injection_has_l0_findings PASSED [ 91%]
+[02:04:51.747] tests/test_multidim.py::TestL0Warnings::test_hardcoded_secret_has_l0_findings PASSED [ 93%]
+[02:04:51.748] tests/test_multidim.py::TestL0Warnings::test_code_passes_l0_not_blocked PASSED [ 95%]
+[02:04:51.749] tests/test_multidim.py::TestL0Warnings::test_multi_vuln_all_warnings PASSED [ 97%]
+[02:04:52.228] tests/test_multidim.py::TestL0Warnings::test_empty_input_handled PASSED  [100%]
+[02:04:52.230] 
+[02:04:52.230] ============================== warnings summary ===============================
+[02:04:52.230] tests\test_multidim.py:471
+[02:04:52.231]   D:\code\team-project\hackthon\ThreatHunter\tests\test_multidim.py:471: PytestUnknownMarkWarning: Unknown pytest.mark.e2e - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+[02:04:52.231]     @pytest.mark.e2e
+[02:04:52.231] 
+[02:04:52.231] -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+[02:04:52.231] ================= 49 passed, 6 deselected, 1 warning in 5.28s =================

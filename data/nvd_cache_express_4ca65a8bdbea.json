@@ -1,0 +1,16 @@
+{
+  "_cached_at": 1775635734.9942698,
+  "vulnerabilities": [
+    {
+      "cve_id": "CVE-2022-24999",
+      "package": "Express",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Express.js qs prototype pollution",
+      "in_cisa_kev": false,
+      "has_public_exploit": false
+    }
+  ],
+  "total": 1,
+  "package": "express"
+}

@@ -65,6 +65,13 @@ harness/entropy/    （第 3 層）← 可引用 context 和 constraints
 → 路徑：`ui/app.py`
 → 啟動：`streamlit run ui/app.py`
 
+### 如果你的任務是「修改 main.py Pipeline」
+→ 路徑：`main.py`
+→ 參考：`docs/pipeline_guide.md`（Pipeline 執行手冊）
+→ 參考：`docs/data_contracts.md`（JSON 格式）
+→ 測試：`python -m pytest tests/test_pipeline_integration.py -v`
+→ 注意：保留現有 Pipeline 架構（Pipeline + Crew 內部化），不改用純 Sequential Crew
+
 ## 核心驗證指令（Verification Commands）
 
 ```bash

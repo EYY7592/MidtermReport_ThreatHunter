@@ -1,0 +1,16 @@
+{
+  "_cached_at": 1775635735.0007396,
+  "vulnerabilities": [
+    {
+      "cve_id": "CVE-2022-22965",
+      "package": "Spring",
+      "cvss_score": 9.8,
+      "severity": "CRITICAL",
+      "description": "Spring4Shell: Spring Framework RCE via DataBinder",
+      "in_cisa_kev": true,
+      "has_public_exploit": true
+    }
+  ],
+  "total": 1,
+  "package": "spring"
+}

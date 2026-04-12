@@ -1,0 +1,79 @@
+{
+  "package": "python",
+  "source": "OTX",
+  "pulse_count": 10,
+  "threat_level": "inactive",
+  "pulses": [
+    {
+      "name": "Duke APT group's latest tools: cloud services and Linux support",
+      "description": "Recent weeks have seen the outing of two new additions to the Duke group's toolset, SeaDuke and CloudDuke. Of these, SeaDuke is a simple trojan made interesting by the fact that it's written in Python. And even more curiously, SeaDuke, with its built-in support for both Windows and Linux, is the fir",
+      "created": "2015-07-22",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "Python-Based PWOBot Targets European Organizations",
+      "description": "We have discovered a malware family named ‘PWOBot’ that is fairly unique because it is written entirely in Python, and compiled via PyInstaller to generate a Microsoft Windows executable. The malware has been witnessed affecting a number of Europe-based organizations, particularly in Poland. Additio",
+      "created": "2016-04-19",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "SSH bruteforce logs 2016-05-30",
+      "description": "Automatically generated pulse based on logins to a Cowrie honeypot. Submitted with the OTX Python SDK.",
+      "created": "2016-05-31",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "SSH bruteforce logs 2016-05-31",
+      "description": "Automatically generated pulse based on logins to a Cowrie honeypot. Submitted with the OTX Python SDK.",
+      "created": "2016-05-31",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "SSH bruteforce logs 2016-06-01",
+      "description": "Automatically generated pulse based on logins to a Cowrie honeypot. Submitted with the OTX Python SDK.",
+      "created": "2016-06-02",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "SSH bruteforce logs 2016-06-02",
+      "description": "Automatically generated pulse based on logins to a Cowrie honeypot. Submitted with the OTX Python SDK.",
+      "created": "2016-06-02",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "SSH bruteforce logs 2016-06-03",
+      "description": "Automatically generated pulse based on logins to a Cowrie honeypot. Submitted with the OTX Python SDK.",
+      "created": "2016-06-04",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "SSH bruteforce logs 2016-06-04",
+      "description": "SSH bruteforce logs from 2016-06-04. Automatically generated pulse based on logins to a Cowrie honeypot. Submitted with the OTX Python SDK.",
+      "created": "2016-06-04",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "SSH bruteforce logs 2016-06-05",
+      "description": "SSH bruteforce logs from 2016-06-05. Automatically generated pulse based on logins to a Cowrie honeypot. Submitted with the OTX Python SDK.",
+      "created": "2016-06-05",
+      "tags": [],
+      "indicator_count": 0
+    },
+    {
+      "name": "SSH bruteforce logs 2016-06-06",
+      "description": "SSH bruteforce logs from 2016-06-06. Automatically generated pulse based on logins to a Cowrie honeypot. Submitted with the OTX Python SDK.",
+      "created": "2016-06-06",
+      "tags": [],
+      "indicator_count": 0
+    }
+  ],
+  "_cached_at": 1776004445.0624464
+}

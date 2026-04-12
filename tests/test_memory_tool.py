@@ -121,7 +121,7 @@ class TestWriteMemory:
             agent_name="scout",
             data=json.dumps(test_data),
         )
-        assert "✅" in write_result
+        assert "[OK]" in write_result
 
         read_result = read_memory.run(agent_name="scout")
         parsed = json.loads(read_result)
@@ -145,7 +145,7 @@ class TestWriteMemory:
             agent_name="hacker",
             data=json.dumps({"evil": True}),
         )
-        assert "❌" in result
+        assert "[FAIL]" in result
 
     def test_write_invalid_json(self):
         """無效 JSON 輸入回傳錯誤訊息"""
@@ -154,7 +154,7 @@ class TestWriteMemory:
             agent_name="scout",
             data="{invalid json!!!",
         )
-        assert "❌" in result
+        assert "[FAIL]" in result
 
     def test_write_overwrite(self):
         """重複寫入覆蓋舊資料"""

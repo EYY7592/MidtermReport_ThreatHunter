@@ -1,0 +1,25 @@
+{
+  "_cached_at": 1775635734.9866695,
+  "vulnerabilities": [
+    {
+      "cve_id": "CVE-2022-21661",
+      "package": "WordPress",
+      "cvss_score": 8.8,
+      "severity": "HIGH",
+      "description": "WordPress <5.8.3 SQL injection via WP_Query",
+      "in_cisa_kev": false,
+      "has_public_exploit": true
+    },
+    {
+      "cve_id": "CVE-2021-29447",
+      "package": "WordPress",
+      "cvss_score": 7.1,
+      "severity": "HIGH",
+      "description": "WordPress 5.6-5.7 XXE via media upload",
+      "in_cisa_kev": false,
+      "has_public_exploit": false
+    }
+  ],
+  "total": 2,
+  "package": "wordpress"
+}

@@ -1,0 +1,2 @@
+{"seq": 1, "ts": "2026-04-12T14:20:02.905867+00:00", "scan_id": "pipe_1776003602", "event": "SCAN_START", "agent": "pipeline", "data": {"scan_id": "pipe_1776003602"}}
+{"seq": 2, "ts": "2026-04-12T14:20:02.918067+00:00", "scan_id": "pipe_1776003602", "event": "STAGE_EXIT", "agent": "input_sanitizer", "data": {"status": "SUCCESS", "duration_ms": 0, "output_keys": "['input_type', 'l0_warning_count']"}}

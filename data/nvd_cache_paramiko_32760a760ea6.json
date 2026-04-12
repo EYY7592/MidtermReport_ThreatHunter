@@ -1,0 +1,16 @@
+{
+  "_cached_at": 1775635734.9926584,
+  "vulnerabilities": [
+    {
+      "cve_id": "CVE-2023-48795",
+      "package": "paramiko",
+      "cvss_score": 5.9,
+      "severity": "MEDIUM",
+      "description": "Terrapin attack via SSH prefix truncation",
+      "in_cisa_kev": false,
+      "has_public_exploit": true
+    }
+  ],
+  "total": 1,
+  "package": "paramiko"
+}

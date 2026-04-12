@@ -56,7 +56,7 @@ def _load_package_map() -> dict:
             with open(PACKAGE_MAP_PATH, "r", encoding="utf-8") as f:
                 return json.load(f)
     except (json.JSONDecodeError, IOError) as e:
-        logger.warning(f"⚠️ package_map.json 載入失敗：{e}")
+        logger.warning("[WARN] package_map.json load failed: %s", e)
     return {}
 
 
@@ -106,12 +106,12 @@ def _read_cache(package_name: str) -> dict | None:
                 cached = json.load(f)
             cached_time = cached.get("_cached_at", 0)
             if time.time() - cached_time < CACHE_TTL:
-                logger.info(f"📁 NVD 快取命中：{package_name}")
+                logger.info("[OK] NVD cache hit: %s", package_name)
                 return cached
             else:
-                logger.info(f"📁 NVD 快取過期：{package_name}")
+                logger.info("[INFO] NVD cache expired: %s", package_name)
     except (json.JSONDecodeError, IOError) as e:
-        logger.warning(f"⚠️ NVD 快取讀取失敗：{e}")
+        logger.warning("[WARN] NVD cache read failed: %s", e)
     return None
 
 
@@ -124,7 +124,7 @@ def _write_cache(package_name: str, data: dict) -> None:
         with open(cache_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except (IOError, PermissionError) as e:
-        logger.warning(f"⚠️ NVD 快取寫入失敗：{e}")
+        logger.warning("[WARN] NVD cache write failed: %s", e)
 
 
 def _rate_limit() -> None:
@@ -135,7 +135,7 @@ def _rate_limit() -> None:
     elapsed = time.time() - _last_request_time
     if elapsed < interval:
         wait = interval - elapsed
-        logger.info(f"⏳ NVD rate limit: 等待 {wait:.1f}s")
+        logger.info("[WAIT] NVD rate limit: waiting %.1fs", wait)
         time.sleep(wait)
     _last_request_time = time.time()
 
@@ -258,7 +258,7 @@ def _query_nvd_api(keyword: str) -> dict | None:
     for attempt in range(1, MAX_RETRIES + 1):
         _rate_limit()
         try:
-            logger.info(f"🔍 NVD API 查詢：{keyword}（第 {attempt} 次）")
+            logger.info("[QUERY] NVD API: %s (attempt %d)", keyword, attempt)
             response = requests.get(
                 NVD_API_BASE,
                 params=params,
@@ -270,27 +270,27 @@ def _query_nvd_api(keyword: str) -> dict | None:
                 return response.json()
 
             if response.status_code == 403:
-                logger.warning(f"⚠️ NVD API 403 (rate limited)，等待後重試...")
+                logger.warning("[WARN] NVD API 403 (rate limited), retrying...")
                 time.sleep(RATE_LIMIT_WITHOUT_KEY * 2)
                 continue
 
             if response.status_code >= 500:
-                logger.warning(f"⚠️ NVD API {response.status_code} (server error)")
+                logger.warning("[WARN] NVD API %d (server error)", response.status_code)
                 time.sleep(2)
                 continue
 
             # 其他錯誤碼
-            logger.warning(f"⚠️ NVD API 回傳 {response.status_code}: {response.text[:200]}")
+            logger.warning("[WARN] NVD API returned %d: %s", response.status_code, response.text[:200])
             return None
 
         except requests.exceptions.Timeout:
-            logger.warning(f"⚠️ NVD API timeout（{REQUEST_TIMEOUT}s）")
+            logger.warning("[WARN] NVD API timeout (%ds)", REQUEST_TIMEOUT)
             continue
         except requests.exceptions.ConnectionError:
-            logger.warning("⚠️ NVD API 連線失敗（網路問題）")
+            logger.warning("[WARN] NVD API connection failed (network issue)")
             continue
         except requests.exceptions.RequestException as e:
-            logger.warning(f"⚠️ NVD API 請求異常：{e}")
+            logger.warning("[WARN] NVD API request error: %s", e)
             return None
 
     return None  # 所有重試都失敗
@@ -357,11 +357,20 @@ def _search_nvd_impl(package_name: str) -> str:
     """
     try:
         candidates = _normalize_package_name(package_name)
-        logger.info(f"🔍 NVD 查詢套件：{package_name} → 候選名稱：{candidates}")
+        logger.info("[QUERY] NVD package: %s -> candidates: %s", package_name, candidates)
 
-        # 嘗試每個候選名稱
+        # ── 第一優先：讀取本地快取（Cache-First，避免 API timeout 浪費時間）──
         for keyword in candidates:
-            # 先試快取（如果 API 已經失敗過，至少有上次的資料）
+            cached = _read_cache(keyword)
+            if cached:
+                cached.pop("_cached_at", None)
+                cached["fallback_used"] = False  # 快取命中不算降級
+                logger.info("[OK] NVD cache hit (cache-first): %s -> %d CVEs",
+                            keyword, len(cached.get("vulnerabilities", [])))
+                return json.dumps(cached, ensure_ascii=False, indent=2)
+
+        # ── 第二優先：呼叫 NVD API（快取未命中才嘗試）──
+        for keyword in candidates:
             raw = _query_nvd_api(keyword)
 
             if raw is not None:
@@ -371,21 +380,21 @@ def _search_nvd_impl(package_name: str) -> str:
                     # 成功！寫入快取供離線使用
                     _write_cache(keyword, result)
                     logger.info(
-                        f"✅ NVD 查詢成功：{package_name} → {result['count']} 筆 CVE"
+                        "[OK] NVD API query success: %s -> %d CVEs", package_name, result['count']
                     )
                     return json.dumps(result, ensure_ascii=False, indent=2)
 
                 # API 回傳成功但 0 筆結果 → 嘗試下一個別名
-                logger.info(f"ℹ️ NVD 查無結果：{keyword}，嘗試下一個別名")
+                logger.info("[INFO] NVD no results for: %s, trying next alias", keyword)
                 continue
 
-            # API 失敗 → 嘗試讀快取
+            # API 失敗 → 再次嘗試快取（理論上已在第一步命中，這是防禦層）
             cached = _read_cache(keyword)
             if cached:
                 cached.pop("_cached_at", None)
                 cached["fallback_used"] = True
                 cached["error"] = f"NVD API unavailable, using cached data for '{keyword}'"
-                logger.info(f"📁 NVD 使用快取：{keyword}")
+                logger.info("[OK] NVD cache fallback (after API fail): %s", keyword)
                 return json.dumps(cached, ensure_ascii=False, indent=2)
 
         # 所有候選名稱都查不到
@@ -397,12 +406,12 @@ def _search_nvd_impl(package_name: str) -> str:
             "error": f"No vulnerabilities found for '{package_name}' (tried: {candidates})",
             "fallback_used": False,
         }
-        logger.info(f"ℹ️ NVD 查無結果：{package_name}")
+        logger.info("[INFO] NVD no results for: %s", package_name)
         return json.dumps(empty_result, ensure_ascii=False, indent=2)
 
     except Exception as e:
         # 最後一道防線：任何未預期錯誤都不能讓 Agent crash
-        logger.error(f"❌ NVD Tool 未預期錯誤：{e}", exc_info=True)
+        logger.error("[FAIL] NVD Tool unexpected error: %s", e, exc_info=True)
         error_result = {
             "package": package_name,
             "source": "NVD",

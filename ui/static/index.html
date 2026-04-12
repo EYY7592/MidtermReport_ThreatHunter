@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="ThreatHunter — AI 驅動的多 Agent 資安威脅情報平台，即時漏洞掃描與行動報告" />
+  <title>ThreatHunter — AI 資安威脅情報平台</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ──────────────────────────────────────── -->
+  <header class="th-header">
+    <span class="th-logo">🛡️</span>
+    <div>
+      <div class="th-title">ThreatHunter</div>
+      <div class="th-subtitle">AI-POWERED CYBERSECURITY THREAT INTELLIGENCE</div>
+    </div>
+    <a href="/checkpoints" class="cp-nav-link" style="margin-left:auto;color:#00FFFF;text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.78rem;font-weight:500;letter-spacing:0.05em;padding:5px 12px;border-radius:6px;border:1px solid rgba(0,255,255,0.2);transition:all 0.2s" onmouseover="this.style.background='rgba(0,255,255,0.1)'" onmouseout="this.style.background='transparent'">📡 Checkpoints</a>
+    <div class="th-status">
+      <span id="statusDot" class="status-dot idle"></span>
+      <span id="statusText">IDLE</span>
+    </div>
+  </header>
+
+  <!-- ── Main ────────────────────────────────────────── -->
+  <main>
+
+    <!-- Input Card -->
+    <div class="input-card">
+      <div class="section-title">▸ TARGET INPUT</div>
+      <div class="input-area">
+        <!-- 檔案上傳區 -->
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-zone-content">
+            <span class="drop-icon">📂</span>
+            <span class="drop-text">拖放程式碼檔案到此處</span>
+            <span class="drop-hint">或</span>
+            <label class="file-select-btn">
+              選擇檔案
+              <input type="file" id="fileInput"
+                accept=".py,.js,.ts,.java,.go,.php,.rb,.rs,.c,.cpp,.h,.txt,.yml,.yaml,.json,.toml,.xml"
+                hidden />
+            </label>
+            <span class="drop-formats">.py .js .ts .java .go .php .c .cpp .rs</span>
+          </div>
+        </div>
+        <!-- 程式碼 / 套件輸入 -->
+        <textarea
+          id="techStackInput"
+          class="code-textarea"
+          rows="6"
+          placeholder="Paste code, tech stack, or config here&#10;&#10;Examples:&#10;  • Django 4.2, Redis 7.0, nginx 1.24&#10;  • import os; os.system(user_input)&#10;  • const app = require('express');"
+          autocomplete="off"
+          spellcheck="false"
+        >Django 4.2, Redis 7.0</textarea>
+        <div class="input-footer">
+          <span id="inputTypeIndicator" class="type-indicator">📦 Package List · Path A</span>
+          <div class="input-actions">
+            <button id="btnScan" class="btn btn-primary" onclick="startScan()">🔍 Scan</button>
+            <div class="example-dropdown-wrap">
+              <button class="btn" onclick="toggleExampleMenu()">Load Example ▾</button>
+              <div id="exampleMenu" class="example-dropdown hidden">
+                <div class="example-item" onclick="loadExampleType('pkg')">📦 Tech Stack (Django)</div>
+                <div class="example-item" onclick="loadExampleType('python')">🐍 Python — SQL Injection</div>
+                <div class="example-item" onclick="loadExampleType('javascript')">📜 JavaScript — XSS</div>
+                <div class="example-item" onclick="loadExampleType('java')">☕ Java — Deserialization</div>
+                <div class="example-item" onclick="loadExampleType('go')">🔵 Go — Command Injection</div>
+                <div class="example-item" onclick="loadExampleType('php')">🐘 PHP — File Include</div>
+                <div class="example-item" onclick="loadExampleType('injection')">🛡️ Prompt Injection Attack</div>
+              </div>
+            </div>
+            <button id="btnClear" class="btn hidden" onclick="clearResults()">✕ Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline Progress Bar -->
+    <div id="pipelineBar" class="pipeline-bar hidden">
+      <span id="stepOrchestrator" class="pipeline-step step-pending">🧭 Orch</span>
+      <span class="step-arrow">──▶</span>
+      <span id="stepLayer1" class="pipeline-step step-pending">⚡ L1</span>
+      <span class="step-arrow">──▶</span>
+      <span id="stepScout" class="pipeline-step step-pending">🔍 Scout</span>
+      <span class="step-arrow">──▶</span>
+      <span id="stepAnalyst" class="pipeline-step step-pending">🧠 Analyst</span>
+      <span class="step-arrow">──▶</span>
+      <span id="stepCritic" class="pipeline-step step-pending">⚖️ Critic</span>
+      <span class="step-arrow">──▶</span>
+      <span id="stepAdvisor" class="pipeline-step step-pending">📋 Advisor</span>
+    </div>
+
+    <!-- Agent Status Cards -->
+    <div id="agentGrid" class="agent-grid hidden">
+      <!-- Row 1: v3.1 新增 Agent -->
+      <div class="agent-card" id="cardOrchestrator">
+        <div class="agent-icon">🧭</div>
+        <div class="agent-name">Orchestrator</div>
+        <div class="agent-role">動態路由決策</div>
+        <div class="agent-status pending" id="statusOrchestrator">WAITING</div>
+        <div class="agent-detail" id="detailOrchestrator">—</div>
+      </div>
+      <div class="agent-card" id="cardSecurityGuard">
+        <div class="agent-icon">🔒</div>
+        <div class="agent-name">Security Guard</div>
+        <div class="agent-role">隔離 LLM 提取</div>
+        <div class="agent-status pending" id="statusSecurityGuard">WAITING</div>
+        <div class="agent-detail" id="detailSecurityGuard">—</div>
+      </div>
+      <div class="agent-card" id="cardIntelFusion">
+        <div class="agent-icon">🧠</div>
+        <div class="agent-name">Intel Fusion</div>
+        <div class="agent-role">六維情報融合</div>
+        <div class="agent-status pending" id="statusIntelFusion">WAITING</div>
+        <div class="agent-detail" id="detailIntelFusion">—</div>
+      </div>
+      <!-- Row 2: 原始四 Agent -->
+      <div class="agent-card" id="cardScout">
+        <div class="agent-icon">🔍</div>
+        <div class="agent-name">Scout</div>
+        <div class="agent-role">威脅情報偵察</div>
+        <div class="agent-status pending" id="statusScout">WAITING</div>
+        <div class="agent-detail" id="detailScout">—</div>
+      </div>
+      <div class="agent-card" id="cardAnalyst">
+        <div class="agent-icon">🔬</div>
+        <div class="agent-name">Analyst</div>
+        <div class="agent-role">漏洞連鎖分析</div>
+        <div class="agent-status pending" id="statusAnalyst">WAITING</div>
+        <div class="agent-detail" id="detailAnalyst">—</div>
+      </div>
+      <div class="agent-card" id="cardCritic">
+        <div class="agent-icon">⚖️</div>
+        <div class="agent-name">Critic</div>
+        <div class="agent-role">ColMAD 辯論</div>
+        <div class="agent-status pending" id="statusCritic">WAITING</div>
+        <div class="agent-detail" id="detailCritic">—</div>
+      </div>
+      <div class="agent-card" id="cardAdvisor">
+        <div class="agent-icon">📋</div>
+        <div class="agent-name">Advisor</div>
+        <div class="agent-role">行動報告生成</div>
+        <div class="agent-status pending" id="statusAdvisor">WAITING</div>
+        <div class="agent-detail" id="detailAdvisor">—</div>
+      </div>
+    </div>
+
+    <!-- Live Monitor + Meta -->
+    <div id="monitorLayout" class="monitor-layout hidden">
+      <!-- Live Log Panel -->
+      <div>
+        <div class="section-title">▸ LIVE MONITOR</div>
+        <div id="logPanel" class="log-panel">
+          <div class="log-empty">等待掃描啟動...</div>
+        </div>
+      </div>
+      <!-- Meta Side Panel -->
+      <div>
+        <div class="section-title">▸ PIPELINE META</div>
+        <div id="metaPanel" class="meta-side">
+          <div class="meta-row"><span class="meta-label">Status</span><span class="meta-value" id="metaStatus">—</span></div>
+          <div class="meta-row"><span class="meta-label">Tech Stack</span><span class="meta-value" id="metaTech">—</span></div>
+          <div class="meta-row"><span class="meta-label">Pipeline Ver</span><span class="meta-value" id="metaVersion">—</span></div>
+          <div class="meta-row"><span class="meta-label">Scan Path</span><span class="meta-value" id="metaScanPath">—</span></div>
+          <div class="meta-row"><span class="meta-label">Duration</span><span class="meta-value" id="metaDuration">—</span></div>
+          <div class="meta-row"><span class="meta-label">Critic Verdict</span><span class="meta-value" id="metaVerdict">—</span></div>
+          <div class="meta-row"><span class="meta-label">Critic Score</span><span class="meta-value" id="metaScore">—</span></div>
+          <div class="meta-row"><span class="meta-label">Degradation</span><span class="meta-value" id="metaDeg">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="errorBanner" class="error-banner hidden"></div>
+
+    <!-- Success Banner -->
+    <div id="successBanner" class="success-banner hidden"></div>
+
+    <!-- ── Report Section (hidden until scan done) ──── -->
+    <div id="reportSection" class="hidden">
+
+      <!-- Executive Summary -->
+      <div class="section-title">▸ EXECUTIVE SUMMARY</div>
+      <div class="exec-summary">
+        <div class="exec-text" id="execSummary">—</div>
+      </div>
+
+      <!-- Metric Cards -->
+      <div class="metric-grid" id="metricGrid">
+        <div class="metric-card metric-critical">
+          <div class="metric-value" id="mCritical">0</div>
+          <div class="metric-label">Critical</div>
+        </div>
+        <div class="metric-card metric-high">
+          <div class="metric-value" id="mHigh">0</div>
+          <div class="metric-label">High</div>
+        </div>
+        <div class="metric-card metric-score">
+          <div class="metric-value" id="mRisk">0</div>
+          <div class="metric-label">Risk Score</div>
+        </div>
+        <div class="metric-card metric-new">
+          <div class="metric-value" id="mNew">0</div>
+          <div class="metric-label">New CVEs</div>
+        </div>
+      </div>
+
+      <!-- Action Report -->
+      <div class="report-grid">
+        <!-- Urgent -->
+        <div class="report-card">
+          <div class="report-card-header header-urgent">🔴 URGENT — Immediate Action Required</div>
+          <div class="report-card-body" id="urgentList">
+            <div style="color:var(--text-dim);font-size:0.8rem;padding:0.5rem;">No urgent items</div>
+          </div>
+        </div>
+        <!-- Important -->
+        <div class="report-card">
+          <div class="report-card-header header-important">⚠️ IMPORTANT — Address Within 72h</div>
+          <div class="report-card-body" id="importantList">
+            <div style="color:var(--text-dim);font-size:0.8rem;padding:0.5rem;">No important items</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resolved + CVEs -->
+      <div class="report-grid">
+        <!-- Resolved -->
+        <div class="report-card">
+          <div class="report-card-header header-resolved">✅ RESOLVED — Verified Fixed</div>
+          <div class="report-card-body" id="resolvedList">
+            <div style="color:var(--text-dim);font-size:0.8rem;padding:0.5rem;">No resolved items</div>
+          </div>
+        </div>
+        <!-- CVE Table -->
+        <div class="report-card">
+          <div class="report-card-header header-cve">📊 CVE INTELLIGENCE</div>
+          <div class="report-card-body" style="padding:0;">
+            <table class="cve-table">
+              <thead>
+                <tr>
+                  <th>CVE ID</th>
+                  <th>Package</th>
+                  <th style="text-align:center">CVSS</th>
+                  <th>Severity</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody id="cveTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /reportSection -->
+
+  </main>
+
+  <footer>ThreatHunter v3.1 · Harness Engineering Architecture · Multi-Agent Pipeline</footer>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -29,3 +29,11 @@ pytest>=7.4.0,<9.0.0
 
 # ── 環境變數管理 ────────────────────────────────────────────
 python-dotenv>=1.0.0,<2.0.0
+
+# ── 程式碼安全掃描引擎（v3.0 新增）────────────────────────
+# bandit：Python 程式碼 SAST，100+ CWE 規則（PSF Incubating Project）
+bandit>=1.7.9,<2.0.0
+
+# ── MITRE ATT&CK 資料解析（v3.0 新增）─────────────────────
+# mitreattack-python：解析 ATT&CK STIX 2.1 資料，漏洞技術 ID 映射
+mitreattack-python>=3.0.4,<4.0.0

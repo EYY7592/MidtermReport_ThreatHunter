@@ -12,6 +12,7 @@
 
 import os
 import logging
+import time
 
 import requests
 
@@ -19,8 +20,7 @@ from crewai import Agent
 
 from config import get_llm
 
-# 使用新版 config.get_llm()（支援 openrouter/vllm/openai 三模式降級）
-llm = get_llm()
+# LLM 延遲初始化：在 create_scout_agent() 中才呼叫 get_llm()
 from tools.nvd_tool import search_nvd
 from tools.otx_tool import search_otx
 from tools.memory_tool import read_memory, write_memory, history_search
@@ -50,12 +50,12 @@ def _load_skill() -> str:
                 with open(SKILL_PATH, "r", encoding=encoding) as f:
                     content = f.read().strip()
                 if content:
-                    logger.info(f"✅ Skill 載入成功：{SKILL_PATH}（{len(content)} 字元）")
+                    logger.info("[OK] Skill loaded: %s (%d chars)", SKILL_PATH, len(content))
                     return content
         except (IOError, UnicodeDecodeError):
             continue
 
-    logger.warning(f"⚠️ Skill 檔案載入失敗，使用內嵌精簡版：{SKILL_PATH}")
+    logger.warning("[WARN] Skill file load failed, using fallback: %s", SKILL_PATH)
     return _FALLBACK_SKILL
 
 
@@ -118,7 +118,7 @@ CONSTITUTION = """
 # Agent 工廠函式
 # ══════════════════════════════════════════════════════════════
 
-def create_scout_agent() -> Agent:
+def create_scout_agent(excluded_models: list[str] | None = None) -> Agent:
     """
     建立 Scout Agent 實例。
 
@@ -127,10 +127,13 @@ def create_scout_agent() -> Agent:
       - goal: 收集漏洞 + 比對歷史 + 輸出 JSON
       - backstory: 系統憲法 + Skill SOP（完整嵌入）
       - tools: search_nvd, search_otx, read_memory, write_memory, history_search
-      - llm: 從 config.py 取得（支援三模式切換）
+      - llm: 從 config.py 取得（支援三模式切換 + 429 自動輪替）
       - verbose=True: Observability 支柱
       - max_iter=15: Constraints 支柱（防止無限迴圈）
       - allow_delegation=False: Scout 不委派工作給其他 Agent
+
+    Args:
+        excluded_models: 需要跳過的模型名稱列表（429 被限速的模型）
 
     Returns:
         CrewAI Agent 實例，可直接用於 Task 和 Crew
@@ -144,13 +147,14 @@ def create_scout_agent() -> Agent:
 
 ---
 
-## 📋 分析方法論（Skill SOP）
+## 分析方法論（Skill SOP）
 
 以下是你執行威脅情報收集時必須遵循的標準作業程序：
 
 {skill_content}
 """
 
+    llm = get_llm(exclude_models=excluded_models)
     scout = Agent(
         role="威脅情報偵察員 (Scout)",
         goal=(
@@ -162,15 +166,16 @@ def create_scout_agent() -> Agent:
         tools=[search_nvd, search_otx, read_memory, write_memory, history_search],
         llm=llm,
         verbose=True,       # Harness: Observability — 完整 ReAct 推理可見
-        max_iter=15,         # Harness: Constraints — 防止無限迴圈
+        max_iter=5,          # v3.5: Gemini-3-Flash ~4s/call, Scout查重點套件即可
         allow_delegation=False,  # Scout 不委派，自己做完
     )
 
     logger.info(
-        f"✅ Scout Agent 建立完成 | "
-        f"tools={[t.name for t in scout.tools]} | "
-        f"max_iter={scout.max_iter} | "
-        f"llm={llm.model if hasattr(llm, 'model') else 'unknown'}"
+        "[OK] Scout Agent created | "
+        "tools=%s | max_iter=%s | llm=%s",
+        [t.name for t in scout.tools],
+        scout.max_iter,
+        llm.model if hasattr(llm, 'model') else 'unknown'
     )
 
     return scout
@@ -180,65 +185,76 @@ def create_scout_agent() -> Agent:
 # CrewAI Task 工廠函式（便利函式，供 main.py 使用）
 # ══════════════════════════════════════════════════════════════
 
-def create_scout_task(agent: Agent, tech_stack: str):
+def create_scout_task(agent, tech_stack: str):
     """
-    建立 Scout Agent 的 Task。
-
-    Args:
-        agent: create_scout_agent() 回傳的 Agent 實例
-        tech_stack: 使用者輸入的技術堆疊字串（如 "Django 4.2, Redis 7.0"）
-
-    Returns:
-        CrewAI Task 實例
+    v3.4: Scout Task - package-aware mode.
+    When tech_stack is a short comma-separated package list (from PackageExtractor),
+    explicitly enumerate each package for the LLM to query via search_nvd.
     """
     from crewai import Task
 
+    # Detect if input is a clean package list or raw code/long text
+    is_package_list = (
+        len(tech_stack) < 300
+        and "\n" not in tech_stack
+        and "def " not in tech_stack
+        and "import " not in tech_stack
+    )
+
+    if is_package_list:
+        packages = [p.strip() for p in tech_stack.split(",") if p.strip()]
+        packages_display = "\n".join(f"   {i+1}. {pkg}" for i, pkg in enumerate(packages))
+        nvd_calls = "\n".join(f"   - search_nvd(\'{pkg}\')" for pkg in packages[:8])
+        task_desc = (
+            f"You are analyzing security vulnerabilities for packages extracted from source code.\n\n"
+            f"Package list to scan:\n{packages_display}\n\n"
+            f"Steps to follow (MUST call tools in order):\n\n"
+            f"Step 1: Call read_memory\n"
+            f"   Action: read_memory\n"
+            f"   Action Input: scout\n\n"
+            f"Step 2: For EACH package, call search_nvd separately:\n"
+            f"{nvd_calls}\n\n"
+            f"Step 3: For CVEs with CVSS >= 7.0, call search_otx for that package\n\n"
+            f"Step 4: Assemble JSON report from REAL tool results only\n"
+            f"   - CVE IDs, CVSS scores must come from search_nvd output\n"
+            f"   - Compare with read_memory history, mark is_new\n\n"
+            f"Step 5: Call write_memory to save results\n"
+            f"   Action: write_memory\n"
+            f"   Action Input: scout|{{JSON report}}\n\n"
+            f"Step 6: Output JSON report as Final Answer\n\n"
+            f"FORBIDDEN:\n"
+            f"- Do NOT skip tool calls\n"
+            f"- Do NOT fabricate CVE IDs\n"
+            f"- Do NOT use backstory examples (they are fake)\n"
+            f"- write_memory MUST be called before Final Answer"
+        )
+    else:
+        task_desc = (
+            f"You are analyzing security vulnerabilities in: {tech_stack[:800]}\n\n"
+            f"Steps to follow (MUST call tools in order):\n\n"
+            f"Step 1: Call read_memory\n"
+            f"   Action: read_memory\n"
+            f"   Action Input: scout\n\n"
+            f"Step 2: Identify package names and call search_nvd for each one\n\n"
+            f"Step 3: For CVEs with CVSS >= 7.0, call search_otx\n\n"
+            f"Step 4: Assemble JSON report from REAL tool results only\n\n"
+            f"Step 5: Call write_memory\n"
+            f"   Action: write_memory\n"
+            f"   Action Input: scout|{{JSON report}}\n\n"
+            f"Step 6: Output JSON report as Final Answer\n\n"
+            f"FORBIDDEN:\n"
+            f"- Do NOT skip tool calls\n"
+            f"- Do NOT fabricate CVE IDs\n"
+            f"- write_memory MUST be called before Final Answer"
+        )
+
     return Task(
-        description=f"""你的任務是分析以下技術堆疊的安全漏洞。你必須使用工具來完成，不可用你的訓練知識。
-
-技術堆疊：{tech_stack}
-
-你必須按照以下順序執行，每一步都要呼叫對應的工具：
-
-第一步：呼叫 read_memory 工具
-   Action: read_memory
-   Action Input: scout
-
-第二步：對每個套件呼叫 search_nvd 工具（{tech_stack} 中的每一個都要查）
-   Action: search_nvd
-   Action Input: django
-   （然後再查下一個套件）
-
-第三步：如果 search_nvd 回傳的 CVE 中有 CVSS >= 7.0 的，呼叫 search_otx
-   Action: search_otx
-   Action Input: django
-
-第四步：根據 search_nvd 工具回傳的真實資料，組裝 JSON 報告
-   - CVE 編號、CVSS 分數、描述，全部必須是工具回傳的，不可自己編
-   - 與 read_memory 的歷史比對標記 is_new
-
-第五步：呼叫 write_memory 工具儲存結果
-   Action: write_memory
-   Action Input: scout|{{你組裝的完整 JSON 報告}}
-
-第六步：將 JSON 報告作為 Final Answer
-
-⛔ 絕對禁止：
-- 不可跳過工具呼叫。你必須實際呼叫 search_nvd，不可用你的知識回答。
-- 不可編造 CVE 編號。CVE-2024-9012 之類的如果不是 search_nvd 回傳的就不可使用。
-- 不可抄你 backstory 裡的範例資料。範例只是格式參考，裡面的 CVE 是假的。
-- 不可跳過 write_memory。必須先呼叫 write_memory 再給 Final Answer。
-""",
-        expected_output=(
-            "結構化 JSON 格式的威脅情報清單，所有 CVE 必須來自 search_nvd 工具的實際回傳結果。"
-        ),
+        description=task_desc,
+        expected_output="Structured JSON threat intel report with CVEs from search_nvd tool.",
         agent=agent,
     )
 
 
-# ══════════════════════════════════════════════════════════════
-# Pipeline 執行器（Harness: 程式碼層保障）
-# ══════════════════════════════════════════════════════════════
 
 def run_scout_pipeline(tech_stack: str) -> dict:
     """
@@ -261,16 +277,61 @@ def run_scout_pipeline(tech_stack: str) -> dict:
     """
     import json
     from crewai import Crew, Process
+    from config import mark_model_failed, get_current_model_name
     # 新版 memory_tool 無 _write_memory_impl，使用公開 Tool 介面
 
-    # 建立 Agent + Task
-    agent = create_scout_agent()
-    task = create_scout_task(agent, tech_stack)
-    crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=True)
+    # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
+    MAX_LLM_RETRIES = 2
+    excluded_models: list[str] = []
 
-    # 執行 Agent
-    logger.info(f"🚀 Scout Pipeline 啟動：{tech_stack}")
-    result = crew.kickoff()
+    for attempt in range(MAX_LLM_RETRIES + 1):
+        # 建立 Agent + Task（每次重試都用新模型）
+        agent = create_scout_agent(excluded_models)
+        task = create_scout_task(agent, tech_stack)
+        crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=True)
+
+        # 執行 Agent
+        logger.info("[START] Scout Pipeline: %s (attempt %d/%d)", tech_stack, attempt + 1, MAX_LLM_RETRIES + 1)
+        try:
+            from checkpoint import recorder as _cp
+            _current_model = get_current_model_name(agent.llm)
+            _cp.llm_call("scout", _current_model, "openrouter", f"attempt={attempt+1}")
+        except Exception:
+            _current_model = "unknown"
+        _t_llm = time.time()
+        try:
+            result = crew.kickoff()
+            try:
+                _cp.llm_result("scout", _current_model, "SUCCESS",
+                               len(str(result)), int((time.time() - _t_llm) * 1000),
+                               thinking=str(result)[:1000])
+            except Exception:
+                pass
+            break  # 成功則跳出重試迴圈
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str and attempt < MAX_LLM_RETRIES:
+                # 標記當前模型為冷卻中，下次迴圈會選擇其他模型
+                current_model = get_current_model_name(agent.llm)
+                mark_model_failed(current_model)
+                excluded_models.append(current_model)
+                wait_sec = (attempt + 1) * 12  # 遞增等待：12s, 24s
+                logger.warning("[RETRY] Scout 429 on %s, waiting %ds before retry %d/%d",
+                              current_model, wait_sec, attempt + 1, MAX_LLM_RETRIES)
+                try:
+                    _cp.llm_retry("scout", current_model, error_str[:200],
+                                  attempt + 1, "next_in_waterfall")
+                except Exception:
+                    pass
+                time.sleep(wait_sec)
+                continue
+
+            try:
+                _cp.llm_error("scout", _current_model, error_str[:300])
+            except Exception:
+                pass
+            raise  # 非 429 或已超過重試次數，直接拋出
+
     result_str = str(result).strip()
 
     # 解析 JSON（處理可能的 markdown 包裝）
@@ -285,7 +346,7 @@ def run_scout_pipeline(tech_stack: str) -> dict:
     try:
         output = json.loads(json_str)
     except json.JSONDecodeError:
-        logger.error(f"❌ Agent 輸出不是合法 JSON：{result_str[:200]}")
+        logger.error("[FAIL] Agent output is not valid JSON: %s", result_str[:200])
         raise ValueError(f"Scout Agent output is not valid JSON: {result_str[:200]}")
 
     # ── Harness 保障 1：強制 write_memory ──────────────────────
@@ -303,17 +364,57 @@ def run_scout_pipeline(tech_stack: str) -> dict:
             need_write = True
 
     if need_write:
-        logger.warning("⚠️ Agent 未呼叫 write_memory — 程式碼代為執行（Harness 保障）")
+        logger.warning("[WARN] Agent did not call write_memory -- code forcing write (Harness)")
         write_result = write_memory.run(agent_name="scout", data=json.dumps(output, ensure_ascii=False))
-        logger.info(f"📝 程式碼強制寫入記憶：{write_result}")
+        logger.info("[OK] Forced memory write: %s", write_result)
 
     # ── Harness 保障 2：基礎 Schema 驗證 ──────────────────────
     required = ["scan_id", "timestamp", "tech_stack", "vulnerabilities", "summary"]
     for field in required:
         if field not in output:
-            logger.warning(f"⚠️ 輸出缺少必要欄位：{field}")
+            logger.warning("[WARN] Output missing required field: %s", field)
+            if field == "vulnerabilities":
+                output["vulnerabilities"] = []
+            elif field == "summary":
+                output["summary"] = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
 
-    # ── Harness 保障 3：CVE 真實性驗證（Anti-Hallucination）──
+    # ── Harness 保障 2.5：Cache 注入（Anti-LLM-Omission）──────
+    # 當 LLM 輸出 0 vulnerabilities，但 NVD cache 中有資料時，
+    # 直接從 cache 注入——防止 LLM 忽略工具輸出的問題
+    if not output.get("vulnerabilities"):
+        from tools.nvd_tool import _search_nvd_impl
+        injected = []
+        for item in (tech_stack or "").split(","):
+            pkg = item.strip().split()[0].lower()
+            if not pkg:
+                continue
+            try:
+                cached_result = json.loads(_search_nvd_impl(pkg))
+                for v in cached_result.get("vulnerabilities", []):
+                    cve_id = v.get("cve_id") or v.get("id", "")
+                    if not cve_id.startswith("CVE-"):
+                        continue
+                    injected.append({
+                        "cve_id":      cve_id,
+                        "package":     v.get("package", pkg),
+                        "cvss_score":  v.get("cvss_score", 0.0),
+                        "severity":    v.get("severity", "MEDIUM"),
+                        "description": v.get("description", "")[:300],
+                        "published":   v.get("published_date", ""),
+                        "is_new":      True,
+                        "in_cisa_kev": v.get("in_cisa_kev", False),
+                        "has_public_exploit": v.get("has_public_exploit", False),
+                    })
+            except Exception as e:
+                logger.warning("[WARN] Cache inject failed for %s: %s", pkg, e)
+
+        if injected:
+            output["vulnerabilities"] = injected
+            logger.warning(
+                "[HARNESS 2.5] LLM output 0 CVEs, injected %d CVEs from NVD cache for tech_stack=%s",
+                len(injected), tech_stack[:60]
+            )
+
     # 重新查 NVD 建立真實 CVE 清單 + CVE→package 對應表
     from tools.nvd_tool import _search_nvd_impl
     real_cves = set()
@@ -346,7 +447,7 @@ def run_scout_pipeline(tech_stack: str) -> dict:
                 real_cves.add(cve_id)
                 cve_to_package[cve_id] = pkg
         except Exception as e:
-            logger.warning(f"⚠️ CVE 驗證時 NVD 查詢失敗 ({pkg}): {e}")
+            logger.warning("[WARN] CVE verification NVD query failed (%s): %s", pkg, e)
 
     if real_cves:
         original_count = len(output.get("vulnerabilities", []))
@@ -377,7 +478,7 @@ def run_scout_pipeline(tech_stack: str) -> dict:
                     if resp.status_code == 200:
                         data = resp.json()
                         if data.get("totalResults", 0) > 0:
-                            logger.info(f"✅ CVE 精確驗證通過：{cve_id}")
+                            logger.info("[OK] CVE exact verification passed: %s", cve_id)
                             verified_vulns.append(vuln)
                             # 補 package：從 description 推斷
                             if not vuln.get("package"):
@@ -388,14 +489,18 @@ def run_scout_pipeline(tech_stack: str) -> dict:
                                         cve_to_package[cve_id] = pkg
                                         break
                             continue
+                    # NVD 明確回應但找不到 → 才算幻覺
                     hallucinated.append(cve_id)
                 except Exception:
-                    # 查詢失敗 → 保守移除
-                    hallucinated.append(cve_id)
+                    # NVD API 不可達（timeout/connection）→ 保守保留，不當幻覺處理
+                    logger.warning("[WARN] NVD verify unreachable for %s, keeping conservatively", cve_id)
+                    verified_vulns.append(vuln)
+
 
         if hallucinated:
             logger.warning(
-                f"🚨 偵測到 {len(hallucinated)} 筆幻覺 CVE，已移除：{hallucinated}"
+                "[ALERT] Detected %d hallucinated CVEs, removed: %s",
+                len(hallucinated), hallucinated
             )
             output["vulnerabilities"] = verified_vulns
             # 重新計算 summary
@@ -408,12 +513,13 @@ def run_scout_pipeline(tech_stack: str) -> dict:
                 "low": sum(1 for v in verified_vulns if v.get("severity") == "LOW"),
             }
             logger.info(
-                f"📊 CVE 驗證結果：{original_count} → {len(verified_vulns)} 筆（移除 {len(hallucinated)} 筆幻覺）"
+                "[OK] CVE verification result: %d -> %d (removed %d hallucinated)",
+                original_count, len(verified_vulns), len(hallucinated)
             )
         else:
-            logger.info(f"✅ 所有 {original_count} 筆 CVE 通過真實性驗證")
+            logger.info("[OK] All %d CVEs passed verification", original_count)
     else:
-        logger.warning("⚠️ 無法建立真實 CVE 清單，跳過驗證")
+        logger.warning("[WARN] Cannot build real CVE list, skipping verification")
 
     # ── Harness 保障 4：補全 package 欄位 ──────────────────────
     # Agent 常忘記加 package，用 Layer 3 建好的 cve_to_package 補
@@ -436,7 +542,7 @@ def run_scout_pipeline(tech_stack: str) -> dict:
                     vuln["package"] = "unknown"
                     patched_count += 1
     if patched_count:
-        logger.info(f"🔧 已補全 {patched_count} 筆 CVE 的 package 欄位")
+        logger.info("[OK] Patched %d CVE package fields", patched_count)
 
     # ── Harness 保障 5：校正 is_new 標記 ──────────────────────
     # Agent 常常不正確比對歷史，程式碼代為校正
@@ -469,9 +575,9 @@ def run_scout_pipeline(tech_stack: str) -> dict:
             # 重算 summary
             vulns = output.get("vulnerabilities", [])
             output["summary"]["new_since_last_scan"] = sum(1 for v in vulns if v.get("is_new"))
-            logger.info(f"🔧 已校正 {corrected} 筆 CVE 的 is_new 標記")
+            logger.info("[OK] Corrected %d CVE is_new flags", corrected)
     except Exception as e:
-        logger.warning(f"⚠️ is_new 校正失敗：{e}")
+        logger.warning("[WARN] is_new correction failed: %s", e)
 
     # ── 最終 Summary 校正（確保一致性）──────────────────────────
     vulns = output.get("vulnerabilities", [])
@@ -487,7 +593,7 @@ def run_scout_pipeline(tech_stack: str) -> dict:
     vuln_count = output["summary"]["total"]
     new_count = output["summary"]["new_since_last_scan"]
     logger.info(
-        f"✅ Scout Pipeline 完成：{vuln_count} 筆 CVE，新增 {new_count} 筆"
+        "[OK] Scout Pipeline complete: %d CVEs, %d new", vuln_count, new_count
     )
 
     return output

@@ -65,12 +65,12 @@ def _read_cache(package_name: str) -> dict | None:
                 cached = json.load(f)
             cached_time = cached.get("_cached_at", 0)
             if time.time() - cached_time < CACHE_TTL:
-                logger.info(f"📁 OTX 快取命中：{package_name}")
+                logger.info("[OK] OTX cache hit: %s", package_name)
                 return cached
             else:
-                logger.info(f"📁 OTX 快取過期：{package_name}")
+                logger.info("[INFO] OTX cache expired: %s", package_name)
     except (json.JSONDecodeError, IOError) as e:
-        logger.warning(f"⚠️ OTX 快取讀取失敗：{e}")
+        logger.warning("[WARN] OTX cache read failed: %s", e)
     return None
 
 
@@ -83,7 +83,7 @@ def _write_cache(package_name: str, data: dict) -> None:
         with open(cache_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except (IOError, PermissionError) as e:
-        logger.warning(f"⚠️ OTX 快取寫入失敗：{e}")
+        logger.warning("[WARN] OTX cache write failed: %s", e)
 
 
 def _rate_limit() -> None:
@@ -189,7 +189,7 @@ def _query_otx_api(keyword: str) -> dict | None:
     for attempt in range(1, MAX_RETRIES + 1):
         _rate_limit()
         try:
-            logger.info(f"🔍 OTX API 查詢：{keyword}（第 {attempt} 次）")
+            logger.info("[QUERY] OTX API: %s (attempt %d)", keyword, attempt)
             response = requests.get(
                 OTX_SEARCH_ENDPOINT,
                 params=params,
@@ -201,30 +201,30 @@ def _query_otx_api(keyword: str) -> dict | None:
                 return response.json()
 
             if response.status_code == 403:
-                logger.warning("⚠️ OTX API 403 (unauthorized) — 需要 API Key")
+                logger.warning("[WARN] OTX API 403 (unauthorized) -- API Key needed")
                 return None
 
             if response.status_code == 429:
-                logger.warning("⚠️ OTX API 429 (rate limited)")
+                logger.warning("[WARN] OTX API 429 (rate limited)")
                 time.sleep(5)
                 continue
 
             if response.status_code >= 500:
-                logger.warning(f"⚠️ OTX API {response.status_code} (server error)")
+                logger.warning("[WARN] OTX API %d (server error)", response.status_code)
                 time.sleep(2)
                 continue
 
-            logger.warning(f"⚠️ OTX API 回傳 {response.status_code}: {response.text[:200]}")
+            logger.warning("[WARN] OTX API returned %d: %s", response.status_code, response.text[:200])
             return None
 
         except requests.exceptions.Timeout:
-            logger.warning(f"⚠️ OTX API timeout（{REQUEST_TIMEOUT}s）")
+            logger.warning("[WARN] OTX API timeout (%ds)", REQUEST_TIMEOUT)
             continue
         except requests.exceptions.ConnectionError:
-            logger.warning("⚠️ OTX API 連線失敗（網路問題）")
+            logger.warning("[WARN] OTX API connection failed (network issue)")
             continue
         except requests.exceptions.RequestException as e:
-            logger.warning(f"⚠️ OTX API 請求異常：{e}")
+            logger.warning("[WARN] OTX API request error: %s", e)
             return None
 
     return None
@@ -274,7 +274,7 @@ def _search_otx_impl(package_name: str) -> str:
         name = package_name.strip().lower()
         name = name.split()[0] if " " in name else name
 
-        logger.info(f"🔍 OTX 查詢套件：{name}")
+        logger.info("[QUERY] OTX package: %s", name)
 
         # 嘗試 API 查詢
         raw = _query_otx_api(name)
@@ -286,9 +286,8 @@ def _search_otx_impl(package_name: str) -> str:
             _write_cache(name, result)
 
             logger.info(
-                f"✅ OTX 查詢成功：{package_name} → "
-                f"{result['pulse_count']} pulses, "
-                f"threat_level={result['threat_level']}"
+                "[OK] OTX query success: %s -> %d pulses, threat_level=%s",
+                package_name, result['pulse_count'], result['threat_level']
             )
             return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -298,7 +297,7 @@ def _search_otx_impl(package_name: str) -> str:
             cached.pop("_cached_at", None)
             cached["fallback_used"] = True
             cached["error"] = f"OTX API unavailable, using cached data for '{name}'"
-            logger.info(f"📁 OTX 使用快取：{name}")
+            logger.info("[OK] OTX using cache: %s", name)
             return json.dumps(cached, ensure_ascii=False, indent=2)
 
         # 完全沒有資料
@@ -311,12 +310,12 @@ def _search_otx_impl(package_name: str) -> str:
             "error": f"OTX API unavailable and no cache for '{name}'",
             "fallback_used": False,
         }
-        logger.info(f"ℹ️ OTX 查無資料：{package_name}")
+        logger.info("[INFO] OTX no data for: %s", package_name)
         return json.dumps(empty_result, ensure_ascii=False, indent=2)
 
     except Exception as e:
         # 最後一道防線
-        logger.error(f"❌ OTX Tool 未預期錯誤：{e}", exc_info=True)
+        logger.error("[FAIL] OTX Tool unexpected error: %s", e, exc_info=True)
         error_result = {
             "package": package_name,
             "source": "OTX",

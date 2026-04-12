@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -31,8 +32,7 @@ from crewai import Agent, Task
 from config import get_llm
 from tools.memory_tool import history_search, read_memory, write_memory
 
-# 延遲取得 LLM 實例（config.get_llm() 支援三模式降級）
-llm = get_llm()
+# LLM 延遲初始化：在 create_advisor_agent() 中才呼叫 get_llm()
 
 logger = logging.getLogger("ThreatHunter")
 
@@ -67,9 +67,12 @@ except FileNotFoundError:
 # 第二部份：Agent 建立函式
 # ══════════════════════════════════════════════════════════════
 
-def create_advisor_agent() -> Agent:
+def create_advisor_agent(excluded_models: list[str] | None = None) -> Agent:
     """
     建立 Advisor Agent。
+
+    Args:
+        excluded_models: 需要跳過的模型名稱列表（429 被限速的模型）
 
     Returns:
         CrewAI Agent 實例，具備記憶讀寫能力。
@@ -136,9 +139,9 @@ risk_score = min(100, sum of (cvss_score * weight for each vuln))
 weight: CRITICAL=3, HIGH=2, MEDIUM=1, LOW=0.5
 """,
         tools=[read_memory, write_memory, history_search],
-        llm=llm,
+        llm=get_llm(exclude_models=excluded_models),
         verbose=True,
-        max_iter=10,
+        max_iter=4,  # v3.5: Advisor 只讀/寫記憶，不需多次迭代
         allow_delegation=False,
     )
 
@@ -366,41 +369,82 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
         except json.JSONDecodeError:
             analyst_dict = {}
 
-    logger.info("🚀 Advisor Pipeline 啟動")
+    logger.info("[START] Advisor Pipeline")
+
+    # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
+    from config import mark_model_failed, get_current_model_name
+    MAX_LLM_RETRIES = 2
+    excluded_models: list[str] = []
 
     # ── 建立 Agent + Task ──────────────────────────────────────
-    agent = create_advisor_agent()
-    task = create_advisor_task(agent, analyst_str)
-
-    # ── 執行 CrewAI ────────────────────────────────────────────
     raw_output = ""
     output: dict[str, Any] = {}
     crew_success = False
 
-    try:
-        crew = Crew(
-            agents=[agent],
-            tasks=[task],
-            process=Process.sequential,
-            verbose=True,
-        )
-        result = crew.kickoff()
-        raw_output = str(result.raw) if hasattr(result, "raw") else str(result)
-        output = _extract_json_from_output(raw_output)
-        crew_success = bool(output)
-    except Exception as e:
-        logger.error("❌ CrewAI 執行失敗：%s", e)
+    for attempt in range(MAX_LLM_RETRIES + 1):
+        agent = create_advisor_agent(excluded_models)
+        task = create_advisor_task(agent, analyst_str)
+
+        # ── 執行 CrewAI ────────────────────────────────────────────
+        try:
+            crew = Crew(
+                agents=[agent],
+                tasks=[task],
+                process=Process.sequential,
+                verbose=True,
+            )
+            logger.info("[START] Advisor Crew kickoff (attempt %d/%d)", attempt + 1, MAX_LLM_RETRIES + 1)
+            try:
+                from checkpoint import recorder as _cp
+                _adv_model = get_current_model_name(agent.llm)
+                _cp.llm_call("advisor", _adv_model, "openrouter", f"attempt={attempt+1}")
+            except Exception:
+                _adv_model = "unknown"
+            _t_adv = time.time()
+            result = crew.kickoff()
+            raw_output = str(result.raw) if hasattr(result, "raw") else str(result)
+            try:
+                _cp.llm_result("advisor", _adv_model, "SUCCESS",
+                               len(raw_output), int((time.time() - _t_adv) * 1000),
+                               thinking=raw_output[:1000])
+            except Exception:
+                pass
+            output = _extract_json_from_output(raw_output)
+            crew_success = bool(output)
+            break  # 成功則跳出重試迴圈
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str and attempt < MAX_LLM_RETRIES:
+                current_model = get_current_model_name(agent.llm)
+                mark_model_failed(current_model)
+                excluded_models.append(current_model)
+                wait_sec = (attempt + 1) * 12  # 遞增等待：12s, 24s
+                logger.warning("[RETRY] Advisor 429 on %s, waiting %ds before retry %d/%d",
+                              current_model, wait_sec, attempt + 1, MAX_LLM_RETRIES)
+                try:
+                    _cp.llm_retry("advisor", current_model, error_str[:200],
+                                  attempt + 1, "next_in_waterfall")
+                except Exception:
+                    pass
+                time.sleep(wait_sec)
+                continue
+
+            logger.error("[FAIL] CrewAI execution failed: %s", e)
+            try:
+                _cp.llm_error("advisor", _adv_model, error_str[:300])
+            except Exception:
+                pass
 
     # ── Harness Layer 1：強制建立輸出 ─────────────────────────
     need_fallback = not output or not crew_success
     if need_fallback:
-        logger.warning("⚠️ Harness Layer 1：LLM 輸出無法解析，程式碼使用降級輸出")
+        logger.warning("[WARN] Harness Layer 1: LLM output unparseable, using fallback")
         output = _build_fallback_output(analyst_dict)
 
     # ── Harness Layer 2：Schema 驗證 ──────────────────────────
     schema_errors = _harness_validate_schema(output)
     if schema_errors:
-        logger.warning("⚠️ Harness Layer 2：Schema 錯誤 %s，合併降級輸出修補", schema_errors)
+        logger.warning("[WARN] Harness Layer 2: Schema errors %s, merging fallback", schema_errors)
         fallback = _build_fallback_output(analyst_dict)
         for k, v in fallback.items():
             if k not in output:
@@ -425,12 +469,12 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
             agent_name="advisor",
             data=json.dumps(output, ensure_ascii=False),
         )
-        logger.info("💾 Advisor 記憶已寫入：%s", write_result)
+        logger.info("[OK] Advisor memory saved: %s", write_result)
     except Exception as e:
-        logger.error("❌ write_memory 失敗：%s", e)
+        logger.error("[FAIL] write_memory failed: %s", e)
 
     logger.info(
-        "✅ Advisor Pipeline 完成｜risk_score=%s｜urgent=%s｜important=%s",
+        "[OK] Advisor Pipeline complete | risk_score=%s | urgent=%s | important=%s",
         output.get("risk_score", 0),
         len(output.get("actions", {}).get("urgent", [])),
         len(output.get("actions", {}).get("important", [])),

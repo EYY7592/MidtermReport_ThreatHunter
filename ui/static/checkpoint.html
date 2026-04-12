@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="ThreatHunter Checkpoint Dashboard — Pipeline 可觀測性審計儀表板" />
+  <title>ThreatHunter — Checkpoint Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/checkpoint.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ──────────────────────────────────────── -->
+  <header class="th-header">
+    <span class="th-logo">🛡️</span>
+    <div>
+      <div class="th-title">ThreatHunter <span class="cp-badge">CHECKPOINT</span></div>
+      <div class="th-subtitle">PIPELINE OBSERVABILITY DASHBOARD</div>
+    </div>
+    <nav class="cp-nav">
+      <a href="/" class="cp-nav-link">← Main Dashboard</a>
+    </nav>
+  </header>
+
+  <main class="cp-main">
+
+    <!-- ── Scan Selector Bar ────────────────────────────── -->
+    <div class="cp-toolbar">
+      <div class="cp-toolbar-left">
+        <label class="cp-label">掃描紀錄</label>
+        <select id="scanSelector" class="cp-select" style="min-width:420px">
+          <option value="">Loading scans...</option>
+        </select>
+        <button id="refreshBtn" class="cp-btn cp-btn-ghost" title="Refresh">⟳</button>
+      </div>
+      <div class="cp-toolbar-right">
+        <div class="cp-filter-group">
+          <label class="cp-label">EVENT</label>
+          <select id="eventFilter" class="cp-select cp-select-sm">
+            <option value="">All Events</option>
+            <option value="SCAN_START">SCAN_START</option>
+            <option value="SCAN_END">SCAN_END</option>
+            <option value="STAGE_ENTER">STAGE_ENTER</option>
+            <option value="STAGE_EXIT">STAGE_EXIT</option>
+            <option value="LLM_CALL">LLM_CALL</option>
+            <option value="LLM_RESULT">LLM_RESULT</option>
+            <option value="LLM_RETRY">LLM_RETRY</option>
+            <option value="LLM_ERROR">LLM_ERROR</option>
+            <option value="TOOL_CALL">TOOL_CALL</option>
+            <option value="HARNESS_CHECK">HARNESS_CHECK</option>
+            <option value="DEGRADATION">DEGRADATION</option>
+          </select>
+        </div>
+        <div class="cp-filter-group">
+          <label class="cp-label">AGENT</label>
+          <select id="agentFilter" class="cp-select cp-select-sm">
+            <option value="">All Agents</option>
+          </select>
+        </div>
+        <div class="cp-filter-group">
+          <label class="cp-label">SEARCH</label>
+          <input id="searchInput" class="cp-input" type="text" placeholder="Search..." />
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Stats Row ────────────────────────────────────── -->
+    <div class="cp-stats-row">
+      <div class="cp-stat-card" id="statTotal">
+        <div class="cp-stat-value">—</div>
+        <div class="cp-stat-label">TOTAL EVENTS</div>
+      </div>
+      <div class="cp-stat-card cp-stat-llm" id="statLLM">
+        <div class="cp-stat-value">—</div>
+        <div class="cp-stat-label">LLM CALLS</div>
+      </div>
+      <div class="cp-stat-card cp-stat-error" id="statErrors">
+        <div class="cp-stat-value">—</div>
+        <div class="cp-stat-label">ERRORS / RETRIES</div>
+      </div>
+      <div class="cp-stat-card cp-stat-duration" id="statDuration">
+        <div class="cp-stat-value">—</div>
+        <div class="cp-stat-label">DURATION</div>
+      </div>
+      <div class="cp-stat-card cp-stat-agents" id="statAgents">
+        <div class="cp-stat-value">—</div>
+        <div class="cp-stat-label">AGENTS</div>
+      </div>
+    </div>
+
+    <!-- ── Timeline ─────────────────────────────────────── -->
+    <div class="cp-timeline-container">
+      <div class="cp-timeline-header">
+        <span class="section-title">▸ EVENT TIMELINE</span>
+        <span id="filteredCount" class="cp-filtered-count"></span>
+      </div>
+      <div id="timeline" class="cp-timeline">
+        <div class="cp-empty-state">
+          <div class="cp-empty-icon">📡</div>
+          <div class="cp-empty-text">Select a scan file to view checkpoint events</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Detail Panel (hidden by default) ─────────────── -->
+    <div id="detailPanel" class="cp-detail-panel cp-hidden">
+      <div class="cp-detail-header">
+        <span class="cp-detail-title" id="detailTitle">Event Detail</span>
+        <button id="closeDetail" class="cp-btn cp-btn-ghost">✕</button>
+      </div>
+      <div id="detailContent" class="cp-detail-content"></div>
+    </div>
+
+  </main>
+
+</div>
+
+<script src="/static/checkpoint.js"></script>
+</body>
+</html>

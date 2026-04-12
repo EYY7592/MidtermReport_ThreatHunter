@@ -22,6 +22,12 @@ memory/vector_store/*
 !memory/.gitkeep
 !memory/vector_store/.gitkeep
 
+# 執行時產出（不應提交）
+tmp_*
+log_*.txt
+advisor_memory.json
+data/model_stats.json
+
 # IDE
 .vscode/
 .idea/
@@ -30,6 +36,7 @@ memory/vector_store/*
 
 # pytest
 .pytest_cache/
+.ruff_cache/
 
 # OS
 .DS_Store
@@ -37,3 +44,6 @@ Thumbs.db
 
 # Antigravity
 .gemini/
+
+# OpenCode
+.opencode/
