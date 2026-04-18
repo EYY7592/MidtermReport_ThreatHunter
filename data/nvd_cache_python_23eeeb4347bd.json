@@ -1,5 +1,5 @@
 {
-  "package": "python",
+  "package": "Python",
   "source": "NVD",
   "count": 10,
   "vulnerabilities": [
@@ -84,5 +84,5 @@
       "affected_versions": ""
     }
   ],
-  "_cached_at": 1776001604.4022107
+  "_cached_at": 1776458065.0383031
 }

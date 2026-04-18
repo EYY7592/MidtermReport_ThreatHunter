@@ -48,7 +48,7 @@ class TestScoutAgentCreation:
         assert expected == tool_names, f"Missing tools: {expected - tool_names}"
 
     def test_agent_max_iter(self):
-        """max_iter 必須是 15（Harness Constraints）"""
+        """max_iter 必須是 15（SOP：6 步驟流程需要足夠迭代空間）"""
         from agents.scout import create_scout_agent
         agent = create_scout_agent()
         assert agent.max_iter == 15

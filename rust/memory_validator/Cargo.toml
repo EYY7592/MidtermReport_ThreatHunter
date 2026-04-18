@@ -1,0 +1,13 @@
+[package]
+name = "memory_validator"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "threathunter_memory_validator"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3      = { workspace = true }
+serde_json = { workspace = true }
+regex     = { workspace = true }

@@ -91,6 +91,19 @@ MAX_PACKAGES = 8
 _MIN_PACKAGE_NAME_LEN = 2
 _INVALID_NAME_RE = re.compile(r"[^a-zA-Z0-9_\-]")
 
+# Node.js 內建模組黑名單（不應視為 npm 套件查詢 NVD）
+# 來源：https://nodejs.org/api/ (Node.js 20 LTS)
+NODEJS_BUILTIN_BLACKLIST: frozenset[str] = frozenset({
+    "fs", "path", "http", "https", "url", "events", "stream",
+    "util", "crypto", "os", "child_process", "net", "tls",
+    "dns", "readline", "cluster", "worker_threads", "buffer",
+    "assert", "querystring", "punycode", "string_decoder",
+    "zlib", "timers", "process", "console", "module",
+    "v8", "vm", "perf_hooks", "async_hooks", "inspector",
+    "http2", "dgram", "domain", "repl", "tty", "wasi",
+    "trace_events", "diagnostics_channel", "node:fs", "node:path",
+})
+
 
 def _is_valid_package_name(name: str) -> bool:
     """
@@ -179,9 +192,14 @@ def extract_third_party_packages(
             if top_level is None:
                 continue
 
-            # 過濾標準庫
+            # 過濾標準庫（Python）
             if top_level in STDLIB_BLACKLIST:
-                logger.debug("[PKG_EX] Filtered stdlib: %s", top_level)
+                logger.debug("[PKG_EX] Filtered Python stdlib: %s", top_level)
+                continue
+
+            # 過濾 Node.js 內建模組
+            if top_level in NODEJS_BUILTIN_BLACKLIST:
+                logger.debug("[PKG_EX] Filtered Node.js builtin: %s", top_level)
                 continue
 
             # 過濾不合理名稱

@@ -6,7 +6,10 @@ checkpoint.py — Pipeline 執行檢查點記錄器
   - 零阻塞：I/O 操作盡可能輕量（append-only JSONL）
   - 零失敗：任何記錄錯誤都被靜默吞噬，絕不影響 Pipeline
   - 結構化：每條記錄都是可查詢的 JSON
-  - 執行緒安全：threading.Lock 保護（Layer 1 並行寫入）
+  - 執行緒安全：
+      Phase 4A: 優先使用 Rust threathunter_checkpoint_writer
+                （parking_lot::Mutex + BufWriter<File>，高頻 SSE 不競爭）
+      Fallback:  Python threading.Lock + TextIO（原有實作）
 
 輸出格式（JSONL）：
   logs/checkpoints/scan_{id}_{timestamp}.jsonl
@@ -32,6 +35,17 @@ from pathlib import Path
 from typing import Any, TextIO
 
 logger = logging.getLogger("ThreatHunter.checkpoint")
+
+# ── Phase 4A：Rust BufWriter 整合 ────────────────────────────
+# 優先載入 Rust crate；不可用時（未編譯、非 Windows 等）自動降級
+try:
+    import threathunter_checkpoint_writer as _cw
+    _RUST_WRITER_AVAILABLE = True
+    logger.info("[CHECKPOINT] Phase 4A: Rust BufWriter 啟用 ✓")
+except ImportError:
+    _cw = None  # type: ignore[assignment]
+    _RUST_WRITER_AVAILABLE = False
+    logger.debug("[CHECKPOINT] Phase 4A: Rust BufWriter 不可用，使用 Python fallback")
 
 # ── 環境變數開關（回滾策略第三級）──────────────────────────────
 ENABLED = os.getenv("CHECKPOINT_ENABLED", "true").lower() != "false"
@@ -95,10 +109,18 @@ class CheckpointRecorder:
         self._errors_dir = self._logs_dir / "errors"
         self._scan_id: str = "unknown"
         self._seq: int = 0
-        self._file: TextIO | None = None
-        self._lock = threading.Lock()
+        self._file: TextIO | None = None        # Python fallback writer
+        self._lock = threading.Lock()            # Python fallback lock
         self._event_counts: dict[str, int] = {}
         self._scan_start_time: float = 0.0
+        self._current_filename: str = ""        # v3.6: Thinking Path API 使用
+        # Phase 4A：追蹤 Rust writer 是否對本次掃描開啟
+        self._rust_writer_active: bool = False
+
+    @property
+    def current_filename(self) -> str:
+        """回傳本次掃描的 JSONL 檔名（供 server.py Thinking Path API 使用）"""
+        return self._current_filename
 
     # ══════════════════════════════════════════════════════════
     # 掃描生命週期
@@ -116,20 +138,40 @@ class CheckpointRecorder:
             self._seq = 0
             self._event_counts = {}
             self._scan_start_time = time.time()
+            self._rust_writer_active = False
 
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"scan_{scan_id[:8]}_{ts}.jsonl"
             filepath = self._checkpoints_dir / filename
+            self._current_filename = filename  # v3.6: 供 Thinking Path API 查詢
 
-            # 關閉之前的檔案（若有）
-            if self._file and not self._file.closed:
+            # ── Phase 4A：優先嘗試 Rust BufWriter ──────────────────
+            if _RUST_WRITER_AVAILABLE:
                 try:
-                    self._file.close()
-                except Exception:
-                    pass
+                    _cw.open_writer(str(filepath))
+                    self._rust_writer_active = True
+                    logger.info(
+                        "[CHECKPOINT] Phase 4A: Rust BufWriter 開啟: %s", filepath.name
+                    )
+                except Exception as rust_err:
+                    logger.warning(
+                        "[CHECKPOINT] Phase 4A: Rust BufWriter 開啟失敗，回退 Python: %s", rust_err
+                    )
+                    self._rust_writer_active = False
 
-            self._file = open(filepath, "a", encoding="utf-8")
-            self.checkpoint("SCAN_START", "pipeline", {"scan_id": scan_id})
+            # ── Fallback：Python TextIO ─────────────────────────────
+            if not self._rust_writer_active:
+                if self._file and not self._file.closed:
+                    try:
+                        self._file.close()
+                    except Exception:
+                        pass
+                self._file = open(filepath, "a", encoding="utf-8")
+
+            self.checkpoint("SCAN_START", "pipeline", {
+                "scan_id": scan_id,
+                "writer_backend": "rust_bufwriter" if self._rust_writer_active else "python_lock",
+            })
             logger.info("[CHECKPOINT] 掃描記錄開始: %s", filepath.name)
 
         except Exception as e:
@@ -145,7 +187,22 @@ class CheckpointRecorder:
                 "total_duration_seconds": round(total_duration, 2),
                 "total_checkpoints": self._seq,
                 "event_summary": dict(self._event_counts),
+                "writer_backend": "rust_bufwriter" if self._rust_writer_active else "python_lock",
             })
+            # ── Phase 4A：關閉 Rust writer ──────────────────────────
+            if self._rust_writer_active and _RUST_WRITER_AVAILABLE:
+                try:
+                    _cw.flush_writer()
+                    _cw.close_writer()
+                    logger.debug(
+                        "[CHECKPOINT] Phase 4A: Rust BufWriter 已關閉，共寫入 %d 行",
+                        _cw.get_lines_written(),
+                    )
+                except Exception as e:
+                    logger.debug("[CHECKPOINT] Phase 4A: Rust close 失敗: %s", e)
+                finally:
+                    self._rust_writer_active = False
+            # ── Fallback：Python TextIO 關閉 ────────────────────────
             if self._file and not self._file.closed:
                 self._file.close()
                 self._file = None
@@ -163,6 +220,9 @@ class CheckpointRecorder:
     def checkpoint(self, event: str, agent: str, data: dict | None = None) -> None:
         """
         寫入一條 checkpoint 記錄（執行緒安全）。
+
+        Phase 4A：優先使用 Rust BufWriter（parking_lot::Mutex，無 GIL 競爭）。
+        Fallback：Python threading.Lock + TextIO（原有實作，完全等效）。
 
         Args:
             event: 事件類型（如 STAGE_ENTER, LLM_CALL 等）
@@ -186,6 +246,23 @@ class CheckpointRecorder:
                 }
 
                 line = json.dumps(record, ensure_ascii=False, default=str)
+
+                # ── Phase 4A：Rust BufWriter 寫入路徑 ──────────────
+                if self._rust_writer_active and _RUST_WRITER_AVAILABLE:
+                    try:
+                        _cw.write_line(line)
+                        # 高優先級事件（LLM 錯誤 / 掃描邊界）立即 flush
+                        if event in ("SCAN_START", "SCAN_END", "LLM_ERROR", "DEGRADATION"):
+                            _cw.flush_writer()
+                        return
+                    except Exception as rust_err:
+                        # Rust 寫入失敗 → 回退，並禁用 Rust writer 避免後續重試
+                        logger.warning(
+                            "[CHECKPOINT] Phase 4A Rust write 失敗，切換 Python: %s", rust_err
+                        )
+                        self._rust_writer_active = False
+
+                # ── Fallback：Python TextIO ─────────────────────────
                 if self._file and not self._file.closed:
                     self._file.write(line + "\n")
                     self._file.flush()  # 即時寫入，debug 時更易追蹤
@@ -213,12 +290,23 @@ class CheckpointRecorder:
     # Stage 層便捷方法
     # ══════════════════════════════════════════════════════════
 
-    def stage_enter(self, agent: str, input_data: Any = None) -> None:
-        """Stage 進入點 checkpoint"""
+    def stage_enter(
+        self,
+        agent: str,
+        input_data: Any = None,
+        skill_file: str = "",
+        input_type: str = "",
+    ) -> None:
+        """Stage 進入點 checkpoint — v3.7: 加入 skill_file / input_type 欄位供 Thinking Path UI 使用"""
         try:
             data: dict[str, Any] = {}
+            # v3.7: Path-Aware Skills 追蹤資料
+            if skill_file:
+                data["skill_file"] = skill_file
+            if input_type:
+                data["input_type"] = input_type
+            # 輸入摘要
             if isinstance(input_data, dict):
-                # 只記錄摘要，不記錄完整輸入
                 data["input_keys"] = list(input_data.keys())[:20]
                 if "tech_stack" in input_data:
                     data["tech_stack_preview"] = _truncate(
@@ -256,11 +344,24 @@ class CheckpointRecorder:
                     data["risk_score"] = output_data["risk_score"]
                 if "verdict" in output_data:
                     data["verdict"] = output_data["verdict"]
-                if "_degraded" in output_data:
+                if output_data.get("_degraded"):
                     data["degraded"] = True
                 if "scan_path" in output_data:
                     data["scan_path"] = output_data["scan_path"]
             self.checkpoint("STAGE_EXIT", agent, data)
+
+            # ── 自動注入 DEGRADATION checkpoint ──────────────────────────
+            # 當 stage 輸出包含 _degraded=True 時，立即補寫一條 DEGRADATION
+            # 事件，讓 Thinking Path 面板能正確顯示降級原因，不讓開發者瞎猜
+            if isinstance(output_data, dict) and output_data.get("_degraded"):
+                error_msg  = str(output_data.get("_error", "Unknown degradation reason"))
+                strategy   = f"status={status}, duration={duration_ms}ms"
+                self.checkpoint("DEGRADATION", agent, {
+                    "reason":            _truncate(error_msg, 400),
+                    "fallback_strategy": strategy,
+                    "error":             _truncate(error_msg, 400),   # 供前端 tp-error-text 使用
+                    "source":            "stage_exit_auto",
+                })
         except Exception:
             pass
 

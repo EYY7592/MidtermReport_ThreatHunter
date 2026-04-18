@@ -168,8 +168,26 @@ def calculate_composite_score(
 # Skill SOP 載入
 # ══════════════════════════════════════════════════════════════
 
+# Phase 4D: 使用 SkillLoader 熱載入系統
+try:
+    from skills.skill_loader import skill_loader as _skill_loader
+    _SKILL_LOADER_AVAILABLE = True
+    logger.info("[IntelFusion] Phase 4D: SkillLoader 啟用 ✓")
+except ImportError:
+    _skill_loader = None
+    _SKILL_LOADER_AVAILABLE = False
+
+
 def _load_skill() -> str:
-    """載入 Intel Fusion SOP（含 Graceful Degradation）"""
+    """載入 Intel Fusion SOP（Phase 4D: SkillLoader 熱載入 + Graceful Degradation）"""
+    # Phase 4D: SkillLoader 熱載入路徑
+    if _SKILL_LOADER_AVAILABLE and _skill_loader is not None:
+        try:
+            return _skill_loader.load_skill("intel_fusion.md")
+        except Exception as e:
+            logger.warning("[IntelFusion] SkillLoader 失敗，回退磁碟讀取: %s", e)
+
+    # Fallback: 直接從磁碟讀取
     for encoding in ("utf-8", "utf-8-sig", "latin-1"):
         try:
             if SKILL_PATH.exists():
@@ -201,7 +219,7 @@ _FALLBACK_SKILL = """
 # Agent 工廠
 # ══════════════════════════════════════════════════════════════
 
-def build_intel_fusion_agent() -> Agent:
+def build_intel_fusion_agent(excluded_models: list[str] | None = None) -> Agent:
     """
     建立 Intel Fusion Agent（六維情報融合師）。
 
@@ -214,7 +232,7 @@ def build_intel_fusion_agent() -> Agent:
       - read_memory / write_memory（API 健康狀態）
 
     Args:
-        None
+        excluded_models: 要排除的模型名稱列表（429 重試時傳入）
 
     Returns:
         CrewAI Agent 實例
@@ -284,7 +302,7 @@ def build_intel_fusion_agent() -> Agent:
 }}
 """
 
-    llm = get_llm()
+    llm = get_llm(exclude_models=excluded_models or [])
     agent = Agent(
         role="Intelligence Fusion Specialist",
         goal=(
@@ -394,7 +412,7 @@ def run_intel_fusion(
             from config import get_current_model_name, mark_model_failed
             from crewai import Crew, Process
 
-            agent = build_intel_fusion_agent()
+            agent = build_intel_fusion_agent(excluded_models=excluded_models)
 
             # v3.4：根據輸入類型使用不同的 task description
             if package_list_for_task:
@@ -479,7 +497,22 @@ def run_intel_fusion(
                 if len(parts) >= 3:
                     result_str = parts[1].strip()
 
-            result = json.loads(result_str)
+            result = None
+            try:
+                result = json.loads(result_str)
+            except json.JSONDecodeError:
+                # 層 2：從大段文字中提取 {} block（LLM 加了解釋文字的情況）
+                _jm = re.search(r'\{[\s\S]*\}', result_str)
+                if _jm:
+                    try:
+                        result = json.loads(_jm.group(0))
+                    except json.JSONDecodeError:
+                        pass
+                if result is None:
+                    # 層 3：無法解析，讓外層 except 捕獲並 graceful degrade
+                    raise ValueError(
+                        f"LLM output is not JSON (len={len(result_str)}): {result_str[:120]}"
+                    )
             break  # 成功
 
         except Exception as e:
@@ -490,16 +523,19 @@ def run_intel_fusion(
                     current_model = get_current_model_name(agent.llm)
                     mark_model_failed(current_model)
                     excluded_models.append(current_model)
-                    wait_sec = (attempt + 1) * 12  # 遞增等待：12s, 24s
-                    logger.warning("[INTEL] 429 on %s, waiting %ds before retry %d/%d",
-                                  current_model, wait_sec, attempt + 1, MAX_RETRIES)
+                    import re as _re
+                    _m = _re.search(r'retry.{1,10}(\d+\.?\d*)s', error_str, _re.IGNORECASE)
+                    retry_after = float(_m.group(1)) if _m else 0.0
+                    logger.warning("[INTEL] 429 on %s (attempt %d/%d), api_retry_after=%.0fs",
+                                  current_model, attempt + 1, MAX_RETRIES, retry_after)
                     try:
                         from checkpoint import recorder as _cp2
                         _cp2.llm_retry("intel_fusion", current_model, error_str[:200],
                                        attempt + 1, "next_in_waterfall")
                     except Exception:
                         pass
-                    time.sleep(wait_sec)
+                    from config import rate_limiter as _rl
+                    _rl.on_429(retry_after=retry_after, caller="intel_fusion")  # 最少 30s
                     continue
                 except Exception:
                     pass
@@ -541,11 +577,15 @@ def run_intel_fusion(
         try:
             fusion_count = len(result.get("fusion_results", []))
             kev_hits = sum(1 for f in result.get("fusion_results", []) if f.get("shortcut_kev"))
+            is_degraded = result.get("_degraded", False)
             on_progress("intel_fusion", "COMPLETE", {
-                "status": "SUCCESS" if not result.get("_degraded") else "DEGRADED",
+                "status": "DEGRADED" if is_degraded else "SUCCESS",
                 "fusion_count": fusion_count,
                 "kev_hits": kev_hits,
                 "duration_ms": duration_ms,
+                # DEGRADED 時帶入錯誤訊息，供 server.py on_progress 提取
+                "_degraded": is_degraded,
+                "_error": result.get("_error", "") if is_degraded else "",
             })
         except Exception:
             pass

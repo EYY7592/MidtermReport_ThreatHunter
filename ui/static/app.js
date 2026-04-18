@@ -143,11 +143,11 @@ function detectInputType(text) {
   const configPatterns = [/^FROM\s+\S+/m, /^[\w-]+:\s+\S/m, /<\?xml/i, /^\[.*\]$/m];
   const isConfig = configPatterns.filter(p => p.test(text)).length >= 2;
 
-  if (hasInjection && isCode) return { type: 'injection', label: '🛡️ Code + Prompt Injection · Path B', cls: 'injection' };
-  if (hasInjection)          return { type: 'injection', label: '🛡️ Prompt Injection Detected', cls: 'injection' };
-  if (isConfig)              return { type: 'config',    label: '⚙️ Config File · Path C', cls: 'config' };
-  if (isCode)                return { type: 'code',      label: '💻 Source Code · Path B', cls: 'code' };
-  return                            { type: 'pkg',       label: '📦 Package List · Path A', cls: '' };
+  if (hasInjection && isCode) return { type: 'injection', label: 'Code + Prompt Injection · Path B', cls: 'injection' };
+  if (hasInjection)          return { type: 'injection', label: 'Prompt Injection Detected', cls: 'injection' };
+  if (isConfig)              return { type: 'config',    label: 'Config File · Path C', cls: 'config' };
+  if (isCode)                return { type: 'code',      label: 'Source Code · Path B', cls: 'code' };
+  return                            { type: 'pkg',       label: 'Package List · Path A', cls: '' };
 }
 
 let _detectTimer = null;
@@ -256,7 +256,7 @@ const STATUS_LABELS = {
   pending: 'WAITING', running: 'RUNNING', done: 'COMPLETE',
   skipped: 'SKIPPED', degraded: 'DEGRADED',
 };
-function setAgentState(agent, state, detail = '') {
+function setAgentState(agent, state, detail = '', errorMsg = '') {
   const card   = $(`card${cap(agent)}`);
   const status = $(`status${cap(agent)}`);
   const det    = $(`detail${cap(agent)}`);
@@ -264,7 +264,28 @@ function setAgentState(agent, state, detail = '') {
   card.className   = `agent-card ${state}`;
   status.className = `agent-status ${state}`;
   status.textContent = STATUS_LABELS[state] || state.toUpperCase();
-  if (det) det.textContent = detail || '—';
+  if (det) {
+    if (state === 'degraded' && errorMsg) {
+      // DEGRADED 時顯示錯誤摘要（截短 60 字元）
+      const shortErr = errorMsg.length > 60 ? errorMsg.slice(0, 57) + '...' : errorMsg;
+      det.textContent = `⚠️ ${shortErr}`;
+      // title tooltip 顯示完整錯誤
+      det.title = errorMsg;
+      det.style.color = 'var(--red, #ff4d6d)';
+      det.style.fontSize = '0.7rem';
+    } else {
+      det.textContent = detail || '—';
+      det.title = detail || '';
+      det.style.color = '';
+      det.style.fontSize = '';
+    }
+  }
+  // DEGRADED 時在 card 加 title tooltip整套錯誤
+  if (state === 'degraded' && errorMsg) {
+    card.title = `☠️ DEGRADED: ${errorMsg}`;
+  } else {
+    card.title = '';
+  }
 }
 function cap(s) {
   // snake_case → PascalCase（例：security_guard → SecurityGuard）
@@ -390,19 +411,26 @@ function openSSE(scanId) {
   /* agent_done ──────────────────────────────────────── */
   sse.addEventListener('agent_done', e => {
     const d = JSON.parse(e.data);
-    const agent  = d.agent;
-    const status = (d.status || 'done').toLowerCase();
-    const detail = buildAgentDetail(agent, d.detail || {});
+    const agent    = d.agent;
+    const status   = (d.status || 'done').toLowerCase();
+    const detail   = buildAgentDetail(agent, d.detail || {});
+    const errorMsg = d.error_msg || d.detail?._error || '';
 
-    const stepState = status === 'success' ? 'done'
-                    : status === 'skipped' ? 'skipped'
+    const stepState = status === 'success'  ? 'done'
+                    : status === 'skipped'  ? 'skipped'
                     : status === 'degraded' ? 'degraded' : 'done';
 
     setStepState(agent, stepState);
-    setAgentState(agent, stepState, detail);
+    setAgentState(agent, stepState, detail, errorMsg);
 
     const dur = d.detail?.duration_ms ? ` [${d.detail.duration_ms}ms]` : '';
-    appendLog('log-ok', 'OK', `[${agent.toUpperCase()}] ${status.toUpperCase()}${dur}`);
+    if (status === 'degraded' && errorMsg) {
+      // DEGRADED 時在 log 印出紅色錯誤行
+      appendLog('log-ok',   'OK',  `[${agent.toUpperCase()}] ${status.toUpperCase()}${dur}`);
+      appendLog('log-fail', 'ERR', `[${agent.toUpperCase()}] ${errorMsg}`);
+    } else {
+      appendLog('log-ok', 'OK', `[${agent.toUpperCase()}] ${status.toUpperCase()}${dur}`);
+    }
   });
 
   /* done ────────────────────────────────────────────── */
@@ -451,6 +479,9 @@ function openSSE(scanId) {
     renderReport(result);
     setHeaderStatus('done');
     resetButtons();
+    // v3.6: 顯示 Thinking Path NEW 徽章
+    const badge = $('thinkingBadgeNew');
+    if (badge) badge.style.display = 'inline-block';
   });
 
   /* error ───────────────────────────────────────────── */
@@ -477,6 +508,11 @@ function openSSE(scanId) {
 
 /* ── Build Agent Detail Text ─────────────────────────────── */
 function buildAgentDetail(agent, info) {
+  // DEGRADED 狀態：密展錯誤原因
+  if (info._degraded || info._error) {
+    const err = info._error || 'degraded';
+    return err.length > 60 ? err.slice(0, 57) + '...' : err;
+  }
   switch (agent) {
     case 'orchestrator':    return info.scan_path   ? `Path: ${info.scan_path}` : '';
     case 'layer1_parallel': return info.agents_completed ? `${info.agents_completed.join(', ')} done` : '';
@@ -604,6 +640,7 @@ function resetButtons() {
 function clearResults() {
   if (currentSSE) { currentSSE.close(); currentSSE = null; }
   stopTimer();
+  closeThinking();   // v3.6: 關閉 Thinking Path Drawer
   hide('pipelineBar');
   hide('agentGrid');
   hide('monitorLayout');
@@ -611,6 +648,9 @@ function clearResults() {
   hide('errorBanner');
   hide('successBanner');
   hide('btnClear');
+  // v3.6: btnThinking 永遠顯示，clear 時隱藏 NEW 徽章
+  const badge = $('thinkingBadgeNew');
+  if (badge) badge.style.display = 'none';
   clearLog();
   resetButtons();
   setHeaderStatus('idle');
@@ -686,6 +726,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (!e.target.closest('.example-dropdown-wrap')) hide('exampleMenu');
   });
 
+  // ESC 鍵關閉 Thinking Drawer
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeThinking();
+  });
+
   // 健康檢查
   try {
     const r = await fetch('/api/health');
@@ -696,3 +741,331 @@ window.addEventListener('DOMContentLoaded', async () => {
     /* silent */
   }
 });
+
+
+/* ═══════════════════════════════════════════════════════════
+   ⚡ THINKING PATH — v3.6
+   完整 Agent 推理軌跡側拉面板
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 狀態 ─────────────────────────────────────────────────── */
+let _thinkingOpen = false;
+
+/* ── 事件類型標籤 ──────────────────────────────────────────── */
+const TP_EVENT_META = {
+  LLM_CALL:      { icon: '🧠', label: 'LLM 呼叫',    cls: 'tp-step-llm' },
+  LLM_RESULT:    { icon: '✅', label: 'LLM 回應',    cls: 'tp-step-llm-result' },
+  LLM_RETRY:     { icon: '🔄', label: 'LLM 重試',    cls: 'tp-step-retry' },
+  LLM_ERROR:     { icon: '❌', label: 'LLM 錯誤',    cls: 'tp-step-error' },
+  TOOL_CALL:     { icon: '🔧', label: '工具呼叫',    cls: 'tp-step-tool' },
+  STAGE_ENTER:   { icon: '▶', label: 'Stage 開始',  cls: 'tp-step-stage' },
+  STAGE_EXIT:    { icon: '⏹', label: 'Stage 結束',  cls: 'tp-step-stage' },
+  HARNESS_CHECK: { icon: '🛡️', label: 'Harness 驗證', cls: 'tp-step-harness' },
+  DEGRADATION:   { icon: '⚠️', label: '降級觸發',    cls: 'tp-step-warn' },
+};
+
+/* ── 開啟 Thinking Path ─────────────────────────────────────── */
+async function openThinking() {
+  if (_thinkingOpen) return;
+
+  const overlay = $('thinkingOverlay');
+  const drawer  = $('thinkingDrawer');
+  if (!overlay || !drawer) return;
+
+  overlay.classList.remove('hidden');
+  drawer.classList.remove('hidden');
+  // 觸發 slide-in 動畫
+  requestAnimationFrame(() => {
+    drawer.classList.add('tp-open');
+    overlay.classList.add('tp-overlay-visible');
+  });
+  _thinkingOpen = true;
+
+  // 若已有 scan_id 就載入，否則載入最新的
+  await loadThinkingData();
+}
+
+/* ── 關閉 Thinking Path ─────────────────────────────────────── */
+function closeThinking() {
+  if (!_thinkingOpen) return;
+  const overlay = $('thinkingOverlay');
+  const drawer  = $('thinkingDrawer');
+  if (drawer)  drawer.classList.remove('tp-open');
+  if (overlay) overlay.classList.remove('tp-overlay-visible');
+
+  setTimeout(() => {
+    overlay?.classList.add('hidden');
+    drawer?.classList.add('hidden');
+    _thinkingOpen = false;
+  }, 320); // 配合 transition 時間
+}
+
+/* ── 載入 Thinking Path 資料 ────────────────────────────────── */
+async function loadThinkingData() {
+  const content  = $('thinkingContent');
+  const loading  = $('thinkingLoading');
+  const metaEl   = $('thinkingMeta');
+
+  if (loading) loading.style.display = 'flex';
+  if (content) content.innerHTML = '<div class="tp-loading"><div class="tp-spinner"></div><span>載入思考軌跡中...</span></div>';
+
+  // 優先用 currentScanId，fallback GET /api/checkpoints/latest
+  let scanId = currentScanId;
+  let url = scanId ? `/api/thinking/${scanId}` : null;
+
+  // 若沒有 scanId，先取最新 checkpoint 再直接讀 /api/thinking/latest
+  if (!url) {
+    try {
+      const latestResp = await fetch('/api/checkpoints/latest');
+      const latestData = await latestResp.json();
+      if (latestData.latest?.name) {
+        // 從檔名取 scan_id（格式：scan_{8chars}_{ts}.jsonl）
+        const parts = latestData.latest.name.replace('.jsonl', '').split('_');
+        scanId = parts.slice(1, -2).join('_'); // 取去掉 scan_ 和時間戳
+        url = `/api/thinking/${scanId}`;
+      }
+    } catch {
+      /* silent */
+    }
+  }
+
+  if (!url) {
+    if (content) content.innerHTML = '<div class="tp-empty">尚無掃描記錄。<br>請先執行一次掃描。</div>';
+    return;
+  }
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    renderThinkingPath(data);
+  } catch (e) {
+    if (content) content.innerHTML = `<div class="tp-empty">載入失敗：${escapeHtml(e.message)}</div>`;
+  }
+}
+
+/* ── 渲染 Thinking Path ─────────────────────────────────────── */
+function renderThinkingPath(data) {
+  const content = $('thinkingContent');
+  const metaEl  = $('thinkingMeta');
+  if (!content) return;
+
+  const scanMeta = data.scan_meta || {};
+  const agents   = data.agents   || {};
+  const cpFile   = data.checkpoint_file || '—';
+
+  // 更新 header 元資料
+  const dur = scanMeta.duration_seconds
+    ? (scanMeta.duration_seconds >= 60
+        ? `${(scanMeta.duration_seconds / 60).toFixed(1)}m`
+        : `${scanMeta.duration_seconds.toFixed(0)}s`)
+    : '—';
+  if (metaEl) {
+    metaEl.textContent = `掃描耗時 ${dur} · ${scanMeta.total_events || '?'} 個 Checkpoint · ${cpFile}`;
+  }
+
+  const agentCount = Object.keys(agents).length;
+  if (agentCount === 0) {
+    content.innerHTML = '<div class="tp-empty">此 Checkpoint 尚無 Agent 事件記錄。</div>';
+    return;
+  }
+
+  // 渲染每個 Agent 的 accordion
+  let html = '';
+  for (const [agentKey, agentData] of Object.entries(agents)) {
+    const role       = agentData.role || agentKey;
+    const skillName  = agentData.skill_name;
+    const skillFile  = agentData.skill_file;          // v3.7: actual filename
+    const skillOk    = agentData.skill_applied;
+    const inputType  = agentData.input_type || 'pkg'; // v3.7: path type
+    const llmCalls   = agentData.llm_calls || 0;
+    const toolCalls  = agentData.tool_calls || 0;
+    const totalMs    = agentData.total_duration_ms || 0;
+    const steps      = agentData.steps || [];
+
+    // prefer skill_file (direct from checkpoint) over skill_name
+    const displaySkill = skillFile || skillName;
+
+    const agentId  = `tp-agent-${agentKey.replace(/_/g, '-')}`;
+    const hasError = steps.some(s => s.event === 'LLM_ERROR' || s.event === 'DEGRADATION');
+    // DEGRADED 從 steps 找到降級原因（供 header 即時顯示）
+    const degradeStep  = steps.find(s => s.event === 'DEGRADATION');
+    const degradeReason = degradeStep ? (degradeStep.data?.reason || degradeStep.data?.error || '') : '';
+
+    html += `
+    <div class="tp-agent-block ${hasError ? 'tp-agent-has-error' : ''}">
+      <button class="tp-agent-header" onclick="toggleTpAgent('${agentId}')" aria-expanded="true">
+        <div class="tp-agent-left">
+          <span class="tp-agent-chevron" id="${agentId}-chevron">▾</span>
+          <span class="tp-agent-name">${escapeHtml(agentKey.replace(/_/g, ' '))}</span>
+          <span class="tp-agent-role">${escapeHtml(role)}</span>
+          ${hasError ? `<span class="tp-skill-badge" style="color:var(--red);border-color:rgba(248,81,73,0.5);background:rgba(248,81,73,0.1);" title="${escapeHtml(degradeReason)}">☠️ DEGRADED</span>` : ''}
+        </div>
+        <div class="tp-agent-right">
+          ${displaySkill ? renderSkillBadge(skillOk, displaySkill, inputType) : ''}
+          <span class="tp-stat-badge">${llmCalls} LLM</span>
+          <span class="tp-stat-badge">${toolCalls} Tools</span>
+          ${totalMs > 0 ? `<span class="tp-stat-badge tp-dur">${(totalMs/1000).toFixed(1)}s</span>` : ''}
+        </div>
+      </button>
+      <div class="tp-agent-steps" id="${agentId}">
+        ${renderAgentSteps(steps)}
+      </div>
+    </div>`;
+  }
+
+  content.innerHTML = html;
+}
+
+/* ── accordion toggle ──────────────────────────────────── */
+function toggleTpAgent(id) {
+  const el      = $(id);
+  const chevron = $(`${id}-chevron`);
+  if (!el) return;
+  const isOpen = el.classList.toggle('tp-collapsed');
+  if (chevron) chevron.textContent = isOpen ? '▸' : '▾';
+}
+
+/* ── Skill Badge (v3.7: path-aware) ────────────────────────── */
+function renderSkillBadge(applied, skillName, inputType) {
+  // color by path
+  const PATH_COLOR = {
+    'pkg':       { cls: 'tp-skill-pkg',       icon: '📦', label: 'PKG' },
+    'code':      { cls: 'tp-skill-code',      icon: '🔍', label: 'CODE' },
+    'injection': { cls: 'tp-skill-injection', icon: '🤖', label: 'AI' },
+    'config':    { cls: 'tp-skill-config',    icon: '⚙️', label: 'CFG' },
+  };
+  const pathMeta = PATH_COLOR[inputType] || { cls: '', icon: '📋', label: (inputType || '').toUpperCase() };
+  // short display name from filename
+  const shortName = skillName
+    ? skillName.replace('.md', '').replace(/_/g, ' ')
+    : 'skill';
+  const statusIcon = applied ? '✅' : '⚠️';
+  const statusTip  = applied
+    ? `Skill SOP applied: ${skillName}`
+    : `Skill SOP unconfirmed: ${skillName}`;
+
+  return `<span class="tp-skill-badge ${pathMeta.cls} ${applied ? 'tp-skill-ok' : 'tp-skill-warn'}" title="${escapeHtml(statusTip)}">
+    ${statusIcon} ${pathMeta.icon} <strong>${pathMeta.label}</strong> · ${escapeHtml(shortName)}
+  </span>`;
+}
+
+/* ── 渲染 Agent 步驟列表 ─────────────────────────────────── */
+function renderAgentSteps(steps) {
+  if (!steps.length) return '<div class="tp-step-empty">此 Agent 無詳細步驟記錄</div>';
+
+  return steps.map(step => {
+    const meta = TP_EVENT_META[step.event] || { icon: '◦', label: step.event, cls: 'tp-step-other' };
+    const ts   = step.ts ? step.ts.replace('T', ' ').slice(0, 19) : '';
+    const data = step.data || {};
+
+    let detail = '';
+    switch (step.event) {
+      case 'LLM_CALL':
+        detail = `
+          <div class="tp-detail-row"><span class="tp-detail-label">Model</span><span class="tp-mono tp-badge-model">${escapeHtml(data.model || '—')}</span></div>
+          ${data.task_preview ? `<div class="tp-detail-row tp-task-preview"><span class="tp-detail-label">Task</span><span class="tp-detail-val">${escapeHtml(data.task_preview)}</span></div>` : ''}
+        `;
+        break;
+
+      case 'LLM_RESULT': {
+        const status   = data.status || '—';
+        const dur      = data.duration_ms ? `${data.duration_ms}ms` : '—';
+        const outLen   = data.output_length ? `${data.output_length} chars` : '';
+        const statusCls = status === 'SUCCESS' ? 'tp-status-ok' : 'tp-status-err';
+        detail = `
+          <div class="tp-detail-row">
+            <span class="tp-detail-label">Status</span><span class="tp-status-badge ${statusCls}">${escapeHtml(status)}</span>
+            <span class="tp-detail-label" style="margin-left:0.75rem">Time</span><span class="tp-mono">${dur}</span>
+            ${outLen ? `<span class="tp-detail-label" style="margin-left:0.75rem">Output</span><span class="tp-mono">${outLen}</span>` : ''}
+          </div>
+          ${data.thinking_preview ? `
+          <details class="tp-thinking-details">
+            <summary>💭 思考過程（摘要）</summary>
+            <pre class="tp-thinking-pre">${escapeHtml(data.thinking_preview)}</pre>
+          </details>` : ''}
+        `;
+        break;
+      }
+
+      case 'LLM_RETRY':
+        detail = `
+          <div class="tp-detail-row">
+            <span class="tp-detail-label">失敗模型</span><span class="tp-mono tp-badge-model">${escapeHtml(data.failed_model || '—')}</span>
+            <span class="tp-detail-label" style="margin-left:1rem">次數</span><span class="tp-mono">#${data.retry_count || 1}</span>
+          </div>
+          <div class="tp-detail-row"><span class="tp-detail-label">下一個模型</span><span class="tp-mono tp-accent">${escapeHtml(data.next_model || '—')}</span></div>
+          ${data.error ? `<div class="tp-error-text">${escapeHtml(data.error)}</div>` : ''}
+        `;
+        break;
+
+      case 'LLM_ERROR':
+        detail = `<div class="tp-error-text">${escapeHtml(data.error || '未知錯誤')}</div>`;
+        break;
+
+      case 'TOOL_CALL': {
+        const toolStatus = data.status || '—';
+        const toolCls = toolStatus === 'SUCCESS' ? 'tp-status-ok' : 'tp-status-err';
+        detail = `
+          <div class="tp-detail-row">
+            <span class="tp-detail-label">Tool</span><span class="tp-mono tp-accent">${escapeHtml(data.tool_name || '—')}</span>
+            <span class="tp-detail-label" style="margin-left:1rem">Status</span><span class="tp-status-badge ${toolCls}">${escapeHtml(toolStatus)}</span>
+          </div>
+          ${data.input ? `<div class="tp-detail-row"><span class="tp-detail-label">Input</span><span class="tp-detail-val">${escapeHtml(data.input)}</span></div>` : ''}
+          ${data.output_preview ? `<div class="tp-detail-row"><span class="tp-detail-label">Output</span><span class="tp-detail-val tp-muted">${escapeHtml(data.output_preview)}</span></div>` : ''}
+        `;
+        break;
+      }
+
+      case 'STAGE_ENTER':
+        detail = data.tech_stack_preview
+          ? `<div class="tp-detail-row"><span class="tp-detail-label">Input</span><span class="tp-detail-val">${escapeHtml(data.tech_stack_preview)}</span></div>`
+          : '';
+        break;
+
+      case 'STAGE_EXIT': {
+        const exitStatus  = data.status || '—';
+        const exitDur     = data.duration_ms ? `${data.duration_ms}ms` : '';
+        const exitCls     = exitStatus === 'SUCCESS' ? 'tp-status-ok' : (exitStatus === 'DEGRADED' ? 'tp-status-warn' : 'tp-status-err');
+        detail = `
+          <div class="tp-detail-row">
+            <span class="tp-detail-label">Status</span><span class="tp-status-badge ${exitCls}">${escapeHtml(exitStatus)}</span>
+            ${exitDur ? `<span class="tp-detail-label" style="margin-left:1rem">Duration</span><span class="tp-mono">${exitDur}</span>` : ''}
+            ${data.risk_score != null ? `<span class="tp-detail-label" style="margin-left:1rem">Risk</span><span class="tp-mono tp-accent">${data.risk_score}</span>` : ''}
+            ${data.verdict ? `<span class="tp-detail-label" style="margin-left:1rem">Verdict</span><span class="tp-mono">${escapeHtml(data.verdict)}</span>` : ''}
+            ${data.degraded ? `<span class="tp-status-badge" style="background:rgba(248,81,73,0.12);color:var(--red);margin-left:0.75rem">☠️ DEGRADED</span>` : ''}
+          </div>
+        `;
+        break;
+      }
+
+      case 'DEGRADATION': {
+        const errMsg   = data.error || data.reason || '原因不明';
+        const srcLabel = data.source === 'stage_exit_auto' ? ' (自動捕捉)' : '';
+        detail = `
+          <div class="tp-degraded-banner">
+            <div class="tp-degraded-title">☠️ 降級觸發${srcLabel}</div>
+            <div class="tp-error-text" style="margin-top:6px">${escapeHtml(errMsg)}</div>
+            ${data.fallback_strategy ? `<div class="tp-detail-row" style="margin-top:4px"><span class="tp-detail-label">Fallback</span><span class="tp-mono tp-muted">${escapeHtml(data.fallback_strategy)}</span></div>` : ''}
+          </div>`;
+        break;
+      }
+
+      default:
+        if (Object.keys(data).length > 0) {
+          detail = `<div class="tp-detail-val tp-muted">${escapeHtml(JSON.stringify(data).slice(0, 200))}</div>`;
+        }
+    }
+
+    return `
+    <div class="tp-step ${meta.cls}">
+      <div class="tp-step-header">
+        <span class="tp-step-icon">${meta.icon}</span>
+        <span class="tp-step-label">${meta.label}</span>
+        <span class="tp-step-ts">${ts}</span>
+      </div>
+      ${detail ? `<div class="tp-step-detail">${detail}</div>` : ''}
+    </div>`;
+
+  }).join('');
+}

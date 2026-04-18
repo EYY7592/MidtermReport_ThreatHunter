@@ -1,0 +1,7 @@
+# rust/.cargo/config.toml
+# 使用 MinGW-w64 gcc（來自 MSYS2）作為 Windows GNU 目標的連結器
+# 避免需要完整 MSVC / VS Build Tools 安裝
+
+[target.x86_64-pc-windows-gnu]
+linker = "C:\\msys64\\mingw64\\bin\\gcc.exe"
+ar     = "C:\\msys64\\mingw64\\bin\\ar.exe"

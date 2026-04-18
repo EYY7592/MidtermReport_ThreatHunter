@@ -52,6 +52,13 @@ CONSTITUTION = """
 
 SKILL_PATH = os.path.join(PROJECT_ROOT, "skills", "chain_analysis.md")
 
+# v3.7: Path-Aware Skill Map（對應 main.py recorder.stage_enter 使用）
+SKILL_MAP: dict[str, str] = {
+    "pkg":       "chain_analysis.md",       # Path A: package CVE chain
+    "code":      "code_chain_analysis.md",  # Path B-code: source code chain
+    "injection": "ai_chain_analysis.md",   # Path B-inject: AI security chain
+    "config":    "config_chain_analysis.md", # Path C: config chain
+}
 
 def _load_skill() -> str:
     """
@@ -614,6 +621,45 @@ def _harness_validate_chain_risk(output: dict[str, Any]) -> None:
                 chain_risk["confidence"] = "NEEDS_VERIFICATION"
 
 
+# CVE 年份切割點：2005 年前的漏洞目標軟體基本已退場
+# 佐證：EPSS 研究（Jacobs et al. 2023）顯示 pre-2005 CVE 的 EPSS < 0.01
+# 開源參考：Trivy --ignore-unfixed、Grype suppression 機制
+_CVE_YEAR_CUTOFF = 2005
+
+
+def _harness_filter_ancient_cves(output: dict[str, Any]) -> None:
+    """
+    Harness Layer 3.5：CVE 年份過濾。
+
+    對 year < _CVE_YEAR_CUTOFF 的 CVE 標記 NEEDS_VERIFICATION，
+    不刪除（保留審計軌跡），但讓 Advisor 知道這些 CVE 可疑。
+
+    設計依據：
+      1. EPSS (Jacobs et al. 2023)：pre-2005 CVE 的 EPSS 平均 < 0.01
+      2. NIST CVSS v3.1 User Guide §7.3：Temporal Metrics 應納入評估
+      3. Trivy/Grype 都有類似的年份過濾/suppress 機制
+    """
+    for item in output.get("analysis", []):
+        cve_id = item.get("cve_id", "")
+        year_m = re.match(r"CVE-(\d{4})-", cve_id)
+        if not year_m:
+            continue
+        year = int(year_m.group(1))
+        if year < _CVE_YEAR_CUTOFF:
+            # 設為 NEEDS_VERIFICATION，不強制刪除
+            if item.get("chain_risk", {}).get("confidence") not in ("NEEDS_VERIFICATION",):
+                item.setdefault("chain_risk", {})["confidence"] = "NEEDS_VERIFICATION"
+            item["_ancient_cve_warning"] = (
+                f"CVE year {year} < {_CVE_YEAR_CUTOFF}: "
+                f"target software likely retired. "
+                f"Verify relevance to current tech stack before acting."
+            )
+            logger.warning(
+                "[ANALYST] Ancient CVE flagged: %s (year=%d) → confidence=NEEDS_VERIFICATION",
+                cve_id, year,
+            )
+
+
 def _build_fallback_output(scout_data: dict[str, Any]) -> dict[str, Any]:
     """
     Harness 保障：當 LLM 輸出無法解析時，
@@ -665,7 +711,7 @@ def _build_fallback_output(scout_data: dict[str, Any]) -> dict[str, Any]:
 # 第五部份：Pipeline 執行函式（含 Harness 保障層）
 # ══════════════════════════════════════════════════════════════
 
-def run_analyst_pipeline(scout_output: str | dict) -> dict:
+def run_analyst_pipeline(scout_output: str | dict, input_type: str = "pkg") -> dict:
     """
     執行完整的 Analyst Pipeline，包含 Agent 執行 + 程式碼層保障。
 
@@ -685,6 +731,7 @@ def run_analyst_pipeline(scout_output: str | dict) -> dict:
 
     Args:
         scout_output: Scout Agent 的 JSON 輸出（字串或 dict）
+        input_type:   Path-Aware Skill 路由（pkg/code/injection/config）
 
     Returns:
         dict: 解析後的 Analyst 報告 JSON（符合 Analyst → Advisor 契約）
@@ -763,15 +810,18 @@ def run_analyst_pipeline(scout_output: str | dict) -> dict:
                 current_model = get_current_model_name(collector.llm)
                 mark_model_failed(current_model)
                 excluded_models.append(current_model)
-                wait_sec = (attempt + 1) * 12  # 遞增等待：12s, 24s
-                logger.warning("[RETRY] Analyst 429 on %s, waiting %ds before retry %d/%d",
-                              current_model, wait_sec, attempt + 1, MAX_LLM_RETRIES)
+                import re as _re
+                _m = _re.search(r'retry.{1,10}(\d+\.?\d*)s', error_str, _re.IGNORECASE)
+                retry_after = float(_m.group(1)) if _m else 0.0
+                logger.warning("[RETRY] Analyst 429 on %s (attempt %d/%d), api_retry_after=%.0fs",
+                              current_model, attempt + 1, MAX_LLM_RETRIES, retry_after)
                 try:
                     _cp.llm_retry("analyst", current_model, error_str[:200],
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                time.sleep(wait_sec)
+                from config import rate_limiter as _rl
+                _rl.on_429(retry_after=retry_after, caller="analyst")  # 最少 30s
                 continue
 
             logger.error("[FAIL] CrewAI execution failed: %s", e)
@@ -815,6 +865,10 @@ def run_analyst_pipeline(scout_output: str | dict) -> dict:
 
     # ── Harness Layer 3：chain_risk 邏輯驗證 ───────────────────
     _harness_validate_chain_risk(output)
+
+    # ── Harness Layer 3.5：CVE 年份過濾 ─────────────────────────
+    # 佐證：EPSS (Jacobs et al. 2023)、NIST CVSS §7.3、Trivy/Grype suppress
+    _harness_filter_ancient_cves(output)
 
     # ── 確保 risk_score 在合理範圍 ─────────────────────────────
     risk_score = output.get("risk_score", 0)

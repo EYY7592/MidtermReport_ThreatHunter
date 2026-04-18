@@ -1,0 +1,20 @@
+[package]
+name = "threathunter_prompt_sandbox"
+version = "0.1.0"
+edition = "2021"
+description = "ThreatHunter WASM Runtime Sandbox — L0.5 輸入邊界守衛（wasmtime Host + PyO3）"
+
+[lib]
+name = "threathunter_prompt_sandbox"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3       = { workspace = true }
+serde_json = { workspace = true }
+wasmtime   = { version = "28", default-features = false, features = ["cranelift", "runtime"] }
+sha2       = { workspace = true }
+hex        = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = "thin"

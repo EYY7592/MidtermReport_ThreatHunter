@@ -1,5 +1,5 @@
 {
-  "package": "django",
+  "package": "django 4.2",
   "source": "NVD",
   "count": 10,
   "vulnerabilities": [
@@ -33,7 +33,7 @@
       "severity": "MEDIUM",
       "description": "The administration application in Django 0.91, 0.95, and 0.96 stores unauthenticated HTTP POST requests and processes them after successful authentication occurs, which allows remote attackers to conduct cross-site request forgery (CSRF) attacks and delete or modify data via unspecified requests.",
       "published": "2008-09-04T17:41:00.000",
-      "affected_versions": "0.91, 0.95, 0.96"
+      "affected_versions": "< 0.91.3, < 0.95.4, < 0.96.3"
     },
     {
       "cve_id": "CVE-2009-2659",
@@ -84,5 +84,5 @@
       "affected_versions": "0.91, 0.95, 0.95.1"
     }
   ],
-  "_cached_at": 1775965188.2826798
+  "_cached_at": 1776431867.792047
 }

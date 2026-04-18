@@ -106,9 +106,9 @@ ENABLE_MEMORY_RAG = os.getenv("ENABLE_MEMORY_RAG", "false").lower() == "true"
 MAX_DEBATE_ROUNDS = int(os.getenv("MAX_DEBATE_ROUNDS", "2"))
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.75"))
 CONSTRAINT_THRESHOLD = float(os.getenv("CONSTRAINT_THRESHOLD", "0.75"))
-LLM_RPM = int(os.getenv("LLM_RPM", "60"))  # Google AI Studio 容許更高速率
-# Gemini-2.0-Flash ~1秒回應，設 3 秒間隔防止 API 躃踩
-LLM_MIN_INTERVAL_SEC = float(os.getenv("LLM_MIN_INTERVAL_SEC", "3.0"))
+LLM_RPM = int(os.getenv("LLM_RPM", "15"))  # Google Free Tier: Gemma4 RPM
+# Gemma-4 thinking tokens 消耗大，相鄰呼叫至少間隔 8 秒緩解 429
+LLM_MIN_INTERVAL_SEC = float(os.getenv("LLM_MIN_INTERVAL_SEC", "8.0"))
 # 單次 LLM 呼叫最長等待秒數（AFC 卡死指標）
 LLM_TIMEOUT_SEC = int(os.getenv("LLM_TIMEOUT_SEC", "90"))
 
@@ -240,6 +240,29 @@ class LLMRateLimiter:
             self._total_waited = 0.0
             self._call_count = 0
 
+    def on_429(self, retry_after: float = 0.0, caller: str = "") -> float:
+        """
+        收到 429 時呼叫：強制等待 retry_after 秒（或最少 30 秒）。
+        重設 last_call_time，下一次呼叫重新計時。
+
+        Args:
+            retry_after: API 回傳的 Retry-After 秒數（0 表示未提供）
+            caller: 呼叫者名稱（供日誌識別）
+
+        Returns:
+            實際等待的秒數
+        """
+        with self._lock:
+            wait_sec = max(retry_after, 30.0)  # 最少等 30 秒
+            logger.warning(
+                "[RATE_LIMITER] 429 received! %s force-waiting %.0fs before retry",
+                caller or "unknown", wait_sec
+            )
+            time.sleep(wait_sec)
+            self._last_call_time = time.time()  # 重設計時器
+            self._total_waited += wait_sec
+            return wait_sec
+
     @property
     def total_waited(self) -> float:
         """累計等待秒數（供監控使用）"""
@@ -268,8 +291,9 @@ def _build_provider_chain() -> list[tuple[str, dict]]:
     if LLM_PROVIDER == "google":
         if GOOGLE_API_KEY:
             # ────────────────────────────────────────────────────────
-            # v3.5 主力：Gemini-3-Flash-Preview（用戶確認，來源 AI Studio）
-            #   優勢：最新架構（Gemini 3 系列），指令遵守強，~4秒回應
+            # v4.2 主力：Gemini-3-Flash-Preview（最快 ~2-4s，多次呼叫友好）
+            #   優勢：無 thinking overhead，Intel Fusion 六維分析速度最快
+            #   Gemma-4 thinking tokens 太重，多 Agent 場景速度不佳
             # ────────────────────────────────────────────────────────
             chain.append(
                 (
@@ -282,22 +306,47 @@ def _build_provider_chain() -> list[tuple[str, dict]]:
                     },
                 )
             )
-            # 備用模型 1：Gemini-2.0-Flash（最快 ~0.9 秒，穩定可靠）
+            # 備用模型 1：Gemini-2.5-Flash（穩定可用，配額充足）
             chain.append(
                 (
-                    "Google AI (Gemini-2.0-Flash) [backup1]",
+                    "Google AI (Gemini-2.5-Flash) [backup1]",
                     {
-                        "model": "gemini/gemini-2.0-flash",
+                        "model": "gemini/gemini-2.5-flash",
                         "api_key": GOOGLE_API_KEY,
                         "max_tokens": 8192,
                         "timeout": LLM_TIMEOUT_SEC,
                     },
                 )
             )
-            # 備用模型 2：Gemini-2.5-Flash-Lite（輕量快速 ~1.2 秒）
+            # 備用模型 2：Gemma-4-31B-IT（thinking 能力強，但較慢）
             chain.append(
                 (
-                    "Google AI (Gemini-2.5-Flash-Lite) [backup2]",
+                    "Google AI (Gemma-4-31B-IT) [backup2]",
+                    {
+                        "model": "gemini/gemma-4-31b-it",
+                        "api_key": GOOGLE_API_KEY,
+                        "max_tokens": 8192,
+                        "timeout": LLM_TIMEOUT_SEC,
+                    },
+                )
+            )
+            # 備用模型 3：Gemma-4-26B-A4B-IT（MoE 架構）
+            chain.append(
+                (
+                    "Google AI (Gemma-4-26B-A4B-IT) [backup3]",
+                    {
+                        "model": "gemini/gemma-4-26b-a4b-it",
+                        "api_key": GOOGLE_API_KEY,
+                        "max_tokens": 8192,
+                        "timeout": LLM_TIMEOUT_SEC,
+                    },
+                )
+            )
+
+            # 備用模型 3：Gemini-2.5-Flash-Lite（輕量快速，配額獨立）
+            chain.append(
+                (
+                    "Google AI (Gemini-2.5-Flash-Lite) [backup3]",
                     {
                         "model": "gemini/gemini-2.5-flash-lite",
                         "api_key": GOOGLE_API_KEY,
@@ -306,12 +355,24 @@ def _build_provider_chain() -> list[tuple[str, dict]]:
                     },
                 )
             )
-            # 備用模型 3：Gemini-2.5-Flash（最新穩定版）
+            # 備用模型 4：Gemini-Flash-Latest（alias，自動指向最新 flash）
             chain.append(
                 (
-                    "Google AI (Gemini-2.5-Flash) [backup3]",
+                    "Google AI (Gemini-Flash-Latest) [backup4]",
                     {
-                        "model": "gemini/gemini-2.5-flash",
+                        "model": "gemini/gemini-flash-latest",
+                        "api_key": GOOGLE_API_KEY,
+                        "max_tokens": 8192,
+                        "timeout": LLM_TIMEOUT_SEC,
+                    },
+                )
+            )
+            # 備用模型 5：Gemini-2.0-Flash（注意：Free Tier 每日配額有限）
+            chain.append(
+                (
+                    "Google AI (Gemini-2.0-Flash) [backup5-limited]",
+                    {
+                        "model": "gemini/gemini-2.0-flash",
                         "api_key": GOOGLE_API_KEY,
                         "max_tokens": 8192,
                         "timeout": LLM_TIMEOUT_SEC,
@@ -391,7 +452,7 @@ def _build_provider_chain() -> list[tuple[str, dict]]:
 # ── 模型健康狀態追蹤（自動輪替核心）──────────────────────────
 # 記錄每個模型最後失敗的時間戳。冷卻期間內跳過該模型，優先選擇其他模型。
 _model_health: dict[str, float] = {}  # model_name -> last_failure_timestamp
-MODEL_COOLDOWN = 60  # 秒：模型限速後的冷卻時間
+MODEL_COOLDOWN = 300  # 秒：模型限速後的冷卻時間（Google Free Tier 每分鐘 / 每日配額重置建議 5 分鐘）
 
 
 def mark_model_failed(model_name: str) -> None:
@@ -489,6 +550,92 @@ def get_llm(exclude_models: list[str] | None = None):
         f"已嘗試：{[name for name, _ in providers]}\n"
         f"降級詳情：{degradation_status.to_dict()}"
     )
+
+
+# ── 429 指數退避重試工具函式 ─────────────────────────────────
+def retry_on_429(
+    fn,
+    *args,
+    max_retries: int = 4,
+    base_delay: float = 15.0,
+    caller: str = "unknown",
+    **kwargs,
+):
+    """
+    對任意 LLM 呼叫函式加入 429 指數退避重試保護。
+
+    策略：
+      第 1 次 429 → 等 15s
+      第 2 次 429 → 等 30s
+      第 3 次 429 → 等 60s
+      第 4 次 429 → 等 120s，之後 raise
+
+    使用方式：
+      result = retry_on_429(crew.kickoff, max_retries=3, caller="scout")
+
+    Args:
+        fn: 要呼叫的函制（callable）
+        *args: 傳入 fn 的位置參數
+        max_retries: 最多重試次數（預設 4）
+        base_delay: 第一次退避基礎秒數（預設 15 秒）
+        caller: 呼叫者名稱（供日誌識別）
+        **kwargs: 傳入 fn 的關鍵字參數
+
+    Returns:
+        fn 的回傳值
+
+    Raises:
+        最後一次例外（若所有重試均失敗）
+    """
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            if attempt > 0:
+                rate_limiter.wait_if_needed(caller)  # 重試前也過 rate limiter
+            return fn(*args, **kwargs)
+        except Exception as e:
+            err_str = str(e)
+            is_429 = (
+                "429" in err_str
+                or "rate limit" in err_str.lower()
+                or "quota" in err_str.lower()
+                or "resource_exhausted" in err_str.lower()
+            )
+            if not is_429:
+                raise  # 非 429 錯誤直接往上拋
+
+            last_exc = e
+
+            # 解析 API 回傳的 retry_after（秒）
+            retry_after = 0.0
+            import re as _re
+            m = _re.search(r'retry.{1,10}(\d+\.?\d*)s', err_str, _re.IGNORECASE)
+            if m:
+                retry_after = float(m.group(1))
+
+            if attempt >= max_retries:
+                logger.error(
+                    "[RETRY] %s: 429 after %d attempts, giving up",
+                    caller, max_retries
+                )
+                break
+
+            # 指數退避（16s → 32s → 64s → 128s，但尊重 API 的 retry_after）
+            backoff = base_delay * (2 ** attempt)
+            wait_sec = max(backoff, retry_after, 15.0)
+            logger.warning(
+                "[RETRY] %s: 429 (attempt %d/%d), backoff=%.0fs (api_retry_after=%.0fs)",
+                caller, attempt + 1, max_retries, wait_sec, retry_after
+            )
+            # 標記模型失敗，讓下次 get_llm() 跳過
+            # 從 error message 中嘗試提取模型名稱
+            mdl_m = _re.search(r'model["\s:]+([\w/.\-]+)', err_str)
+            if mdl_m:
+                mark_model_failed(mdl_m.group(1))
+
+            rate_limiter.on_429(retry_after=wait_sec, caller=caller)
+
+    raise last_exc
 
 
 def get_current_model_name(llm) -> str:

@@ -1,0 +1,12 @@
+[package]
+name = "url_builder"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "threathunter_url_builder"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { workspace = true }
+url  = { workspace = true }

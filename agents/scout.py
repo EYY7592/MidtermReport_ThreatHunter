@@ -28,35 +28,66 @@ from tools.memory_tool import read_memory, write_memory, history_search
 logger = logging.getLogger("ThreatHunter")
 
 # ══════════════════════════════════════════════════════════════
-# Skill 載入（從 .md 讀取，嵌入 backstory）
+# Skill 載入（Phase 4D：使用 SkillLoader 熱載入系統）
 # ══════════════════════════════════════════════════════════════
+
+# ======================================================================
+# v3.7: Path-Aware Skill Map
+# 每種 input_type 對應一份 Skill SOP
+# ======================================================================
+
+SKILL_MAP: dict[str, str] = {
+    "pkg":       "threat_intel.md",        # Path A: package CVE scan
+    "code":      "source_code_audit.md",   # Path B-code: source code review
+    "injection": "ai_security_audit.md",   # Path B-inject: AI security
+    "config":    "config_audit.md",        # Path C: config file audit
+}
 
 # 專案根目錄（agents/ 的上一層）
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKILL_PATH = os.path.join(PROJECT_ROOT, "skills", "threat_intel.md")
+SKILL_PATH = os.path.join(PROJECT_ROOT, "skills", "threat_intel.md")  # default fallback
+
+# Phase 4D: 使用 SkillLoader 熱載入系統
+try:
+    from skills.skill_loader import skill_loader as _skill_loader
+    _SKILL_LOADER_AVAILABLE = True
+    logger.info("[Scout] Phase 4D: SkillLoader 啟用 ✓")
+except ImportError:
+    _skill_loader = None
+    _SKILL_LOADER_AVAILABLE = False
+    logger.warning("[Scout] Phase 4D: SkillLoader 不可用，使用內建 _load_skill")
 
 
-def _load_skill() -> str:
+def _load_skill(skill_filename: str = "threat_intel.md") -> str:
     """
-    載入 Skill SOP 文件內容。
+    Load Skill SOP file by filename (v3.7 path-aware + Phase 4D 熱載入).
 
-    安全閥：
-      - 檔案不存在 → 使用內嵌的精簡版 Skill（Graceful Degradation）
-      - 編碼錯誤 → 嘗試 utf-8-sig → 仍失敗 → 內嵌版
+    Phase 4D: 優先使用 SkillLoader 單例（支援熱載入、mtime 驗證）。
+    Fallback: 直接從磁碟讀取（原有實作，確保向後相容）。
     """
+    # Phase 4D: SkillLoader 熱載入路徑
+    if _SKILL_LOADER_AVAILABLE and _skill_loader is not None:
+        try:
+            return _skill_loader.load_skill(skill_filename)
+        except Exception as e:
+            logger.warning("[Scout] SkillLoader 失敗，回退直接讀取: %s", e)
+
+    # Fallback: 直接從磁碟讀取（原有實作）
+    skill_path = os.path.join(PROJECT_ROOT, "skills", skill_filename)
     for encoding in ("utf-8", "utf-8-sig", "latin-1"):
         try:
-            if os.path.exists(SKILL_PATH):
-                with open(SKILL_PATH, "r", encoding=encoding) as f:
+            if os.path.exists(skill_path):
+                with open(skill_path, "r", encoding=encoding) as f:
                     content = f.read().strip()
                 if content:
-                    logger.info("[OK] Skill loaded: %s (%d chars)", SKILL_PATH, len(content))
+                    logger.info("[OK] Skill loaded: %s (%d chars)", skill_path, len(content))
                     return content
         except (IOError, UnicodeDecodeError):
             continue
 
-    logger.warning("[WARN] Skill file load failed, using fallback: %s", SKILL_PATH)
+    logger.warning("[WARN] Skill file not found, using fallback: %s", skill_path)
     return _FALLBACK_SKILL
+
 
 
 # 內嵌精簡版 Skill（Graceful Degradation — Skill 檔案遺失時的保底）
@@ -118,66 +149,71 @@ CONSTITUTION = """
 # Agent 工廠函式
 # ══════════════════════════════════════════════════════════════
 
-def create_scout_agent(excluded_models: list[str] | None = None) -> Agent:
+def create_scout_agent(
+    excluded_models: list[str] | None = None,
+    input_type: str = "pkg",
+) -> Agent:
     """
-    建立 Scout Agent 實例。
+    Build Scout Agent with Path-Aware Skill SOP (v3.7).
 
-    組成：
-      - role: 威脅情報偵察員
-      - goal: 收集漏洞 + 比對歷史 + 輸出 JSON
-      - backstory: 系統憲法 + Skill SOP（完整嵌入）
-      - tools: search_nvd, search_otx, read_memory, write_memory, history_search
-      - llm: 從 config.py 取得（支援三模式切換 + 429 自動輪替）
-      - verbose=True: Observability 支柱
-      - max_iter=15: Constraints 支柱（防止無限迴圈）
-      - allow_delegation=False: Scout 不委派工作給其他 Agent
+    input_type selects which Skill file to embed in backstory:
+      pkg       -> threat_intel.md         (NVD CVE scan for packages)
+      code      -> source_code_audit.md    (OWASP Top10 + CWE for source code)
+      injection -> ai_security_audit.md    (OWASP LLM Top10 + MITRE ATLAS)
+      config    -> config_audit.md         (CIS Benchmark for config files)
 
     Args:
-        excluded_models: 需要跳過的模型名稱列表（429 被限速的模型）
+        excluded_models: Models to skip (429-rate-limited)
+        input_type: Path type from frontend detector
 
     Returns:
-        CrewAI Agent 實例，可直接用於 Task 和 Crew
+        CrewAI Agent instance ready for Task and Crew
     """
-    skill_content = _load_skill()
+    skill_filename = SKILL_MAP.get(input_type, "threat_intel.md")
+    skill_content = _load_skill(skill_filename)
+    logger.info("[Scout] Path=%s -> Skill=%s", input_type, skill_filename)
 
-    backstory = f"""你是一位經驗豐富的威脅情報分析師，專精於從公開漏洞資料庫中
-識別和評估軟體安全風險。你嚴謹、精確，絕不編造資料。
+    # Goal adapts to the input path
+    _GOAL_MAP = {
+        "pkg":       "Collect known CVEs for the given package list from NVD/OTX, compare with history, output structured JSON.",
+        "code":      "Audit source code for OWASP Top10 / CWE vulnerabilities; extract package imports and scan NVD; output structured JSON.",
+        "injection": "Classify and assess AI security threats (OWASP LLM Top10 / MITRE ATLAS) in the given input; output structured JSON with no CVE hallucination.",
+        "config":    "Audit the given configuration file against CIS Benchmarks for misconfigurations and hardcoded secrets; output structured JSON.",
+    }
+    agent_goal = _GOAL_MAP.get(input_type, _GOAL_MAP["pkg"])
+
+    backstory = f"""You are an expert security analyst specialized in identifying software and AI system vulnerabilities.
+You are rigorous, precise, and never fabricate data.
 
 {CONSTITUTION}
 
 ---
 
-## 分析方法論（Skill SOP）
+## Analysis Methodology (Skill SOP)
 
-以下是你執行威脅情報收集時必須遵循的標準作業程序：
+You MUST follow this Standard Operating Procedure for the current scan path ({input_type}):
 
 {skill_content}
 """
 
     llm = get_llm(exclude_models=excluded_models)
     scout = Agent(
-        role="威脅情報偵察員 (Scout)",
-        goal=(
-            "從 NVD 和 OTX 公開資料庫收集指定技術堆疊的已知漏洞和活躍威脅，"
-            "與歷史掃描結果比對差異，標記新發現的威脅，"
-            "最終輸出結構化 JSON 情報清單供後續分析使用。"
-        ),
+        role="Threat Intelligence Scout",
+        goal=agent_goal,
         backstory=backstory,
         tools=[search_nvd, search_otx, read_memory, write_memory, history_search],
         llm=llm,
-        verbose=True,       # Harness: Observability — 完整 ReAct 推理可見
-        max_iter=5,          # v3.5: Gemini-3-Flash ~4s/call, Scout查重點套件即可
-        allow_delegation=False,  # Scout 不委派，自己做完
+        verbose=True,
+        max_iter=15,   # SOP: 最多 15 輪 ReAct（包含 6 步驟程：read_memory+search_nvd+OTX+write_memory）
+        allow_delegation=False,
     )
 
     logger.info(
-        "[OK] Scout Agent created | "
-        "tools=%s | max_iter=%s | llm=%s",
-        [t.name for t in scout.tools],
-        scout.max_iter,
-        llm.model if hasattr(llm, 'model') else 'unknown'
+        "[OK] Scout Agent ready | input_type=%s | skill=%s | llm=%s",
+        input_type,
+        skill_filename,
+        llm.model if hasattr(llm, 'model') else 'unknown',
     )
-
     return scout
 
 
@@ -235,7 +271,15 @@ def create_scout_task(agent, tech_stack: str):
             f"Step 1: Call read_memory\n"
             f"   Action: read_memory\n"
             f"   Action Input: scout\n\n"
-            f"Step 2: Identify package names and call search_nvd for each one\n\n"
+            f"Step 2: Extract PACKAGE NAMES from the code, then call search_nvd for each package.\n"
+            f"   RULE: Package names come from require() or import statements ONLY.\n"
+            f"   Example: require('express') -> search_nvd('express')\n"
+            f"   Example: require('lodash')  -> search_nvd('lodash')\n"
+            f"   FORBIDDEN search terms (these are syntax, NOT packages):\n"
+            f"   - eval, exec, Function, innerHTML, script, html, document\n"
+            f"   - const, let, var, function, class, async, await\n"
+            f"   - req, res, app, user, input (these are variable names)\n"
+            f"   If no require()/import found, output empty vulnerabilities list.\n\n"
             f"Step 3: For CVEs with CVSS >= 7.0, call search_otx\n\n"
             f"Step 4: Assemble JSON report from REAL tool results only\n\n"
             f"Step 5: Call write_memory\n"
@@ -243,6 +287,7 @@ def create_scout_task(agent, tech_stack: str):
             f"   Action Input: scout|{{JSON report}}\n\n"
             f"Step 6: Output JSON report as Final Answer\n\n"
             f"FORBIDDEN:\n"
+            f"- Do NOT search NVD with: eval, html, innerHTML, script, const, function\n"
             f"- Do NOT skip tool calls\n"
             f"- Do NOT fabricate CVE IDs\n"
             f"- write_memory MUST be called before Final Answer"
@@ -256,28 +301,22 @@ def create_scout_task(agent, tech_stack: str):
 
 
 
-def run_scout_pipeline(tech_stack: str) -> dict:
+def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
     """
-    執行完整的 Scout Pipeline，包含 Agent 執行 + 程式碼層保障。
+    Execute full Scout Pipeline with Harness code-level guarantees.
 
-    Harness Engineering 核心理念：
-      不要 100% 依賴 LLM 遵守指令。
-      Agent 負責「盡力做」，程式碼負責「確保做到」。
-
-    程式碼層保障：
-      1. Agent 執行完後，檢查 write_memory 是否被呼叫
-      2. 如果沒有 → 程式碼代為呼叫 write_memory
-      3. 驗證 JSON 輸出格式
+    v3.7: input_type selects the correct Skill SOP for path-aware analysis.
 
     Args:
-        tech_stack: 使用者輸入（如 "Django 4.2, Redis 7.0"）
+        tech_stack: User input (e.g. "Django 4.2, Redis 7.0" or source code)
+        input_type: Path type (pkg/code/injection/config)
 
     Returns:
-        dict: 解析後的 Scout 報告 JSON
+        dict: Parsed Scout JSON report
     """
     import json
     from crewai import Crew, Process
-    from config import mark_model_failed, get_current_model_name
+    from config import mark_model_failed, get_current_model_name, rate_limiter
     # 新版 memory_tool 無 _write_memory_impl，使用公開 Tool 介面
 
     # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
@@ -285,8 +324,8 @@ def run_scout_pipeline(tech_stack: str) -> dict:
     excluded_models: list[str] = []
 
     for attempt in range(MAX_LLM_RETRIES + 1):
-        # 建立 Agent + Task（每次重試都用新模型）
-        agent = create_scout_agent(excluded_models)
+        # v3.7: pass input_type so agent loads the correct Skill SOP
+        agent = create_scout_agent(excluded_models, input_type=input_type)
         task = create_scout_task(agent, tech_stack)
         crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=True)
 
@@ -315,15 +354,18 @@ def run_scout_pipeline(tech_stack: str) -> dict:
                 current_model = get_current_model_name(agent.llm)
                 mark_model_failed(current_model)
                 excluded_models.append(current_model)
-                wait_sec = (attempt + 1) * 12  # 遞增等待：12s, 24s
-                logger.warning("[RETRY] Scout 429 on %s, waiting %ds before retry %d/%d",
-                              current_model, wait_sec, attempt + 1, MAX_LLM_RETRIES)
+                # 解析 API 回傳的 retry_after 秒數
+                import re as _re
+                _m = _re.search(r'retry.{1,10}(\d+\.?\d*)s', error_str, _re.IGNORECASE)
+                retry_after = float(_m.group(1)) if _m else 0.0
+                logger.warning("[RETRY] Scout 429 on %s (attempt %d/%d), api_retry_after=%.0fs",
+                              current_model, attempt + 1, MAX_LLM_RETRIES, retry_after)
                 try:
                     _cp.llm_retry("scout", current_model, error_str[:200],
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                time.sleep(wait_sec)
+                rate_limiter.on_429(retry_after=retry_after, caller="scout")  # 最少 30s
                 continue
 
             try:

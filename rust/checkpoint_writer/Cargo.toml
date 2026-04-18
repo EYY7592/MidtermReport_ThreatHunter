@@ -1,0 +1,13 @@
+[package]
+name = "checkpoint_writer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "threathunter_checkpoint_writer"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3        = { workspace = true }
+tokio       = { workspace = true }
+parking_lot = { workspace = true }

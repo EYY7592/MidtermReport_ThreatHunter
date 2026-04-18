@@ -1,0 +1,234 @@
+# .github/workflows/docker-build.yml
+# ThreatHunter Phase 4B — Docker Build & Push
+# =============================================
+# 觸發：
+#   - push tag（v*.*.*）→ 建置 release image
+#   - push main         → 建置 latest image
+#   - 手動觸發（workflow_dispatch）→ 可選 AMD ROCm variant
+#
+# 映像發布：
+#   - ghcr.io/{owner}/threathunter:latest（main 分支）
+#   - ghcr.io/{owner}/threathunter:{tag}（release tag）
+#   - ghcr.io/{owner}/threathunter:{tag}-rocm（AMD ROCm variant，手動觸發）
+#
+# AMD 合規：
+#   - ROCm variant 使用 rocm/dev-ubuntu-22.04 base image
+#   - 整合 AMD Instinct MI300X GPU 支援（hackathon 部署用）
+
+name: Docker Build & Push
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      build_rocm:
+        description: "Build AMD ROCm variant (for AMD Cloud deployment)"
+        type: boolean
+        default: false
+        required: false
+      tag_override:
+        description: "Custom image tag (leave empty for auto)"
+        type: string
+        default: ""
+        required: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/threathunter
+
+# ============================================================
+# Jobs
+# ============================================================
+
+jobs:
+  # ──────────────────────────────────────────────────────────
+  # 1. Build & Push（標準 amd64 映像）
+  # ──────────────────────────────────────────────────────────
+  docker-build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 設定 Docker Buildx（支援多平台）
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64
+
+      # 登入 GitHub Container Registry
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 自動生成 Docker image metadata（tags + labels）
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # push tag → v1.2.3
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            # push main → latest
+            type=edge,branch=main
+            # workflow_dispatch custom tag
+            type=raw,value=${{ github.event.inputs.tag_override }},enable=${{ github.event.inputs.tag_override != '' }}
+          labels: |
+            org.opencontainers.image.title=ThreatHunter
+            org.opencontainers.image.description=AI 多 Agent 資安威脅情報平台（ThreatHunter Phase 4）
+            org.opencontainers.image.vendor=ThreatHunter Team
+            org.opencontainers.image.licenses=MIT
+
+      # 建置並推送映像（含 layer cache）
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          cache-from: type=gha,scope=main
+          cache-to: type=gha,mode=max,scope=main
+          build-args: |
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+            GIT_COMMIT=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
+
+      # 生成 SBOM 與 Attestation（供軟體供應鏈安全驗證）
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  # ──────────────────────────────────────────────────────────
+  # 2. AMD ROCm Variant（手動觸發或 tag 推送時建置）
+  # ──────────────────────────────────────────────────────────
+  docker-build-rocm:
+    name: Build AMD ROCm Variant
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.build_rocm == 'true' ||
+      startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract ROCm image metadata
+        id: meta-rocm
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # ROCm variant tag：v1.2.3-rocm
+            type=semver,pattern={{version}}-rocm
+            type=raw,value=latest-rocm,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=ThreatHunter (AMD ROCm)
+            org.opencontainers.image.description=ThreatHunter + AMD ROCm (MI300X) GPU 加速版本
+
+      # 使用 AMD ROCm Dockerfile
+      - name: Build and push ROCm image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.rocm
+          push: true
+          tags: ${{ steps.meta-rocm.outputs.tags }}
+          labels: ${{ steps.meta-rocm.outputs.labels }}
+          platforms: linux/amd64
+          cache-from: type=gha,scope=rocm
+          cache-to: type=gha,mode=max,scope=rocm
+          build-args: |
+            ROCM_VERSION=6.3
+            BASE_IMAGE=rocm/dev-ubuntu-22.04:6.3
+
+  # ──────────────────────────────────────────────────────────
+  # 3. Security Scan（Trivy 漏洞掃描）
+  # ──────────────────────────────────────────────────────────
+  docker-security-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${{ needs.docker-build.outputs.image_tag }}"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"  # 非致命：報告但不阻塞 deploy
+
+      - name: Upload Trivy SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: "container-security"
+
+  # ──────────────────────────────────────────────────────────
+  # 4. Deploy Summary
+  # ──────────────────────────────────────────────────────────
+  deploy-summary:
+    name: Deploy Summary
+    runs-on: ubuntu-latest
+    needs: [docker-build, docker-security-scan]
+    if: always()
+
+    steps:
+      - name: Summary
+        run: |
+          echo "## ThreatHunter Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.docker-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.docker-security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Tags:** \`${{ needs.docker-build.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** \`${{ needs.docker-build.outputs.image_digest }}\`" >> $GITHUB_STEP_SUMMARY

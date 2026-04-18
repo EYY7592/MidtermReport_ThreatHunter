@@ -1,0 +1,147 @@
+# ThreatHunter Dockerfile.rocm — AMD ROCm GPU 版本
+# ===================================================
+# 基於 AMD ROCm official image，支援 MI300X GPU
+# AMD Developer Hackathon 賽事部署版本
+#
+# 使用：
+#   docker build -f Dockerfile.rocm -t threathunter:rocm .
+#   docker run --device=/dev/kfd --device=/dev/dri \
+#     --group-add video --group-add render \
+#     -p 1000:1000 --env-file .env threathunter:rocm
+
+ARG ROCM_VERSION=6.3
+ARG BASE_IMAGE=rocm/dev-ubuntu-22.04:6.3
+
+# ── Stage 1: ROCm builder ────────────────────────────────────
+FROM ${BASE_IMAGE} AS builder
+
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG VERSION
+
+# 安裝 Python 3.12 + Rust 建置工具
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
+    python3-pip \
+    curl \
+    gcc \
+    g++ \
+    pkg-config \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# 設定 Python 3.12 為預設
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
+    update-alternatives --install /usr/bin/python python python3.12 1
+
+# 安裝 Rust（WASM + PyO3 編譯）
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain stable --profile minimal && \
+    rustup target add wasm32-unknown-unknown
+
+# 安裝 uv + maturin
+RUN pip3 install --no-cache-dir uv maturin
+
+WORKDIR /build
+
+COPY requirements.txt .
+RUN uv pip install --system -r requirements.txt
+
+# 安裝 ROCm Python 加速套件（AMD 官方，支援 MI300X）
+RUN pip3 install --no-cache-dir \
+    torch --index-url https://download.pytorch.org/whl/rocm6.2 \
+    2>/dev/null || \
+    echo "[INFO] PyTorch ROCm not installed (optional for LLM inference)"
+
+# 編譯 Rust crates（同標準版本）
+COPY rust/ ./rust/
+
+RUN cargo build \
+    --target wasm32-unknown-unknown \
+    --release \
+    --manifest-path /build/rust/prompt_sandbox_guest/Cargo.toml 2>&1 || \
+    echo "[WARN] WASM Guest build failed"
+
+RUN mkdir -p /build/rust/prompt_sandbox/assets && \
+    if [ -f "/build/rust/target/wasm32-unknown-unknown/release/prompt_guard.wasm" ]; then \
+        cp /build/rust/target/wasm32-unknown-unknown/release/prompt_guard.wasm \
+           /build/rust/prompt_sandbox/assets/prompt_guard.wasm; \
+    fi
+
+WORKDIR /build/rust
+RUN for crate in memory_validator json_validator sanitizer url_builder checkpoint_writer prompt_sandbox; do \
+    maturin build --release --strip \
+        --manifest-path /build/rust/$crate/Cargo.toml \
+        2>&1 || echo "[WARN] $crate failed"; \
+    done
+
+RUN find /build/rust/target/wheels -name "*.whl" -exec pip3 install --force-reinstall {} \; 2>/dev/null || true
+
+# ── Stage 2: ROCm Runtime ────────────────────────────────────
+FROM ${BASE_IMAGE} AS runtime
+
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG VERSION
+ARG ROCM_VERSION
+
+LABEL org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.version="${VERSION}-rocm" \
+      org.opencontainers.image.title="ThreatHunter (AMD ROCm)" \
+      org.opencontainers.image.description="ThreatHunter + AMD ROCm ${ROCM_VERSION} (MI300X)" \
+      amd.rocm.version="${ROCM_VERSION}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-venv \
+    python3-pip \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
+    update-alternatives --install /usr/bin/python python python3.12 1
+
+WORKDIR /app
+
+COPY --from=builder /usr/local/lib/python3.12 /usr/local/lib/python3.12 2>/dev/null || true
+COPY --from=builder /usr/local/bin /usr/local/bin 2>/dev/null || true
+COPY --from=builder /usr/lib/python3/dist-packages /usr/lib/python3/dist-packages 2>/dev/null || true
+
+COPY . .
+
+RUN mkdir -p logs/checkpoints memory data
+
+# AMD GPU 使用者群組（讓容器內 process 可存取 /dev/kfd & /dev/dri）
+RUN useradd -m -u 1001 -s /bin/bash threathunter && \
+    usermod -a -G video,render threathunter 2>/dev/null || \
+    usermod -a -G video threathunter 2>/dev/null || true && \
+    chown -R threathunter:threathunter /app
+
+USER threathunter
+
+# AMD Cloud 環境變數
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    WASM_SANDBOX_ENABLED=true \
+    SANDBOX_ENABLED=false \
+    ENABLE_CRITIC=false \
+    ENABLE_MEMORY_RAG=false \
+    HSA_OVERRIDE_GFX_VERSION=9.4.0 \
+    ROCR_VISIBLE_DEVICES=all \
+    LLM_PROVIDER=vllm
+
+EXPOSE 1000
+
+HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:1000/api/health')" \
+    || exit 1
+
+# AMD Cloud：vLLM Llama 3 inference 端點
+# 修改 VLLM_BASE_URL 指向 AMD Cloud MI300X instance
+CMD ["python3", "-m", "uvicorn", "ui.server:app", "--host", "0.0.0.0", "--port", "1000", "--workers", "2"]

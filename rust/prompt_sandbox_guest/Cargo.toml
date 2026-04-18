@@ -1,0 +1,18 @@
+[package]
+name = "prompt_guard"
+version = "0.1.0"
+edition = "2021"
+description = "ThreatHunter WASM Guest — Prompt injection 過濾引擎（沙箱內執行）"
+
+# 必須編譯為 cdylib 才能輸出 .wasm
+[lib]
+crate-type = ["cdylib"]
+
+# 無任何依賴：WASM 沙箱的安全保證之一
+# 沒有 std I/O、沒有網路、沒有 OS syscall
+[dependencies]
+
+[profile.release]
+opt-level = "z"     # 最小體積
+lto = true          # Link-Time Optimization
+panic = "abort"     # 不使用 unwinding（WASM 相容）

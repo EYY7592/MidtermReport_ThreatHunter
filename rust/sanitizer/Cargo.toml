@@ -1,0 +1,13 @@
+[package]
+name = "sanitizer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "threathunter_sanitizer"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3  = { workspace = true }
+regex = { workspace = true }
+sha2  = { workspace = true }

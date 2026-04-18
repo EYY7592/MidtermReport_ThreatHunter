@@ -3,673 +3,872 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ThreatHunter v3.0 — 最終架構審查報告（含佐證來源）</title>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<title>ThreatHunter v3.7 — 全域架構流程圖</title>
 <style>
-  :root{
-    --bg:#0d1117;--surface:#161b22;--s2:#1c2128;
-    --border:#30363d;--accent:#58a6ff;--warn:#f85149;
-    --ok:#3fb950;--yellow:#d29922;--text:#e6edf3;
-    --muted:#8b949e;--purple:#bc8cff;--cyan:#39d353;--orange:#e3672c;
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;600;700;800&display=swap');
+
+  :root {
+    --py:    #3b82f6;
+    --py-bg: rgba(59,130,246,0.12);
+    --js:    #f59e0b;
+    --js-bg: rgba(245,158,11,0.12);
+    --html:  #ef4444;
+    --html-bg: rgba(239,68,68,0.12);
+    --md:    #8b5cf6;
+    --md-bg: rgba(139,92,246,0.12);
+    --json:  #10b981;
+    --json-bg: rgba(16,185,129,0.12);
+    --rust:  #f97316;
+    --rust-bg: rgba(249,115,22,0.12);
+    --ext:   #6b7280;
+    --ext-bg: rgba(107,114,128,0.10);
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: rgba(255,255,255,0.07);
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --accent: #60a5fa;
   }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.7;}
-  .toc{position:sticky;top:0;background:rgba(13,17,23,.96);backdrop-filter:blur(12px);
-    border-bottom:1px solid var(--border);padding:.5rem 2rem;z-index:100;
-    display:flex;gap:1.2rem;align-items:center;flex-wrap:wrap;font-size:.78rem;}
-  .toc a{color:var(--muted);text-decoration:none;transition:color .2s;}
-  .toc a:hover{color:var(--accent);}
-  .toc strong{color:var(--warn);font-size:.85rem;}
-  main{padding:2rem;max-width:1500px;margin:0 auto;}
-  h1{font-size:1.8rem;color:var(--accent);border-bottom:2px solid var(--border);padding-bottom:1rem;margin-bottom:.4rem;}
-  .subtitle{color:var(--muted);font-size:.86rem;margin-bottom:2rem;}
-  h2{font-size:1.15rem;color:var(--purple);margin:3rem 0 1rem;padding:.6rem 1.2rem;
-    background:var(--surface);border-left:4px solid var(--purple);border-radius:0 8px 8px 0;
-    scroll-margin-top:50px;}
-  h3{color:var(--yellow);margin:1.5rem 0 .75rem;font-size:1rem;}
-  h4{color:var(--ok);margin:1rem 0 .4rem;font-size:.9rem;}
-  p{margin:.6rem 0;font-size:.9rem;}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem;margin:1rem 0;}
-  .dw{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;margin:1.5rem 0;overflow-x:auto;}
-  .dt{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
-  .ok-box{border-left:4px solid var(--ok);padding:.8rem 1rem;margin:.6rem 0;background:rgba(63,185,80,.07);border-radius:0 8px 8px 0;font-size:.87rem;}
-  .warn-box{border-left:4px solid var(--yellow);padding:.8rem 1rem;margin:.6rem 0;background:rgba(210,153,34,.07);border-radius:0 8px 8px 0;font-size:.87rem;}
-  .crit-box{border-left:4px solid var(--warn);padding:.8rem 1rem;margin:.6rem 0;background:rgba(248,81,73,.08);border-radius:0 8px 8px 0;font-size:.87rem;}
-  .fact{border-left:4px solid var(--accent);padding:.8rem 1rem;margin:.6rem 0;background:rgba(88,166,255,.07);border-radius:0 8px 8px 0;font-size:.87rem;}
-  table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.84rem;}
-  th{background:var(--s2);padding:.6rem .9rem;text-align:left;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;}
-  td{padding:.6rem .9rem;border-bottom:1px solid var(--border);vertical-align:top;}
-  tr:last-child td{border-bottom:none;}
-  .tag{display:inline-block;padding:.15rem .55rem;border-radius:10px;font-size:.7rem;margin:.1rem;}
-  .tag-g{background:rgba(63,185,80,.2);color:var(--ok);}
-  .tag-r{background:rgba(248,81,73,.2);color:var(--warn);}
-  .tag-y{background:rgba(210,153,34,.2);color:var(--yellow);}
-  .tag-b{background:rgba(88,166,255,.2);color:var(--accent);}
-  .tag-p{background:rgba(188,140,255,.2);color:var(--purple);}
-  .tag-o{background:rgba(227,103,44,.2);color:var(--orange);}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0;}
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1rem 0;}
-  @media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr;}}
-  code{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:.1rem .4rem;font-size:.8rem;color:var(--cyan);}
-  pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.8rem;margin:.8rem 0;line-height:1.6;}
-  a{color:var(--accent);font-size:.82rem;}
-  a.src{color:var(--muted);font-size:.75rem;text-decoration:underline dotted;}
-  .mermaid{font-size:12px;}
-  sup{font-size:.65rem;color:var(--accent);}
-  .verdict-box{border:2px solid;border-radius:12px;padding:1.2rem;margin:1.5rem 0;}
-  .verdict-good{border-color:var(--ok);background:rgba(63,185,80,.05);}
-  .verdict-warn{border-color:var(--yellow);background:rgba(210,153,34,.05);}
-  .verdict-bad{border-color:var(--warn);background:rgba(248,81,73,.05);}
-  .score-bar{background:var(--s2);border-radius:6px;height:8px;overflow:hidden;margin-top:.3rem;}
-  .score-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--ok),var(--accent));}
-  .score-fill-r{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--warn),var(--yellow));}
-  .disclaimer{background:var(--s2);border-radius:8px;padding:1rem;margin:1rem 0;font-size:.8rem;color:var(--muted);border:1px solid var(--border);}
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    font-family: 'Inter', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 32px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+    background: linear-gradient(90deg, #60a5fa, #a78bfa, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 24px;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    justify-content: center; margin-bottom: 28px;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 20px;
+    border: 1px solid; font-size: 11px; font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .dot { width:8px; height:8px; border-radius:50%; }
+
+  /* Main grid */
+  .arch {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  /* Layer rows */
+  .layer {
+    position: relative;
+    padding: 16px 20px;
+    border-left: 3px solid var(--border);
+    border-right: 3px solid var(--border);
+  }
+  .layer-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--text2); font-weight: 700; margin-bottom: 10px;
+  }
+  .layer-inner {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-width: 130px;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .card-name {
+    font-size: 12px; font-weight: 700;
+    margin-bottom: 3px;
+  }
+  .card-file {
+    font-size: 10px; color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 6px;
+  }
+  .card-tags {
+    display: flex; flex-wrap: wrap; gap: 3px;
+  }
+  .tag {
+    font-size: 9px; font-weight: 700;
+    padding: 2px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid;
+  }
+
+  /* Language colors */
+  .py  { color: var(--py);  background: var(--py-bg);  border-color: rgba(59,130,246,0.3);  }
+  .js  { color: var(--js);  background: var(--js-bg);  border-color: rgba(245,158,11,0.3);  }
+  .html-tag { color: var(--html); background: var(--html-bg); border-color: rgba(239,68,68,0.3); }
+  .md  { color: var(--md);  background: var(--md-bg);  border-color: rgba(139,92,246,0.3);  }
+  .json-tag { color: var(--json); background: var(--json-bg); border-color: rgba(16,185,129,0.3); }
+  .rust-tag { color: var(--rust); background: var(--rust-bg); border-color: rgba(249,115,22,0.3); }
+  .ext-tag  { color: var(--ext);  background: var(--ext-bg);  border-color: rgba(107,114,128,0.3);}
+
+  /* Card left border by primary lang */
+  .card-py    { border-left: 3px solid var(--py);   }
+  .card-js    { border-left: 3px solid var(--js);   }
+  .card-html  { border-left: 3px solid var(--html); }
+  .card-md    { border-left: 3px solid var(--md);   }
+  .card-json  { border-left: 3px solid var(--json); }
+  .card-rust  { border-left: 3px solid var(--rust); border-style: dashed; opacity:0.7; }
+
+  /* Arrow connector */
+  .arrow {
+    display: flex; justify-content: center; align-items: center;
+    padding: 5px 0; color: var(--text2); font-size: 18px;
+    position: relative;
+  }
+  .arrow::before, .arrow::after {
+    content:''; position:absolute; left:50%; transform:translateX(-50%);
+    width:1px; height:8px; background: rgba(255,255,255,0.12);
+  }
+  .arrow::before { bottom: 100%; }
+  .arrow::after  { top: 100%;    }
+  .arrow-label {
+    font-size: 9px; color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+    margin-left: 6px;
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface);
+  }
+
+  /* Layer backgrounds */
+  .layer-ui     { background: linear-gradient(135deg, rgba(59,130,246,0.04), transparent); border-top: 2px solid rgba(59,130,246,0.25); }
+  .layer-api    { background: linear-gradient(135deg, rgba(59,130,246,0.06), transparent); border-top: 2px solid rgba(59,130,246,0.15); }
+  .layer-l0     { background: linear-gradient(135deg, rgba(239,68,68,0.06), transparent);  border-top: 2px solid rgba(239,68,68,0.25); }
+  .layer-harness{ background: linear-gradient(135deg, rgba(107,114,128,0.05),transparent); border-top: 2px solid rgba(107,114,128,0.2); }
+  .layer-orch   { background: linear-gradient(135deg, rgba(96,165,250,0.06), transparent); border-top: 2px solid rgba(96,165,250,0.2); }
+  .layer-agents { background: linear-gradient(135deg, rgba(139,92,246,0.06), transparent); border-top: 2px solid rgba(139,92,246,0.25); }
+  .layer-skills { background: linear-gradient(135deg, rgba(139,92,246,0.03), transparent); border-top: 1px dashed rgba(139,92,246,0.2); }
+  .layer-tools  { background: linear-gradient(135deg, rgba(16,185,129,0.05), transparent); border-top: 2px solid rgba(16,185,129,0.2); }
+  .layer-memory { background: linear-gradient(135deg, rgba(16,185,129,0.04), transparent); border-top: 1px dashed rgba(16,185,129,0.25); }
+  .layer-infra  { background: linear-gradient(135deg, rgba(249,115,22,0.03), transparent); border-top: 2px dashed rgba(249,115,22,0.25); }
+  .layer-ext    { background: linear-gradient(135deg, rgba(107,114,128,0.04),transparent); border-top: 2px solid rgba(107,114,128,0.15); border-bottom: 2px solid rgba(107,114,128,0.15); }
+
+  /* Wide card for agents */
+  .card-wide { min-width: 185px; }
+  .card-skill {
+    background: rgba(139,92,246,0.05);
+    border: 1px dashed rgba(139,92,246,0.25);
+    border-radius: 8px;
+    padding: 6px 10px;
+    min-width: 110px;
+  }
+  .card-skill .card-name { font-size: 10px; color: var(--md); }
+  .card-skill .card-file { font-size: 9px; }
+
+  /* Planned badge */
+  .planned {
+    position: absolute; top: 6px; right: 6px;
+    font-size: 8px; padding: 1px 5px;
+    background: rgba(249,115,22,0.15);
+    border: 1px solid rgba(249,115,22,0.4);
+    border-radius: 3px; color: var(--rust);
+    font-weight: 700; font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Checkpoint side panel */
+  .side-layout { display: flex; gap: 10px; align-items: stretch; }
+  .checkpoint-side {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--json);
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-width: 140px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .checkpoint-side .card-name { color: var(--json); font-size: 11px; }
+  .checkpoint-side .card-file { font-size: 9px; }
+  .main-pipeline { flex: 1; display: flex; flex-direction: column; gap: 0; }
+
+  /* Section divider */
+  .sec-note {
+    font-size: 9px; color: var(--text2); font-style: italic;
+    text-align: center; padding: 3px;
+  }
+
+  /* Tool grid */
+  .tool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+  .tool-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--json);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .tool-card .card-name { font-size: 10px; font-weight: 600; }
+  .tool-card .card-file { font-size: 9px; }
+
+  /* External API */
+  .ext-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 6px;
+  }
+  .ext-card {
+    background: rgba(107,114,128,0.06);
+    border: 1px solid rgba(107,114,128,0.15);
+    border-radius: 6px;
+    padding: 6px 9px;
+    text-align: center;
+  }
+  .ext-card .card-name { font-size: 10px; font-weight: 600; color: var(--text2); }
+  .ext-card .card-file { font-size: 9px; }
+
+  /* path badges */
+  .path-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 8.5px; font-weight: 700; padding: 2px 5px;
+    border-radius: 3px; border: 1px solid;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .path-pkg  { color:#c792ff; border-color:rgba(199,146,255,0.3); background:rgba(199,146,255,0.08); }
+  .path-code { color:#7ecfff; border-color:rgba(126,207,255,0.3); background:rgba(126,207,255,0.08); }
+  .path-ai   { color:#ffd166; border-color:rgba(255,209,102,0.35); background:rgba(255,209,102,0.1); }
+  .path-cfg  { color:#4fd1c5; border-color:rgba(79,209,197,0.3); background:rgba(79,209,197,0.08); }
+
+  /* stat row */
+  .stat-row {
+    display: flex; gap: 16px; justify-content: center;
+    margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .stat-item {
+    text-align: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+  }
+  .stat-num { font-size: 20px; font-weight: 800; color: var(--accent); }
+  .stat-lbl { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; }
 </style>
 </head>
 <body>
 
-<nav class="toc">
-  <strong>⚖️ 架構審查</strong>
-  <a href="#sec0">評審標準</a>
-  <a href="#sec1">競品對比</a>
-  <a href="#sec2">弱點誠實評估</a>
-  <a href="#sec3">學術佐證</a>
-  <a href="#sec4">經濟性分析</a>
-  <a href="#sec5">最終裁定</a>
-  <a href="#sec6">最終架構圖</a>
-</nav>
+<h1>ThreatHunter v3.7 — 全域架構流程圖</h1>
+<p class="subtitle">完整資料流向 · 各模組使用語言標記 · 截至 2026-04-14</p>
 
-<main>
-<h1>⚖️ ThreatHunter v3.0 — 最終架構審查報告</h1>
-<p class="subtitle">
-  每項主張均附佐證來源 · 包含誠實弱點評估 · 不偽造數據<br>
-  審查標準：AMD Hackathon 評分 × 競品比較 × 實用性 × 經濟性 × Agent 協作品質
-</p>
-
-<div class="disclaimer">
-  ⚠️ <strong>審查方法說明</strong>：本報告引用的市場數據、論文結論、定價資訊均來自可驗證來源（attached as [n]）。
-  凡是無法引用來源的主張，將明確標注「<em>無直接佐證</em>」或「<em>推論</em>」。
-  本報告同時列出 ThreatHunter 的<strong>缺陷與弱點</strong>，不做美化。
-</div>
-
-<!-- ═══════════════════════════════════ -->
-<h2 id="sec0">§0 · AMD Hackathon 2026 評審標準拆解</h2>
-
-<div class="fact">
-  來源：<a class="src" href="https://lablab.ai/ai-hackathons/amd-developer" target="_blank">lablab.ai AMD Developer Hackathon 2026</a>（已搜尋確認）
-</div>
-
-<table>
-  <tr>
-    <th>評分維度</th><th>權重（推測）</th><th>ThreatHunter 對應</th><th>現況判斷</th>
-  </tr>
-  <tr>
-    <td><strong>技術應用</strong><br><small>AMD Stack 深度整合</small></td>
-    <td>高</td>
-    <td>vLLM on AMD ROCm/MI300X + Llama-70B<br>（需實際部署驗證）</td>
-    <td><span class="tag tag-y">⚠️ 需實測</span></td>
-  </tr>
-  <tr>
-    <td><strong>商業價值</strong><br><small>解決真實痛點</small></td>
-    <td>高</td>
-    <td>替代 Snyk Enterprise（六位數美金/年）<br>+攻擊連鎖分析（市面無同類）</td>
-    <td><span class="tag tag-g">✅ 強</span></td>
-  </tr>
-  <tr>
-    <td><strong>原創性</strong><br><small>方法獨特性</small></td>
-    <td>高</td>
-    <td>LLM Discussion + MacNet DAG + ColMAD 首次組合應用於安全域</td>
-    <td><span class="tag tag-g">✅ 強</span></td>
-  </tr>
-  <tr>
-    <td><strong>展示（Presentation）</strong><br><small>Pitch + Demo</small></td>
-    <td>中</td>
-    <td>需要：GitHub + <strong>FastAPI Live URL</strong>（SSE 即時監控） + 5 分鐘 Pitch 影片</td>
-    <td><span class="tag tag-r">❌ 未完成</span></td>
-  </tr>
-  <tr>
-    <td><strong>Agentic AI（專項）</strong><br><small>自主性/推理/工具協調/可觀測性</small></td>
-    <td>高</td>
-    <td>六 Agent + Orchestrator + ColMAD + Feedback Loop</td>
-    <td><span class="tag tag-g">✅ 強</span></td>
-  </tr>
-</table>
-
-<!-- ═══════════════════════════════════ -->
-<h2 id="sec1">§1 · 與市面工具的競品對比（有佐證）</h2>
-
-<h3>1a. 開源工具能力邊界</h3>
-<div class="fact">
-  來源：<a class="src" href="https://konvu.com" target="_blank">konvu.com — Snyk vs CodeQL vs Semgrep vs Trivy 2024 比較</a> ·
-  <a class="src" href="https://aikido.dev" target="_blank">aikido.dev — Trivy 分析</a>
-</div>
-
-<table>
-  <tr><th>工具</th><th>掃描深度</th><th>攻擊連鎖推理</th><th>情報融合</th><th>Agent 協作</th><th>成本</th></tr>
-  <tr>
-    <td><strong>Snyk Enterprise</strong></td>
-    <td>SAST + SCA + Container + IaC</td>
-    <td>❌ 無</td>
-    <td>❌ 單一來源（NVD）為主</td>
-    <td>❌ 無</td>
-    <td>6 位數美金/年<sup>[1]</sup></td>
-  </tr>
-  <tr>
-    <td><strong>CodeQL</strong></td>
-    <td>深度語意跨檔案 SAST</td>
-    <td>❌ 無 LLM 推理</td>
-    <td>❌ 無</td>
-    <td>❌ 無</td>
-    <td>GitHub Enterprise 授權<sup>[2]</sup></td>
-  </tr>
-  <tr>
-    <td><strong>Semgrep</strong></td>
-    <td>快速模式匹配 SAST</td>
-    <td>❌ 無</td>
-    <td>❌ 無</td>
-    <td>❌ 無</td>
-    <td>免費（基本）/ Pro 訂閱</td>
-  </tr>
-  <tr>
-    <td><strong>Trivy</strong></td>
-    <td>已知 CVE + IaC 配置</td>
-    <td>❌ 無</td>
-    <td>❌ 無</td>
-    <td>❌ 無</td>
-    <td>免費 / 開源</td>
-  </tr>
-  <tr style="background:rgba(63,185,80,.06)">
-    <td><strong>ThreatHunter v3</strong></td>
-    <td>L0正則+L1 AST+L2 LLM+L3 文件+六維情報</td>
-    <td>✅ 跨 CVE 連鎖推理<sup>[3]</sup></td>
-    <td>✅ 六維融合（NVD+EPSS+KEV+GHSA+ATT&CK+OTX）<sup>[4]</sup></td>
-    <td>✅ 六 Agent + ColMAD<sup>[5]</sup></td>
-    <td>Open Source + AMD Cloud</td>
-  </tr>
-</table>
-
-<div class="ok-box">
-  <strong>[1]</strong> Snyk Enterprise 定價：<a class="src" href="https://vendr.com" target="_blank">vendr.com 採購數據</a>顯示中大型企業年合約「六位數美金」，小企業版也要四到五位數。<br>
-  <strong>[2]</strong> CodeQL：<a class="src" href="https://sanj.dev" target="_blank">sanj.dev</a> 指出深度整合在 GitHub Enterprise 生態，高資源需求、長掃描時間。<br>
-  <strong>差異化核心</strong>：所有現有工具都是<strong>「找到漏洞後就結束」</strong>，無法做「這個 SSRF 漏洞是否能串接 Redis 未授權達到 RCE」的推理。ThreatHunter 的 Analyst Agent 做的是這個。
-</div>
-
-<h3>1b. LLM Agent 安全研究與 ThreatHunter 的對比</h3>
-<div class="fact">
-  來源：<a class="src" href="https://usenix.org" target="_blank">PentestGPT (USENIX Security 2024, Deng et al.)</a> ·
-  <a class="src" href="https://arxiv.org" target="_blank">Fang et al. 2024 — GPT-4 autonomous exploit of one-day vulnerabilities (arXiv)</a>
-</div>
-
-<table>
-  <tr><th>研究</th><th>能力</th><th>限制</th><th>ThreatHunter 差異</th></tr>
-  <tr>
-    <td><strong>PentestGPT</strong><br>USENIX 2024</td>
-    <td>模組化滲透測試<br>比單 LLM 顯著更好</td>
-    <td>「Human-in-the-loop」設計<br>不適合自動化 CI/CD</td>
-    <td>ThreatHunter 全自動<br>無需人工介入</td>
-  </tr>
-  <tr>
-    <td><strong>Fang et al.</strong><br>GPT-4 One-Day</td>
-    <td>GPT-4 可自動利用 87% 的已知漏洞</td>
-    <td>需要 CVE 描述作為上下文<br>無上下文則性能大幅下降</td>
-    <td>ThreatHunter 主動查詢 NVD/KEV<br>自行獲取上下文（六維情報）</td>
-  </tr>
-  <tr>
-    <td><strong>HPTSA</strong><br>Zero-Day Multi-Agent</td>
-    <td>多 Agent 層次架構<br>~53% 零日漏洞利用成功率</td>
-    <td>專注於攻擊，不專注於防禦報告生成</td>
-    <td>ThreatHunter 專注於<strong>偵測+行動計畫</strong><br>定位不同（防禦 vs 攻擊）</td>
-  </tr>
-</table>
-
-<div class="warn-box">
-  <strong>[3] 攻擊連鎖推理的來源</strong>：HPTSA 研究（Fang et al.）顯示多 Agent 層次架構能「鏈接多個漏洞」。ThreatHunter 的 Analyst Agent 的連鎖推理概念來自此研究的防禦側應用。
-  但是：<strong>無直接論文證明「防禦側的攻擊連鎖分析有多準確」</strong>——這是 ThreatHunter 的創新點，也是需要 DVWA 實測來驗證的地方。
-</div>
-
-<!-- ═══════════════════════════════════ -->
-<h2 id="sec2">§2 · 誠實弱點評估（不美化）</h2>
-
-<div class="crit-box">
-  <strong>⚠️ 這一節很重要：有弱點不代表不好，但要清楚知道風險在哪裡。</strong>
-</div>
-
-<div class="grid2">
-  <div class="verdict-box verdict-bad">
-    <h4 style="color:var(--warn)">❌ 弱點 1：AMD Hardware 整合未實測</h4>
-    <p><strong>說明</strong>：我們聲稱「在 AMD MI300X 上用 vLLM 跑 Llama-70B」，但目前開發環境用的是 OpenRouter API。</p>
-    <p><strong>風險</strong>：AMD Hackathon 技術應用分數可能低，因為評審強調「深度整合而非 API 包裝」。</p>
-    <p><strong>解決方案</strong>：申請 AMD Developer Cloud 帳號，實際部署一次，取得效能截圖作為證明。</p>
-    <p><strong>時間</strong>：需 4-8 小時配置。</p>
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item" style="color:var(--py);background:var(--py-bg);border-color:rgba(59,130,246,0.3)">
+    <span class="dot" style="background:var(--py)"></span>Python
   </div>
-  <div class="verdict-box verdict-bad">
-    <h4 style="color:var(--warn)">❌ 弱點 2：攻擊連鎖分析精確度無驗證</h4>
-    <p><strong>說明</strong>：Analyst Agent 的 SSRF→Redis→RCE 連鎖推理是 LLM 輸出，可能有幻覺。</p>
-    <p><strong>風險</strong>：評審可能問「這個連鎖分析準確率是多少？」我們沒有數字。</p>
-    <p><strong>解決方案</strong>：在 DVWA 或 VulnHub 上跑 5-10 個已知攻擊鏈，計算 Precision/Recall。</p>
-    <p><strong>時間</strong>：需 6-12 小時測試。</p>
+  <div class="legend-item" style="color:var(--js);background:var(--js-bg);border-color:rgba(245,158,11,0.3)">
+    <span class="dot" style="background:var(--js)"></span>JavaScript
   </div>
-  <div class="verdict-box verdict-warn">
-    <h4 style="color:var(--yellow)">⚠️ 弱點 3：ColMAD 加入的辯論時間和 Token 成本</h4>
-    <p><strong>說明</strong>：CrewAI Hierarchical 比 Sequential 的 Token 消耗更高（Manager 有額外推理開銷）。<sup>[6]</sup></p>
-    <p><strong>來源</strong>：<a class="src" href="https://dev.to" target="_blank">dev.to — CrewAI Token 優化指南</a>。</p>
-    <p><strong>緩解</strong>：三方辯論一致時跳過 Phase 2（快捷路徑設計），省 6 次 LLM 呼叫。</p>
-    <p><strong>評估</strong>：設計有考慮到，但沒有實際測量節省多少。</p>
+  <div class="legend-item" style="color:var(--html);background:var(--html-bg);border-color:rgba(239,68,68,0.3)">
+    <span class="dot" style="background:var(--html)"></span>HTML/CSS
   </div>
-  <div class="verdict-box verdict-warn">
-    <h4 style="color:var(--yellow)">⚠️ 弱點 4：EPSS 和 OTX 的可靠性限制</h4>
-    <p><strong>說明</strong>：EPSS 對硬體漏洞（如 BIOS/韌體）的預測不準確。OTX 是社區回報，品質不一。</p>
-    <p><strong>來源</strong>：<a class="src" href="https://arxiv.org" target="_blank">arXiv EPSS 效能研究</a>（「某些硬體漏洞維持低 EPSS 但仍被積極利用」）。</p>
-    <p><strong>緩解</strong>：Intel Fusion Agent 對 OTX 設低權重（0.05），並動態調整 EPSS 權重。</p>
+  <div class="legend-item" style="color:var(--md);background:var(--md-bg);border-color:rgba(139,92,246,0.3)">
+    <span class="dot" style="background:var(--md)"></span>Markdown (SOP)
   </div>
-  <div class="verdict-box verdict-warn">
-    <h4 style="color:var(--yellow)">⚠️ 弱點 5：展示材料未完成</h4>
-    <p><strong>說明</strong>：FastAPI Live URL 部署 + Pitch 影片 + Demo 影片 尚未完成。</p>
-    <p><strong>UI 架構</strong>：已採用 FastAPI + SSE + Vanilla HTML，<strong>支援即時 Agent 監控串流</strong>（已優於 Streamlit）。</p>
-    <p><strong>風險</strong>：Presentation 評分可能低。評審要求 Live URL 和 5 分鐘影片。</p>
-    <p><strong>優先度</strong>：這是最高優先的待辦事項之一。</p>
+  <div class="legend-item" style="color:var(--json);background:var(--json-bg);border-color:rgba(16,185,129,0.3)">
+    <span class="dot" style="background:var(--json)"></span>JSON / JSONL
   </div>
-  <div class="verdict-box verdict-warn">
-    <h4 style="color:var(--yellow)">⚠️ 弱點 6：Hackathon 期間無生產記錄</h4>
-    <p><strong>說明</strong>：ThreatHunter 是 Hackathon 專案，沒有生產環境使用記錄。</p>
-    <p><strong>緩解</strong>：用 DVWA 測試取得可量化的 Precision/Recall 數據作為替代。</p>
+  <div class="legend-item" style="color:var(--rust);background:var(--rust-bg);border-color:rgba(249,115,22,0.3)">
+    <span class="dot" style="background:var(--rust)"></span>Rust (計劃中)
+  </div>
+  <div class="legend-item" style="color:var(--ext);background:var(--ext-bg);border-color:rgba(107,114,128,0.3)">
+    <span class="dot" style="background:var(--ext)"></span>External API
   </div>
 </div>
 
-<!-- ═══════════════════════════════════ -->
-<h2 id="sec3">§3 · 學術佐證逐項確認</h2>
-
-<table>
-  <tr><th>架構決策</th><th>來源</th><th>核心數據</th><th>ThreatHunter 應用</th><th>是否可驗證</th></tr>
-  <tr>
-    <td>六維情報融合 > 單一 CVSS</td>
-    <td><a class="src" href="https://seemplicity.io" target="_blank">seemplicity.io</a>，<a class="src" href="https://edgescan.com" target="_blank">edgescan.com</a></td>
-    <td>「單一指標不足，融合 CVSS+EPSS+KEV 顯著改善優先排序準確度」</td>
-    <td>六維加權融合評分公式</td>
-    <td>✅ 可查</td>
-  </tr>
-  <tr>
-    <td>不規則拓撲 > 串列 Pipeline</td>
-    <td><a class="src" href="https://arxiv.org/abs/2406.07155" target="_blank">arXiv:2406.07155 MacNet</a></td>
-    <td>「Irregular topologies outperform regular ones」<br>Small-World 拓撲最佳</td>
-    <td>DAG 拓撲 + Small-World 捷徑（KEV→Analyst）</td>
-    <td>✅ 可查</td>
-  </tr>
-  <tr>
-    <td>LLM Discussion 三階段框架</td>
-    <td><a class="src" href="https://arxiv.org/abs/2405.06373" target="_blank">arXiv:2405.06373</a> 李宏毅教授</td>
-    <td>Initiation→Discussion→Convergence<br>角色差異化改善推理品質</td>
-    <td>Analyst/Skeptic/ThreatHunter 三角色 + 三階段</td>
-    <td>✅ 可查</td>
-  </tr>
-  <tr>
-    <td>ColMAD 協作 > 零和競爭</td>
-    <td><a class="src" href="https://arxiv.org" target="_blank">ColMAD 論文（arXiv）</a></td>
-    <td>「比競爭式 MAD 高 +19% 錯誤偵測率」</td>
-    <td>三角色互補盲點，非相互攻擊</td>
-    <td>✅ 可查</td>
-  </tr>
-  <tr>
-    <td>Dual LLM Pattern（Security Guard）</td>
-    <td><a class="src" href="https://simonwillison.net" target="_blank">Simon Willison 2024</a> + OWASP LLM01:2025</td>
-    <td>隔離 LLM 處理不可信輸入，特權 LLM 做推理</td>
-    <td>Security Guard Agent（禁止推理 / Tool 呼叫）</td>
-    <td>✅ 可查</td>
-  </tr>
-  <tr>
-    <td>LLM Agent 優於傳統掃描器</td>
-    <td><a class="src" href="https://usenix.org" target="_blank">PentestGPT, USENIX 2024</a><br><a class="src" href="https://arxiv.org" target="_blank">Fang et al. 2024</a></td>
-    <td>GPT-4 自動利用 87% 的一日漏洞<br>傳統掃描器「無法複製推理型方法」</td>
-    <td>L2 LLM 語意分析層 > 純正則匹配</td>
-    <td>✅ 可查</td>
-  </tr>
-  <tr>
-    <td>CrewAI Hierarchical > Sequential</td>
-    <td><a class="src" href="https://crewai.com" target="_blank">CrewAI 官方文件</a><br><a class="src" href="https://dev.to" target="_blank">dev.to CrewAI 分析</a></td>
-    <td>「複雜非線性任務下 Hierarchical 顯著更好」<br>Token 成本更高但品質更高</td>
-    <td>Orchestrator = Manager Agent，動態任務分配</td>
-    <td>✅ 可查</td>
-  </tr>
-  <tr>
-    <td><strong>誠實說明</strong>：攻擊連鎖「準確率數字」</td>
-    <td>—</td>
-    <td>查無直接數據</td>
-    <td>ThreatHunter 原創設計，需 DVWA 實測</td>
-    <td>⚠️ 無直接佐證，需實測</td>
-  </tr>
-</table>
-
-<!-- ═══════════════════════════════════ -->
-<h2 id="sec4">§4 · 經濟性分析（Token 成本 + 替代成本）</h2>
-<div class="fact">
-  來源：<a class="src" href="https://vendr.com" target="_blank">vendr.com Snyk 定價</a> ·
-  <a class="src" href="https://dev.to" target="_blank">dev.to CrewAI Token 分析</a>
+<!-- Stats -->
+<div class="stat-row">
+  <div class="stat-item"><div class="stat-num">7</div><div class="stat-lbl">AI Agents</div></div>
+  <div class="stat-item"><div class="stat-num">16</div><div class="stat-lbl">Skill SOP (.md)</div></div>
+  <div class="stat-item"><div class="stat-num">7</div><div class="stat-lbl">Tools</div></div>
+  <div class="stat-item"><div class="stat-num">4</div><div class="stat-lbl">Scan Paths</div></div>
+  <div class="stat-item"><div class="stat-num">461</div><div class="stat-lbl">Tests</div></div>
 </div>
 
-<div class="grid2">
-  <div class="card">
-    <h4>💰 替代商業工具的費用節省</h4>
-    <table style="margin-top:.5rem;font-size:.82rem">
-      <tr><td>Snyk Enterprise</td><td style="color:var(--warn)">$100,000+/年<sup>[1]</sup></td></tr>
-      <tr><td>SonarQube Enterprise</td><td style="color:var(--warn)">$20,000+/年</td></tr>
-      <tr><td>Veracode Application Security</td><td style="color:var(--warn)">$15,000+/年</td></tr>
-      <tr style="border-top:1px solid var(--border)"><td><strong>ThreatHunter（開源 + AMD Cloud）</strong></td><td style="color:var(--ok)">$0 + GPU 租用費</td></tr>
-    </table>
-    <p style="font-size:.82rem;margin-top:.75rem;color:var(--muted)">
-      <em>注：Snyk 數字來自 vendr.com 採購平台的中位數報告，非官方定價。</em>
-    </p>
-  </div>
-  <div class="card">
-    <h4>⚡ Token 成本估算（每次掃描）</h4>
-    <table style="margin-top:.5rem;font-size:.82rem">
-      <tr><td>路徑 A（套件掃描）</td><td style="color:var(--ok)">~3,000 tokens</td></tr>
-      <tr><td>路徑 B（完整掃描，三方一致省 Phase 2）</td><td style="color:var(--yellow)">~15,000 tokens</td></tr>
-      <tr><td>路徑 B（完整掃描，需完整辯論）</td><td style="color:var(--yellow)">~25,000 tokens</td></tr>
-      <tr><td>路徑 D（回饋補充掃描）</td><td style="color:var(--yellow)">~10,000 tokens</td></tr>
-    </table>
-    <p style="font-size:.82rem;margin-top:.75rem;color:var(--muted)">
-      <em>注：以 Llama-70B 估算。使用 AMD vLLM 自部署可大幅降低每 Token 成本。<br>
-      <strong>無直接佐證</strong>——這些數字是基於典型 CrewAI 任務估算的<strong>推論</strong>，未實測。</em>
-    </p>
-  </div>
-</div>
+<div class="arch">
 
-<div class="ok-box">
-  <strong>省 Token 優化設計（有設計根據）：</strong>
-  依據 <a class="src" href="https://dev.to" target="_blank">dev.to CrewAI Token 優化</a>：避免 memory=True 造成全歷史注入（Context Bloat），以及生產環境關閉 verbose。
-  ThreatHunter 的設計：(1) 只傳精煉 JSON 契約而非原始程式碼 (2) 三方一致立即跳過 Phase 2 (3) 路徑 A/C 跳過不必要 Agent。
-</div>
-
-<!-- ═══════════════════════════════════ -->
-<h2 id="sec5">§5 · 最終裁定：架構整體評分</h2>
-
-<table>
-  <tr><th>評估維度</th><th>分數</th><th>說明</th></tr>
-  <tr>
-    <td><strong>AMD Hackathon 符合度</strong></td>
-    <td>
-      <div>80/100</div>
-      <div class="score-bar"><div class="score-fill" style="width:80%"></div></div>
-    </td>
-    <td>Agentic AI 五項全覆蓋，但 AMD 硬體實測和展示材料未完成（-20）</td>
-  </tr>
-  <tr>
-    <td><strong>競品差異化</strong></td>
-    <td>
-      <div>90/100</div>
-      <div class="score-bar"><div class="score-fill" style="width:90%"></div></div>
-    </td>
-    <td>攻擊連鎖推理 + 六維融合 + Agent 協作是市面無同類的組合；弱點是無生產驗證</td>
-  </tr>
-  <tr>
-    <td><strong>學術嚴謹性</strong></td>
-    <td>
-      <div>85/100</div>
-      <div class="score-bar"><div class="score-fill" style="width:85%"></div></div>
-    </td>
-    <td>三篇論文有完整佐證，但連鎖分析精確度無論文支持（需實測）</td>
-  </tr>
-  <tr>
-    <td><strong>經濟性</strong></td>
-    <td>
-      <div>75/100</div>
-      <div class="score-bar"><div class="score-fill" style="width:75%"></div></div>
-    </td>
-    <td>開源替代商業工具優勢明顯；Token 成本估算需實測驗證</td>
-  </tr>
-  <tr>
-    <td><strong>Agent 協作品質</strong></td>
-    <td>
-      <div>88/100</div>
-      <div class="score-bar"><div class="score-fill" style="width:88%"></div></div>
-    </td>
-    <td>Hierarchical + Parallel + ColMAD + Feedback Loop = 研究級設計；不規則拓撲有 MacNet 論文支持</td>
-  </tr>
-  <tr>
-    <td><strong>可用性（Hackathon 展示）</strong></td>
-    <td>
-      <div>55/100</div>
-      <div class="score-bar"><div class="score-fill-r" style="width:55%"></div></div>
-    </td>
-    <td>FastAPI + SSE UI 已實作即時監控，但 Live URL 未部署、Pitch 影片未做（最大弱點）</td>
-  </tr>
-</table>
-
-<div class="verdict-box verdict-good" style="margin-top:1.5rem">
-  <h3 style="color:var(--ok);margin-bottom:.75rem">✅ 最終架構裁定：方向正確，執行有缺口</h3>
-  <p>
-    <strong>架構是否是同類中最好的？</strong> 在「開源 LLM 安全分析 Agent」這個細分域內，
-    ThreatHunter 的設計組合（MacNet DAG + LLM Discussion + ColMAD + 六維融合）
-    <strong>在公開研究中找不到完全相同的組合</strong>，具備原創性。
-  </p>
-  <p>
-    <strong>但「最好」這個說法需要謹慎</strong>：
-    (1) 攻擊連鎖推理的精確度仍需 DVWA 實測；
-    (2) AMD 硬體整合是評分缺口；
-    (3) 展示材料是最緊急的短板。
-  </p>
-  <p>
-    <strong>核心結論</strong>：架構設計水準足夠打進前三名，但展示執行不到位就失分。
-  </p>
-</div>
-
-<!-- ═══════════════════════════════════ -->
-<h2 id="sec6">§6 · 最終架構圖（融合所有決策的最終版本）</h2>
-
-<div class="dw">
-  <div class="dt">
-    ThreatHunter v3.0 最終架構 ｜ 每個決策都有來源 ｜ 圓角 = Agent ｜ 方角 = 基礎設施 ｜ 虛線 = 捷徑
-  </div>
-  <div class="mermaid">
-flowchart TD
-    USER(["👤 用戶\n程式碼 / 套件 / 文件"])
-
-    subgraph INFRA_IN["⚙️ L0 輸入防禦（確定性，非 Agent）\n根據：OWASP LLM01:2025"]
-        IS["input_sanitizer.py\n向量語意過濾 + 長度截斷"]
-        L0["L0 正則掃描\n0找到 = 跳過 L1/L2 節省 Token\n根據：MacNet 省資源設計"]
-    end
-
-    USER --> IS --> L0
-
-    subgraph CREW["🏗️ ThreatHunter CrewAI Crew（Process.hierarchical）\n根據：CrewAI 官方文件 — 複雜任務用 Hierarchical"]
-
-      ORCH(["🧭 Orchestrator Agent\nCrewAI Manager\n動態路由 A/B/C/D\n根據：MacNet arXiv:2406.07155\nskills/orchestrator.md"])
-
-      subgraph P1["MacNet Layer 1：並行（不規則拓撲，優於串列）"]
-        SG(["🔒 Security Guard\nDual LLM Pattern\n根據：Simon Willison 2024\nskills/security_guard.md"])
-        IF(["🧠 Intel Fusion\n六維自主選擇\n根據：seemplicity.io, edgescan.com\nskills/intel_fusion.md"])
-        L1["⚙️ L1 AST / bandit\n確定性引擎"]
-      end
-
-      subgraph P2["MacNet Layer 2：合成"]
-        SCOUT(["🕵️ Scout Agent\n六維評分整合\nis_new 記憶比對\nskills/threat_intel.md"])
-      end
-
-      subgraph P3["MacNet Layer 3：連鎖推理\n根據：Fang et al. 2024, HPTSA"]
-        ANALYST(["🔬 Analyst Agent\nSSRF→Redis→RCE 連鎖\nskills/chain_analysis.md"])
-      end
-
-      subgraph P4["MacNet Layer 4：ColMAD 協作辯論\n根據：arXiv:2405.06373 + ColMAD"]
-        RA(["🔬 Analyst 角色\n找真實威脅"])
-        RB(["❓ Skeptic 角色\n補充盲點"])
-        RC(["⚔️ Hunter 角色\n攻擊者視角"])
-        RA <-->|"協作補充\n非零和競爭"| RB
-        RB <-->|"互補缺漏"| RC
-        RC <-->|"提供可利用性"| RA
-      end
-
-      JUDGE(["⚖️ Advisor/Judge\n五維評分 + 歷史追蹤\nskills/action_report.md"])
-
-      CONF{"confidence\n>= 0.70?"}
-      FB["回饋迴路\n帶具體問題\n路徑 D"]
-    end
-
-    subgraph INFRA_OUT["⚙️ 輸出基礎設施（確定性）"]
-        SV["JSON Schema 驗證\njsonschema.validate"]
-        AL["Audit Log + Rate Limit"]
-    end
-
-    OUT["📊 最終報告\nFastAPI UI / SARIF / 行動計畫"]
-    MEM[("💾 共享記憶\nLlamaIndex Vector DB")]
-
-    L0 --> ORCH
-    ORCH -->|"Task A:隔離提取"| SG
-    ORCH -->|"Task B:情報融合"| IF
-    ORCH -->|"Task C:靜態掃描"| L1
-
-    SG & IF & L1 --> SCOUT
-    IF -.->|"KEV 命中捷徑\nSmall-World Edge\n根據：MacNet"| ANALYST
-    SCOUT --> ANALYST
-    ANALYST --> RA & RB & RC
-    RA & RB & RC --> JUDGE
-    JUDGE --> CONF
-    CONF -->|"✅ 足夠"| SV
-    CONF -->|"❌ 不足\nMAX 2 次"| FB
-    FB -->|"精準補充"| ORCH
-
-    SV --> AL --> OUT
-    ORCH & SCOUT & ANALYST & JUDGE <-->|"read/write"| MEM
-
-    style CREW fill:#0d0d1a,stroke:#58a6ff,stroke-width:2px
-    style P1 fill:#0d1a0d,stroke:#3fb950,stroke-dasharray:4 4
-    style P2 fill:#1a150d,stroke:#d29922,stroke-dasharray:4 4
-    style P3 fill:#150d1a,stroke:#bc8cff,stroke-dasharray:4 4
-    style P4 fill:#0d1a15,stroke:#39d353,stroke-dasharray:4 4
-    style INFRA_IN fill:#0d0d0d,stroke:#8b949e,stroke-dasharray:5 5
-    style INFRA_OUT fill:#0d0d0d,stroke:#8b949e,stroke-dasharray:5 5
-    style MEM fill:#1a1a1a,stroke:#8b949e
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════ -->
-<h2>§7 · 立即行動清單（按優先級）</h2>
-
-<table>
-  <tr><th>優先</th><th>任務</th><th>影響</th><th>時間</th></tr>
-  <tr style="background:rgba(248,81,73,.06)">
-    <td><span class="tag tag-r">P0 緊急</span></td>
-    <td>申請 AMD Developer Cloud + 部署 vLLM + 截圖</td>
-    <td>AMD 技術應用評分（最重要維度）</td>
-    <td>4-8 小時</td>
-  </tr>
-  <tr style="background:rgba(248,81,73,.06)">
-    <td><span class="tag tag-r">P0 緊急</span></td>
-    <td>FastAPI + <code>uvicorn</code> 部署至雲端（Railway / Render / AMD Cloud）+ 取得 Live URL</td>
-    <td>Presentation 評分 + 評審能直接試用即時監控介面</td>
-    <td>2-4 小時</td>
-  </tr>
-  <tr style="background:rgba(210,153,34,.06)">
-    <td><span class="tag tag-y">P1 重要</span></td>
-    <td>DVWA 實測 5 個攻擊鏈，取得 Precision/Recall</td>
-    <td>回答「連鎖分析準確率多少？」</td>
-    <td>6-12 小時</td>
-  </tr>
-  <tr style="background:rgba(210,153,34,.06)">
-    <td><span class="tag tag-y">P1 重要</span></td>
-    <td>錄製 5 分鐘 Pitch 影片</td>
-    <td>Presentation 評分</td>
-    <td>2-4 小時</td>
-  </tr>
-  <tr>
-    <td><span class="tag tag-b">P2 一般</span></td>
-    <td><code>skills/intel_fusion.md</code> 對應 Tool 實作</td>
-    <td>六維融合邏輯完整性</td>
-    <td>4-6 小時</td>
-  </tr>
-  <tr>
-    <td><span class="tag tag-b">P2 一般</span></td>
-    <td>測試完整 pipeline：<code>uv run python -m pytest tests/ -v</code></td>
-    <td>確保 Harness 合規</td>
-    <td>1-2 小時</td>
-  </tr>
-</table>
-
-<!-- ═══════════════════════════════════ -->
-<h2 id="sec7">§7b · UI 架構說明（為何不用 Streamlit）</h2>
-
-<div class="card">
-  <h3>❌ Streamlit 的根本限制</h3>
-  <table>
-    <tr><th>限制</th><th>具體問題</th><th>對 Demo 的影響</th></tr>
-    <tr>
-      <td><strong>無真實即時串流</strong></td>
-      <td>Streamlit 靠 polling 或 <code>st.empty()</code> 更新，不是 WebSocket/SSE<br>Agent 執行中無法看到每個步驟的即時輸出</td>
-      <td>評審看不到「六個 Agent 依序工作」的視覺化過程</td>
-    </tr>
-    <tr>
-      <td><strong>阻塞式執行</strong></td>
-      <td>Streamlit ScriptRunner 是單執行緒，長任務會凍結整個 UI</td>
-      <td>掃描 60-120 秒期間 UI 無回應，體驗差</td>
-    </tr>
-    <tr>
-      <td><strong>多用戶共享狀態</strong></td>
-      <td>Session state 在多用戶場景容易污染</td>
-      <td>Demo 時多人同時試用會互相影響</td>
-    </tr>
-  </table>
-</div>
-
-<div class="card">
-  <h3>✅ 現行架構：FastAPI + SSE + Vanilla HTML/JS</h3>
-  <div class="grid2">
-    <div>
-      <h4>技術堆疊</h4>
-      <table>
-        <tr><td><code>fastapi</code></td><td>REST API 後端 (<code>POST /api/scan</code>)</td></tr>
-        <tr><td><code>uvicorn</code></td><td>ASGI 伺服器，支援非同步</td></tr>
-        <tr><td><strong>SSE（Server-Sent Events）</strong></td><td><code>GET /api/stream/{scan_id}</code><br>Agent 每完成一步即時推送事件</td></tr>
-        <tr><td>Vanilla HTML/CSS/JS</td><td>靜態前端，無框架依賴</td></tr>
-        <tr><td><code>threading</code></td><td>Pipeline 在背景執行緒跑，UI 不阻塞</td></tr>
-      </table>
-    </div>
-    <div>
-      <h4>SSE 事件類型（即時監控訊號）</h4>
-      <table>
-        <tr><td><code>connected</code></td><td>連線成功，確認 scan_id</td></tr>
-        <tr><td><code>agent_start</code></td><td>某個 Agent 開始執行</td></tr>
-        <tr><td><code>agent_log</code></td><td>Agent 執行中的即時日誌</td></tr>
-        <tr><td><code>agent_done</code></td><td>Agent 完成，含 status + detail</td></tr>
-        <tr><td><code>done</code></td><td>整個 Pipeline 完成，返回完整報告</td></tr>
-        <tr><td><code>pipeline_error</code></td><td>錯誤訊息，前端立即顯示</td></tr>
-      </table>
+  <!-- ── LAYER 0: USER ── -->
+  <div class="layer layer-ui">
+    <div class="layer-label">👤 用戶端（Browser）</div>
+    <div class="layer-inner">
+      <div class="card card-html">
+        <div class="card-name">🖥 主介面</div>
+        <div class="card-file">ui/static/index.html</div>
+        <div class="card-tags">
+          <span class="tag html-tag">HTML5</span>
+          <span class="tag" style="color:#06b6d4;background:rgba(6,182,212,0.1);border-color:rgba(6,182,212,0.3)">CSS3</span>
+        </div>
+      </div>
+      <div class="card card-js">
+        <div class="card-name">⚡ SSE 事件處理</div>
+        <div class="card-file">ui/static/app.js</div>
+        <div class="card-tags">
+          <span class="tag js">Vanilla JS</span>
+        </div>
+      </div>
+      <div class="card card-js" style="border-left-color:var(--html)">
+        <div class="card-name">🎨 樣式系統</div>
+        <div class="card-file">ui/static/style.css</div>
+        <div class="card-tags">
+          <span class="tag" style="color:#06b6d4;background:rgba(6,182,212,0.1);border-color:rgba(6,182,212,0.3)">CSS3</span>
+          <span class="tag ext-tag">CSS Variables</span>
+        </div>
+      </div>
+      <div class="card card-py">
+        <div class="card-name">🔬 Checkpoint 儀表板</div>
+        <div class="card-file">ui/static/checkpoint.html</div>
+        <div class="card-tags">
+          <span class="tag html-tag">HTML</span>
+          <span class="tag js">JS</span>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="ok-box" style="margin-top:1rem">
-    <strong>比 Streamlit 好在哪裡：</strong>
-    用戶點擊「開始掃描」後，瀏覽器立即透過 SSE 長連線接收事件流。
-    Security Guard「開始提取」→ Intel Fusion「查詢六維情報」→ Analyst「分析連鎖」→ ColMAD「三方辯論中」——
-    每一步都實時出現在畫面上，<strong>評審可以親眼看到七個 Agent 協作工作的全過程</strong>。
+
+  <div class="arrow">↕ <span class="arrow-label">HTTP POST /api/scan · SSE GET /api/stream/{id}</span></div>
+
+  <!-- ── LAYER 1: API ── -->
+  <div class="layer layer-api">
+    <div class="layer-label">🌐 API 後端（FastAPI + SSE）</div>
+    <div class="layer-inner">
+      <div class="card card-py card-wide">
+        <div class="card-name">🚀 FastAPI Server</div>
+        <div class="card-file">ui/server.py</div>
+        <div class="card-tags">
+          <span class="tag py">Python 3.12</span>
+          <span class="tag py">FastAPI</span>
+          <span class="tag py">SSE</span>
+          <span class="tag py">threading</span>
+        </div>
+      </div>
+      <div class="card card-py" style="min-width:180px">
+        <div class="card-name">📊 Thinking Path API</div>
+        <div class="card-file">_build_thinking_path()</div>
+        <div class="card-tags">
+          <span class="tag py">Python</span>
+          <span class="tag json-tag">JSONL → JSON</span>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <div class="arrow">↓ <span class="arrow-label">Pipeline Worker Thread</span></div>
+
+  <!-- ── LAYER 2: L0 SANITIZER ── -->
+  <div class="layer layer-l0">
+    <div class="layer-label">🛡 L0 安全閘門（確定性，在 LLM 前） <span style="color:#ef4444;font-size:9px;margin-left:8px">OWASP LLM01:2025</span></div>
+    <div class="layer-inner">
+      <div class="card card-py card-wide">
+        <div class="card-name">🔍 Input Sanitizer</div>
+        <div class="card-file">input_sanitizer.py</div>
+        <div class="card-tags">
+          <span class="tag py">Python</span>
+          <span class="tag py">regex</span>
+          <span class="tag py">hashlib</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--text2);justify-content:center;padding:0 4px">
+        <span>→ Blocklist 掃描（拒絕）</span>
+        <span>→ L0 正則標記（放行）</span>
+        <span>→ 輸入類型推斷</span>
+        <span>→ SHA-256 hash 追蹤</span>
+      </div>
+      <div class="card card-rust" style="min-width:130px">
+        <div class="planned">計劃 v3.8</div>
+        <div class="card-name" style="color:var(--rust)">🦀 Rust L0 Core</div>
+        <div class="card-file">rust/sanitizer/</div>
+        <div class="card-tags">
+          <span class="tag rust-tag">Rust</span>
+          <span class="tag rust-tag">PyO3</span>
+          <span class="tag rust-tag">regex crate</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓ <span class="arrow-label">SanitizeResult { safe, input_type, sanitized_input }</span></div>
+
+  <!-- ── LAYER 3: ORCHESTRATOR ── -->
+  <div class="layer layer-orch">
+    <div class="layer-label">🎯 Orchestrator — 動態路由決策</div>
+    <div class="side-layout">
+      <div class="checkpoint-side">
+        <div class="card-name">📝 Checkpoint Recorder</div>
+        <div class="card-file">checkpoint.py</div>
+        <div style="margin-top:4px">
+          <span class="tag py" style="font-size:8px;padding:1px 5px">Python</span>
+          <span class="tag json-tag" style="font-size:8px;padding:1px 5px">JSONL</span>
+        </div>
+        <div style="font-size:9px;color:var(--text2);margin-top:6px;line-height:1.5">
+          append-only 寫入<br>
+          threading.Lock<br>
+          STAGE_ENTER<br>
+          LLM_CALL<br>
+          TOOL_CALL<br>
+          DEGRADATION
+        </div>
+        <div class="card card-rust" style="margin-top:8px;border-radius:6px;padding:6px;min-width:unset">
+          <div class="planned" style="position:relative;top:0;right:0;display:inline-block;margin-bottom:3px">計劃 v3.9</div>
+          <div style="font-size:9px;color:var(--rust)">🦀 Rust Writer</div>
+          <div class="card-file">rust/checkpoint/</div>
+        </div>
+      </div>
+      <div class="main-pipeline">
+        <div class="layer-inner">
+          <div class="card card-py card-wide">
+            <div class="card-name">🧭 Orchestrator Agent</div>
+            <div class="card-file">agents/orchestrator.py</div>
+            <div class="card-tags">
+              <span class="tag py">Python</span>
+              <span class="tag py">CrewAI</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+            <span class="path-badge path-pkg">📦 PKG</span>
+            <span class="path-badge path-code">🔍 CODE</span>
+            <span class="path-badge path-ai">🤖 AI/Injection</span>
+            <span class="path-badge path-cfg">⚙️ Config</span>
+          </div>
+          <div class="card card-md">
+            <div class="card-name">📋 Orchestrator SOP</div>
+            <div class="card-file">skills/orchestrator.md</div>
+            <div class="card-tags"><span class="tag md">Markdown</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓ <span class="arrow-label">OrchestrationContext { input_type, scan_path, ... }</span></div>
+
+  <!-- ── LAYER 4: PARALLEL L1 ── -->
+  <div class="layer layer-harness">
+    <div class="layer-label">⚡ Layer 1 並行處理（同時執行）</div>
+    <div class="layer-inner">
+      <div class="card card-py card-wide">
+        <div class="card-name">🔒 Security Guard</div>
+        <div class="card-file">agents/security_guard.py</div>
+        <div class="card-tags">
+          <span class="tag py">Python</span>
+          <span class="tag py">ast.parse()</span>
+          <span class="tag py">regex</span>
+          <span class="tag py">CrewAI</span>
+        </div>
+        <div style="font-size:9px;color:var(--text2);margin-top:5px">
+          Dual LLM Pattern · allow_delegation=False
+        </div>
+      </div>
+      <div class="card card-md" style="min-width:110px">
+        <div class="card-name">📋 Guard SOP</div>
+        <div class="card-file">skills/security_guard.md</div>
+        <div class="card-tags"><span class="tag md">Markdown</span></div>
+      </div>
+      <div style="width:1px;background:var(--border);margin:0 8px;align-self:stretch"></div>
+      <div class="card card-py card-wide">
+        <div class="card-name">🧮 Intel Fusion</div>
+        <div class="card-file">agents/intel_fusion.py</div>
+        <div class="card-tags">
+          <span class="tag py">Python</span>
+          <span class="tag py">CrewAI</span>
+          <span class="tag py">6D Scoring</span>
+        </div>
+        <div style="font-size:9px;color:var(--text2);margin-top:5px">
+          composite_score · dynamic weighting
+        </div>
+      </div>
+      <div class="card card-md" style="min-width:110px">
+        <div class="card-name">📋 Fusion SOP</div>
+        <div class="card-file">skills/intel_fusion.md</div>
+        <div class="card-tags"><span class="tag md">Markdown</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓ <span class="arrow-label">parallel output → merged into pipeline context</span></div>
+
+  <!-- ── LAYER 5: AGENTS ── -->
+  <div class="layer layer-agents">
+    <div class="layer-label">🤖 主 Agent Pipeline（Sequential · Path-Aware Skills v3.7）</div>
+    <div class="layer-inner" style="flex-direction:column;gap:8px">
+
+      <!-- Scout -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="card card-py card-wide">
+          <div class="card-name">🔭 Scout Agent</div>
+          <div class="card-file">agents/scout.py</div>
+          <div class="card-tags">
+            <span class="tag py">Python</span>
+            <span class="tag py">CrewAI</span>
+            <span class="tag py">SKILL_MAP</span>
+          </div>
+          <div style="font-size:9px;color:var(--text2);margin-top:4px">情報蒐集 · 6 維威脅情報整合</div>
+        </div>
+        <div style="color:var(--text2);font-size:16px">→</div>
+        <div class="card card-md" style="min-width:unset">
+          <div class="card-name" style="font-size:10px">📋 路徑 SOP</div>
+          <div class="card-tags" style="flex-direction:column;gap:2px;margin-top:4px">
+            <span class="tag md" style="font-size:8px">pkg → threat_intel.md</span>
+            <span class="tag md" style="font-size:8px">code → source_code_audit.md</span>
+            <span class="tag md" style="font-size:8px">injection → ai_security_audit.md</span>
+            <span class="tag md" style="font-size:8px">config → config_audit.md</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding-left:16px;color:var(--text2);font-size:11px">↓ Scout JSON { cve_list, packages, risk_score }</div>
+
+      <!-- Analyst -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="card card-py card-wide">
+          <div class="card-name">🔬 Analyst Agent</div>
+          <div class="card-file">agents/analyst.py</div>
+          <div class="card-tags">
+            <span class="tag py">Python</span>
+            <span class="tag py">CrewAI</span>
+            <span class="tag py">SKILL_MAP</span>
+          </div>
+          <div style="font-size:9px;color:var(--text2);margin-top:4px">3-Task Pipeline · 攻擊連鎖分析</div>
+        </div>
+        <div style="color:var(--text2);font-size:16px">→</div>
+        <div class="card card-md" style="min-width:unset">
+          <div class="card-name" style="font-size:10px">📋 路徑 SOP</div>
+          <div class="card-tags" style="flex-direction:column;gap:2px;margin-top:4px">
+            <span class="tag md" style="font-size:8px">pkg → chain_analysis.md</span>
+            <span class="tag md" style="font-size:8px">code → code_chain_analysis.md</span>
+            <span class="tag md" style="font-size:8px">injection → ai_chain_analysis.md</span>
+            <span class="tag md" style="font-size:8px">config → config_chain_analysis.md</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding-left:16px;color:var(--text2);font-size:11px">↓ Analyst JSON { attack_chain, cvss_weighted, is_chain }</div>
+
+      <!-- Critic -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="card card-py card-wide">
+          <div class="card-name">⚔️ Critic Agent</div>
+          <div class="card-file">agents/critic.py</div>
+          <div class="card-tags">
+            <span class="tag py">Python</span>
+            <span class="tag py">CrewAI</span>
+            <span class="tag py">ColMAD Debate</span>
+          </div>
+          <div style="font-size:9px;color:var(--text2);margin-top:4px">對抗式辯論 · 三角色驗證</div>
+        </div>
+        <div style="color:var(--text2);font-size:16px">→</div>
+        <div class="card card-md" style="min-width:unset">
+          <div class="card-name" style="font-size:10px">📋 路徑 SOP</div>
+          <div class="card-tags" style="flex-direction:column;gap:2px;margin-top:4px">
+            <span class="tag md" style="font-size:8px">pkg → debate_sop.md</span>
+            <span class="tag md" style="font-size:8px">code → code_debate_sop.md</span>
+            <span class="tag md" style="font-size:8px">injection → ai_debate_sop.md</span>
+            <span class="tag md" style="font-size:8px">config → config_debate_sop.md</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding-left:16px;color:var(--text2);font-size:11px">↓ Critic JSON { verdict, weighted_score, challenges }</div>
+
+      <!-- Advisor -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="card card-py card-wide">
+          <div class="card-name">📋 Advisor Agent</div>
+          <div class="card-file">agents/advisor.py</div>
+          <div class="card-tags">
+            <span class="tag py">Python</span>
+            <span class="tag py">CrewAI</span>
+            <span class="tag py">Judge + Feedback</span>
+          </div>
+          <div style="font-size:9px;color:var(--text2);margin-top:4px">行動報告 · 5 維評分 · Feedback Loop</div>
+        </div>
+        <div style="color:var(--text2);font-size:16px">→</div>
+        <div class="card card-md" style="min-width:unset">
+          <div class="card-name" style="font-size:10px">📋 路徑 SOP</div>
+          <div class="card-tags" style="flex-direction:column;gap:2px;margin-top:4px">
+            <span class="tag md" style="font-size:8px">pkg → action_report.md</span>
+            <span class="tag md" style="font-size:8px">code → code_action_report.md</span>
+            <span class="tag md" style="font-size:8px">injection → ai_action_report.md</span>
+            <span class="tag md" style="font-size:8px">config → config_action_report.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓ <span class="arrow-label">Final Report JSON → SSE → UI</span></div>
+
+  <!-- ── LAYER 6: TOOLS ── -->
+  <div class="layer layer-tools">
+    <div class="layer-label">🔧 工具層（Agents 呼叫）</div>
+    <div class="tool-grid">
+      <div class="tool-card">
+        <div class="card-name">🔎 NVD Tool</div>
+        <div class="card-file">tools/nvd_tool.py</div>
+        <div class="card-tags" style="margin-top:4px">
+          <span class="tag py" style="font-size:8px;padding:1px 4px">Python</span>
+          <span class="tag json-tag" style="font-size:8px;padding:1px 4px">Cache</span>
+        </div>
+      </div>
+      <div class="tool-card">
+        <div class="card-name">⚠️ KEV Tool</div>
+        <div class="card-file">tools/kev_tool.py</div>
+        <div class="card-tags" style="margin-top:4px">
+          <span class="tag py" style="font-size:8px;padding:1px 4px">Python</span>
+        </div>
+      </div>
+      <div class="tool-card">
+        <div class="card-name">🌐 OTX Tool</div>
+        <div class="card-file">tools/otx_tool.py</div>
+        <div class="card-tags" style="margin-top:4px">
+          <span class="tag py" style="font-size:8px;padding:1px 4px">Python</span>
+        </div>
+      </div>
+      <div class="tool-card">
+        <div class="card-name">💣 Exploit Tool</div>
+        <div class="card-file">tools/exploit_tool.py</div>
+        <div class="card-tags" style="margin-top:4px">
+          <span class="tag py" style="font-size:8px;padding:1px 4px">Python</span>
+        </div>
+      </div>
+      <div class="tool-card">
+        <div class="card-name">📊 EPSS Tool</div>
+        <div class="card-file">tools/epss_tool.py</div>
+        <div class="card-tags" style="margin-top:4px">
+          <span class="tag py" style="font-size:8px;padding:1px 4px">Python</span>
+        </div>
+      </div>
+      <div class="tool-card">
+        <div class="card-name">🐙 GHSA Tool</div>
+        <div class="card-file">tools/ghsa_tool.py</div>
+        <div class="card-tags" style="margin-top:4px">
+          <span class="tag py" style="font-size:8px;padding:1px 4px">Python</span>
+        </div>
+      </div>
+      <div class="tool-card">
+        <div class="card-name">💾 Memory Tool</div>
+        <div class="card-file">tools/memory_tool.py</div>
+        <div class="card-tags" style="margin-top:4px">
+          <span class="tag py" style="font-size:8px;padding:1px 4px">Python</span>
+          <span class="tag json-tag" style="font-size:8px;padding:1px 4px">JSON</span>
+        </div>
+      </div>
+      <div class="tool-card">
+        <div class="card-name">📦 Pkg Extractor</div>
+        <div class="card-file">tools/package_extractor.py</div>
+        <div class="card-tags" style="margin-top:4px">
+          <span class="tag py" style="font-size:8px;padding:1px 4px">Python</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LAYER 7: MEMORY ── -->
+  <div class="layer layer-memory">
+    <div class="layer-label">🗃 記憶層（持久化雙層記憶）</div>
+    <div class="layer-inner">
+      <div class="card card-json">
+        <div class="card-name">📂 Scout Memory</div>
+        <div class="card-file">memory/scout_memory.json</div>
+        <div class="card-tags"><span class="tag json-tag">JSON</span></div>
+      </div>
+      <div class="card card-json">
+        <div class="card-name">📂 Analyst Memory</div>
+        <div class="card-file">memory/analyst_memory.json</div>
+        <div class="card-tags"><span class="tag json-tag">JSON</span></div>
+      </div>
+      <div class="card card-json">
+        <div class="card-name">📂 Advisor Memory</div>
+        <div class="card-file">memory/advisor_memory.json</div>
+        <div class="card-tags"><span class="tag json-tag">JSON</span></div>
+      </div>
+      <div class="card card-json">
+        <div class="card-name">📝 Checkpoint Log</div>
+        <div class="card-file">logs/checkpoints/*.jsonl</div>
+        <div class="card-tags">
+          <span class="tag json-tag">JSONL</span>
+          <span class="tag py">append-only</span>
+        </div>
+      </div>
+      <div class="card card-json">
+        <div class="card-name">📦 NVD Cache</div>
+        <div class="card-file">data/nvd_cache.json</div>
+        <div class="card-tags"><span class="tag json-tag">JSON</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LAYER 8: HARNESS INFRA ── -->
+  <div class="layer layer-infra">
+    <div class="layer-label">🏗 Harness Engineering 基礎設施（3 柱架構）</div>
+    <div class="layer-inner">
+      <div class="card card-py">
+        <div class="card-name">Layer 1 — Context</div>
+        <div class="card-file">harness/context/</div>
+        <div class="card-tags"><span class="tag py">Python</span></div>
+        <div style="font-size:9px;color:var(--text2);margin-top:4px">agent_map · doc_indexer</div>
+      </div>
+      <div class="card card-py">
+        <div class="card-name">Layer 2 — Constraints</div>
+        <div class="card-file">harness/constraints/</div>
+        <div class="card-tags">
+          <span class="tag py">Python</span>
+          <span class="tag" style="color:#94a3b8;background:rgba(148,163,184,0.1);border-color:rgba(148,163,184,0.3);font-size:8px">TOML</span>
+        </div>
+        <div style="font-size:9px;color:var(--text2);margin-top:4px">arch_linter · boundary_rules</div>
+      </div>
+      <div class="card card-py">
+        <div class="card-name">Layer 3 — Entropy</div>
+        <div class="card-file">harness/entropy/</div>
+        <div class="card-tags"><span class="tag py">Python</span></div>
+        <div style="font-size:9px;color:var(--text2);margin-top:4px">entropy_scanner · until_clean_loop</div>
+      </div>
+      <div class="card card-py">
+        <div class="card-name">⚙️ Pipeline Coordinator</div>
+        <div class="card-file">main.py</div>
+        <div class="card-tags">
+          <span class="tag py">Python</span>
+          <span class="tag py">StepLogger</span>
+        </div>
+        <div style="font-size:9px;color:var(--text2);margin-top:4px">stage_* 函式 · Graceful Degradation</div>
+      </div>
+      <div class="card card-py">
+        <div class="card-name">🔧 Config / LLM</div>
+        <div class="card-file">config.py</div>
+        <div class="card-tags">
+          <span class="tag py">Python</span>
+          <span class="tag ext-tag">OpenRouter</span>
+        </div>
+        <div style="font-size:9px;color:var(--text2);margin-top:4px">LLM 降級瀑布 · 429 輪替</div>
+      </div>
+      <!-- Sandbox planned -->
+      <div class="card card-rust">
+        <div class="planned">計劃 v3.9</div>
+        <div class="card-name" style="color:var(--rust)">🐳 Sandbox</div>
+        <div class="card-file">sandbox/</div>
+        <div class="card-tags">
+          <span class="tag py" style="font-size:8px">Python</span>
+          <span class="tag rust-tag" style="font-size:8px">Docker</span>
+        </div>
+        <div style="font-size:9px;color:var(--text2);margin-top:4px">AST Guard · Memory Sanitizer</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LAYER 9: EXTERNAL ── -->
+  <div class="layer layer-ext">
+    <div class="layer-label">☁️ 外部 API 依賴</div>
+    <div class="ext-grid">
+      <div class="ext-card">
+        <div class="card-name">🔒 NVD API v2</div>
+        <div class="card-file">services.nvd.nist.gov</div>
+        <div class="card-tags" style="justify-content:center;margin-top:4px">
+          <span class="tag ext-tag" style="font-size:8px">REST</span>
+        </div>
+      </div>
+      <div class="ext-card">
+        <div class="card-name">⚠️ CISA KEV</div>
+        <div class="card-file">cisa.gov</div>
+        <div class="card-tags" style="justify-content:center;margin-top:4px">
+          <span class="tag ext-tag" style="font-size:8px">JSON Feed</span>
+        </div>
+      </div>
+      <div class="ext-card">
+        <div class="card-name">🌐 OTX</div>
+        <div class="card-file">otx.alienvault.com</div>
+        <div class="card-tags" style="justify-content:center;margin-top:4px">
+          <span class="tag ext-tag" style="font-size:8px">REST</span>
+        </div>
+      </div>
+      <div class="ext-card">
+        <div class="card-name">📊 EPSS</div>
+        <div class="card-file">api.first.org/epss</div>
+        <div class="card-tags" style="justify-content:center;margin-top:4px">
+          <span class="tag ext-tag" style="font-size:8px">REST</span>
+        </div>
+      </div>
+      <div class="ext-card">
+        <div class="card-name">🐙 GHSA</div>
+        <div class="card-file">api.github.com</div>
+        <div class="card-tags" style="justify-content:center;margin-top:4px">
+          <span class="tag ext-tag" style="font-size:8px">GraphQL</span>
+        </div>
+      </div>
+      <div class="ext-card">
+        <div class="card-name">🤖 LLM</div>
+        <div class="card-file">openrouter.ai</div>
+        <div class="card-tags" style="justify-content:center;margin-top:4px">
+          <span class="tag ext-tag" style="font-size:8px">OpenAI API</span>
+        </div>
+      </div>
+      <div class="ext-card">
+        <div class="card-name">💣 Exploit-DB</div>
+        <div class="card-file">exploit-db.com</div>
+        <div class="card-tags" style="justify-content:center;margin-top:4px">
+          <span class="tag ext-tag" style="font-size:8px">Scrape</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
-<div class="card">
-  <h4>啟動指令（開發環境）</h4>
-  <pre>uv run uvicorn ui.server:app --host 0.0.0.0 --port 1000 --reload</pre>
-  <h4>啟動指令（生產環境）</h4>
-  <pre>uv run python ui/server.py</pre>
-  <p style="font-size:.85rem;color:var(--muted)">部署目標：Railway / Render / AMD Developer Cloud（FastAPI 部署無需特殊設定，比 Streamlit Cloud 更彈性）</p>
+<!-- Footer stats -->
+<div style="text-align:center;margin-top:24px;font-size:10px;color:var(--text2);font-family:'JetBrains Mono',monospace;line-height:2">
+  <div>
+    <span style="color:var(--py)">Python</span> — 主要語言（agents/, tools/, ui/, main.py, config.py, checkpoint.py, harness/）
+    &nbsp;|&nbsp;
+    <span style="color:var(--js)">JS/HTML/CSS</span> — 前端介面
+    &nbsp;|&nbsp;
+    <span style="color:var(--md)">Markdown</span> — 16 個 Agent SOP
+    &nbsp;|&nbsp;
+    <span style="color:var(--json)">JSON/JSONL</span> — 記憶 + 日誌
+  </div>
+  <div style="margin-top:4px">
+    <span style="color:var(--rust)">🦀 Rust (v3.8 計劃)</span> — L0 Sanitizer PyO3 · Checkpoint Writer
+    &nbsp;|&nbsp;
+    <span style="color:var(--rust)">🐳 Docker (v3.9 計劃)</span> — Sandbox 隔離
+  </div>
+  <div style="margin-top:6px;color:rgba(255,255,255,0.3)">ThreatHunter v3.7 · 2026-04-14 · Harness Engineering · Antigravity</div>
 </div>
 
-<p style="text-align:center;color:var(--muted);padding:2rem;font-size:.82rem;">
-  ThreatHunter v3.1 最終架構審查 ｜ 2026-04-09 ｜ 每項主張附佐證來源<br>
-  UI 架構：FastAPI + SSE（不是 Streamlit） · 設計弱點誠實揭露 · 無資料偽造
-</p>
-
-</main>
-
-<script>
-mermaid.initialize({
-  startOnLoad:true,theme:'dark',
-  themeVariables:{
-    primaryColor:'#1f6feb',primaryTextColor:'#e6edf3',
-    primaryBorderColor:'#58a6ff',lineColor:'#8b949e',
-    secondaryColor:'#161b22',tertiaryColor:'#0d1117',
-    background:'#0d1117',mainBkg:'#161b22',
-    nodeBorder:'#30363d',clusterBkg:'#161b22',
-    titleColor:'#e6edf3',fontFamily:'Segoe UI,system-ui,sans-serif'
-  },
-  flowchart:{htmlLabels:true,curve:'basis'}
-});
-</script>
 </body>
 </html>

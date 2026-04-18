@@ -1,16 +1,88 @@
 {
-  "_cached_at": 1775635734.9942698,
+  "package": "express",
+  "source": "NVD",
+  "count": 10,
   "vulnerabilities": [
     {
-      "cve_id": "CVE-2022-24999",
-      "package": "Express",
+      "cve_id": "CVE-1999-0967",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "Buffer overflow in the HTML library used by Internet Explorer, Outlook Express, and Windows Explorer via the res: local resource protocol.",
+      "published": "1997-11-01T05:00:00.000",
+      "affected_versions": "4.0"
+    },
+    {
+      "cve_id": "CVE-1999-0455",
       "cvss_score": 7.5,
       "severity": "HIGH",
-      "description": "Express.js qs prototype pollution",
-      "in_cisa_kev": false,
-      "has_public_exploit": false
+      "description": "The Expression Evaluator sample application in ColdFusion allows remote attackers to read or delete files on the server via exprcalc.cfm, which does not restrict access to the server properly.",
+      "published": "1999-12-25T05:00:00.000",
+      "affected_versions": "4.0"
+    },
+    {
+      "cve_id": "CVE-1999-0477",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "The Expression Evaluator in the ColdFusion Application Server allows a remote attacker to upload files to the server via openfile.cfm, which does not restrict access to the server properly.",
+      "published": "1999-12-25T05:00:00.000",
+      "affected_versions": "2.0, 3.0, 3.01"
+    },
+    {
+      "cve_id": "CVE-1999-1033",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Microsoft Outlook Express before 4.72.3612.1700 allows a malicious user to send a message that contains a .., which can inadvertently cause Outlook to re-enter POP3 command mode and cause the POP3 session to hang.",
+      "published": "1999-05-11T04:00:00.000",
+      "affected_versions": "<= 4.72.3612.1700, 4.27.3110.1, 4.72.3120.0"
+    },
+    {
+      "cve_id": "CVE-1999-1016",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Microsoft HTML control as used in (1) Internet Explorer 5.0, (2) FrontPage Express, (3) Outlook Express 5, and (4) Eudora, and possibly others, allows remote malicious web site or HTML emails to cause a denial of service (100% CPU consumption) via large HTML form fields such as text inputs in a table cell.",
+      "published": "1999-08-27T04:00:00.000",
+      "affected_versions": "5.0, 5.0"
+    },
+    {
+      "cve_id": "CVE-2000-0036",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Outlook Express 5 for Macintosh downloads attachments to HTML mail without prompting the user, aka the \"HTML Mail Attachment\" vulnerability.",
+      "published": "1999-12-22T05:00:00.000",
+      "affected_versions": "4.5, 5.0"
+    },
+    {
+      "cve_id": "CVE-2000-0115",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "IIS allows local users to cause a denial of service via invalid regular expressions in a Visual Basic script in an ASP page.",
+      "published": "2000-01-21T05:00:00.000",
+      "affected_versions": ""
+    },
+    {
+      "cve_id": "CVE-2000-0105",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Outlook Express 5.01 and Internet Explorer 5.01 allow remote attackers to view a user's email messages via a script that accesses a variable that references subsequent email messages that are read by the client.",
+      "published": "2000-02-01T05:00:00.000",
+      "affected_versions": "5.0"
+    },
+    {
+      "cve_id": "CVE-2000-0415",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Buffer overflow in Outlook Express 4.x allows attackers to cause a denial of service via a mail or news message that has a .jpg or .bmp attachment with a long file name.",
+      "published": "2000-05-12T04:00:00.000",
+      "affected_versions": "98, 4.0, 4.01"
+    },
+    {
+      "cve_id": "CVE-1999-1009",
+      "cvss_score": 2.6,
+      "severity": "LOW",
+      "description": "The Disney Go Express Search allows remote attackers to access and modify search information for users by connecting to an HTTP server on the user's system.",
+      "published": "1999-12-12T05:00:00.000",
+      "affected_versions": ""
     }
   ],
-  "total": 1,
-  "package": "express"
+  "_cached_at": 1776489024.386183
 }

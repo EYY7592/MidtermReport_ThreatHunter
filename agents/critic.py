@@ -36,6 +36,14 @@ try:
 except FileNotFoundError:
     CRITIC_SKILL = "## Skill: Debate SOP\nChallenge Analyst assumptions. Use tools to verify."
 
+# v3.7: Path-Aware Skill Map（對應 main.py recorder.stage_enter 使用）
+SKILL_MAP: dict[str, str] = {
+    "pkg":       "debate_sop.md",       # Path A: package debate
+    "code":      "code_debate_sop.md",  # Path B-code: source code debate
+    "injection": "ai_debate_sop.md",   # Path B-inject: AI security debate
+    "config":    "config_debate_sop.md", # Path C: config debate
+}
+
 VALID_VERDICTS = {"MAINTAIN", "DOWNGRADE", "SKIPPED"}
 SCORECARD_FIELDS = ["evidence", "chain_completeness", "critique_quality", "defense_quality", "calibration"]
 WEIGHTS = {"evidence": 0.30, "chain_completeness": 0.25, "critique_quality": 0.20, "defense_quality": 0.15, "calibration": 0.10}
@@ -265,8 +273,13 @@ def _harness_validate_verdict(output: dict[str, Any]) -> None:
             output["verdict"] = "MAINTAIN" if output["weighted_score"] >= 50 else "DOWNGRADE"
 
 
-def run_critic_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]:
-    """Execute Critic Agent Pipeline (Harness Layers 1/1b/2/2'/3)."""
+def run_critic_pipeline(analyst_output: str | dict[str, Any], input_type: str = "pkg") -> dict[str, Any]:
+    """Execute Critic Agent Pipeline (Harness Layers 1/1b/2/2'/3).
+
+    Args:
+        analyst_output: Analyst 輸出 JSON
+        input_type:     Path-Aware Skill 路由（pkg/code/injection/config）
+    """
     from crewai import Crew, Process
 
     if not ENABLE_CRITIC:
@@ -324,15 +337,18 @@ def run_critic_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]:
                 current_model = get_current_model_name(agent.llm)
                 mark_model_failed(current_model)
                 excluded_models.append(current_model)
-                wait_sec = (attempt + 1) * 12  # 遞增等待：12s, 24s
-                logger.warning("[RETRY] Critic 429 on %s, waiting %ds before retry %d/%d",
-                              current_model, wait_sec, attempt + 1, MAX_LLM_RETRIES)
+                import re as _re
+                _m = _re.search(r'retry.{1,10}(\d+\.?\d*)s', error_str, _re.IGNORECASE)
+                retry_after = float(_m.group(1)) if _m else 0.0
+                logger.warning("[RETRY] Critic 429 on %s (attempt %d/%d), api_retry_after=%.0fs",
+                              current_model, attempt + 1, MAX_LLM_RETRIES, retry_after)
                 try:
                     _cp.llm_retry("critic", current_model, error_str[:200],
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                time.sleep(wait_sec)
+                from config import rate_limiter as _rl
+                _rl.on_429(retry_after=retry_after, caller="critic")  # 最少 30s
                 continue
             logger.error("Critic CrewAI failed: %s", e)
             try:

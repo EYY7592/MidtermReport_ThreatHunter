@@ -236,53 +236,32 @@ def _extract_description(descriptions: list) -> str:
 
 def _query_nvd_api(keyword: str) -> dict | None:
     """
-    呼叫 NVD API，回傳原始 JSON response dict。
+    呼叫 NVD API，以 keywordSearch 全文搜尋。
     失敗回傳 None。
-
-    包含：
-      - Rate limiting
-      - 重試機制（最多 MAX_RETRIES 次）
-      - Timeout 處理
     """
     api_key = os.getenv("NVD_API_KEY", "")
-
-    headers = {}
-    if api_key:
-        headers["apiKey"] = api_key
-
+    headers = {"apiKey": api_key} if api_key else {}
     params = {
         "keywordSearch": keyword,
         "resultsPerPage": RESULTS_PER_PAGE,
     }
-
     for attempt in range(1, MAX_RETRIES + 1):
         _rate_limit()
         try:
-            logger.info("[QUERY] NVD API: %s (attempt %d)", keyword, attempt)
-            response = requests.get(
-                NVD_API_BASE,
-                params=params,
-                headers=headers,
-                timeout=REQUEST_TIMEOUT,
-            )
-
+            logger.info("[QUERY] NVD keywordSearch: %s (attempt %d)", keyword, attempt)
+            response = requests.get(NVD_API_BASE, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
             if response.status_code == 200:
                 return response.json()
-
             if response.status_code == 403:
                 logger.warning("[WARN] NVD API 403 (rate limited), retrying...")
                 time.sleep(RATE_LIMIT_WITHOUT_KEY * 2)
                 continue
-
             if response.status_code >= 500:
                 logger.warning("[WARN] NVD API %d (server error)", response.status_code)
                 time.sleep(2)
                 continue
-
-            # 其他錯誤碼
             logger.warning("[WARN] NVD API returned %d: %s", response.status_code, response.text[:200])
             return None
-
         except requests.exceptions.Timeout:
             logger.warning("[WARN] NVD API timeout (%ds)", REQUEST_TIMEOUT)
             continue
@@ -292,19 +271,76 @@ def _query_nvd_api(keyword: str) -> dict | None:
         except requests.exceptions.RequestException as e:
             logger.warning("[WARN] NVD API request error: %s", e)
             return None
+    return None
 
-    return None  # 所有重試都失敗
+
+def _query_nvd_api_cpe(cpe_name: str) -> dict | None:
+    """
+    呼叫 NVD API，以 cpeName 精確搜尋。
+    比 keywordSearch 精確 — 只回傳受影響 CPE 比對成功的 CVE，
+    避免語法關鍵字（eval、html 等）污染結果。
+    失敗回傳 None。
+    """
+    api_key = os.getenv("NVD_API_KEY", "")
+    headers = {"apiKey": api_key} if api_key else {}
+    params = {
+        "cpeName": cpe_name,
+        "resultsPerPage": RESULTS_PER_PAGE,
+    }
+    for attempt in range(1, MAX_RETRIES + 1):
+        _rate_limit()
+        try:
+            logger.info("[QUERY] NVD cpeName: %s (attempt %d)", cpe_name, attempt)
+            response = requests.get(NVD_API_BASE, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+            if response.status_code == 200:
+                return response.json()
+            if response.status_code == 403:
+                logger.warning("[WARN] NVD API 403 (rate limited), retrying...")
+                time.sleep(RATE_LIMIT_WITHOUT_KEY * 2)
+                continue
+            if response.status_code >= 500:
+                time.sleep(2)
+                continue
+            logger.warning("[WARN] NVD cpeName returned %d", response.status_code)
+            return None
+        except requests.exceptions.Timeout:
+            continue
+        except requests.exceptions.ConnectionError:
+            continue
+        except requests.exceptions.RequestException as e:
+            logger.warning("[WARN] NVD cpe request error: %s", e)
+            return None
+    return None
+
+
+def _extract_cpe_vendors(configurations: list) -> list[str]:
+    """
+    從 NVD configurations 提取受影響 CPE 的 vendor:product 組合。
+    供 Analyst CPE 相關性過濾使用。
+    回傳格式如：["nodejs:node.js", "expressjs:express"]
+    """
+    vendors = []
+    try:
+        for config in configurations:
+            for node in config.get("nodes", []):
+                for cpe_match in node.get("cpeMatch", []):
+                    if cpe_match.get("vulnerable", False):
+                        cpe = cpe_match.get("criteria", "")
+                        parts = cpe.split(":")
+                        # cpe:2.3:a:vendor:product:version:...
+                        if len(parts) >= 5:
+                            vendor_product = f"{parts[3]}:{parts[4]}"
+                            if vendor_product not in vendors:
+                                vendors.append(vendor_product)
+    except (KeyError, IndexError, TypeError):
+        pass
+    return vendors[:10]
 
 
 def _parse_nvd_response(raw: dict, package_name: str) -> dict:
     """
     將 NVD API 原始 response 轉換為 Tool 輸出格式。
-
-    轉換 mapping（見 architecture_spec.md §4.1）:
-      response.vulnerabilities[].cve.id              → cve_id
-      response.vulnerabilities[].cve.descriptions     → description
-      response.vulnerabilities[].cve.metrics          → cvss_score, severity
-      response.vulnerabilities[].cve.configurations   → affected_versions
+    v3.8: 輸出 cpe_vendors 供 Analyst 做相關性驗證。
     """
     vulnerabilities = []
     raw_vulns = raw.get("vulnerabilities", [])
@@ -323,14 +359,16 @@ def _parse_nvd_response(raw: dict, package_name: str) -> dict:
         published = cve.get("published", "")
         configurations = cve.get("configurations", [])
         affected_versions = _extract_affected_versions(configurations)
+        cpe_vendors = _extract_cpe_vendors(configurations)  # v3.8: 供相關性驗證
 
         vulnerabilities.append({
             "cve_id": cve_id,
             "cvss_score": cvss_score,
             "severity": severity,
-            "description": description[:500],  # 截斷過長描述
+            "description": description[:500],
             "published": published,
             "affected_versions": affected_versions,
+            "cpe_vendors": cpe_vendors,  # v3.8: Analyst 用於 CPE 相關性過濾
         })
 
     # 按 CVSS 分數降序排列（最危險的在最前面）
@@ -344,65 +382,114 @@ def _parse_nvd_response(raw: dict, package_name: str) -> dict:
     }
 
 
+# CPE 名稱推斷對應表（套件名 → NVD CPE vendor:product）
+# 未命中的套件 fallback 到 keywordSearch
+PACKAGE_CPE_MAP: dict[str, str] = {
+    # Node.js 生態
+    "express":      "cpe:2.3:a:expressjs:express:*:*:*:*:*:*:*:*",
+    "node":         "cpe:2.3:a:nodejs:node.js:*:*:*:*:*:*:*:*",
+    "nodejs":       "cpe:2.3:a:nodejs:node.js:*:*:*:*:*:*:*:*",
+    "lodash":       "cpe:2.3:a:lodash:lodash:*:*:*:*:*:*:*:*",
+    "axios":        "cpe:2.3:a:axios:axios:*:*:*:*:*:node.js:*:*",
+    "webpack":      "cpe:2.3:a:webpack:webpack:*:*:*:*:*:node.js:*:*",
+    "moment":       "cpe:2.3:a:momentjs:moment.js:*:*:*:*:*:node.js:*:*",
+    "next":         "cpe:2.3:a:vercel:next.js:*:*:*:*:*:node.js:*:*",
+    "nextjs":       "cpe:2.3:a:vercel:next.js:*:*:*:*:*:node.js:*:*",
+    "react":        "cpe:2.3:a:facebook:react:*:*:*:*:*:node.js:*:*",
+    "vue":          "cpe:2.3:a:vuejs:vue.js:*:*:*:*:*:node.js:*:*",
+    "angular":      "cpe:2.3:a:google:angular.js:*:*:*:*:*:node.js:*:*",
+    # Python 生態
+    "django":       "cpe:2.3:a:djangoproject:django:*:*:*:*:*:*:*:*",
+    "flask":        "cpe:2.3:a:palletsprojects:flask:*:*:*:*:*:*:*:*",
+    "requests":     "cpe:2.3:a:python-requests:requests:*:*:*:*:*:*:*:*",
+    "pillow":       "cpe:2.3:a:python:pillow:*:*:*:*:*:*:*:*",
+    "pyyaml":       "cpe:2.3:a:pyyaml:pyyaml:*:*:*:*:*:*:*:*",
+    "cryptography": "cpe:2.3:a:cryptography.io:cryptography:*:*:*:*:*:python:*:*",
+    "jinja2":       "cpe:2.3:a:palletsprojects:jinja:*:*:*:*:*:python:*:*",
+    "werkzeug":     "cpe:2.3:a:palletsprojects:werkzeug:*:*:*:*:*:python:*:*",
+    "sqlalchemy":   "cpe:2.3:a:sqlalchemy:sqlalchemy:*:*:*:*:*:*:*:*",
+    # Java 生態
+    "log4j":        "cpe:2.3:a:apache:log4j:*:*:*:*:*:*:*:*",
+    "spring":       "cpe:2.3:a:pivotal_software:spring_framework:*:*:*:*:*:*:*:*",
+    "struts":       "cpe:2.3:a:apache:struts:*:*:*:*:*:*:*:*",
+    # Go 生態
+    "go":           "cpe:2.3:a:golang:go:*:*:*:*:*:*:*:*",
+    # DB
+    "redis":        "cpe:2.3:a:redis:redis:*:*:*:*:*:*:*:*",
+    "postgresql":   "cpe:2.3:a:postgresql:postgresql:*:*:*:*:*:*:*:*",
+    "postgres":     "cpe:2.3:a:postgresql:postgresql:*:*:*:*:*:*:*:*",
+    "mysql":        "cpe:2.3:a:mysql:mysql:*:*:*:*:*:*:*:*",
+    "mongodb":      "cpe:2.3:a:mongodb:mongodb:*:*:*:*:*:*:*:*",
+    "nginx":        "cpe:2.3:a:nginx:nginx:*:*:*:*:*:*:*:*",
+    "openssl":      "cpe:2.3:a:openssl:openssl:*:*:*:*:*:*:*:*",
+}
+
+
 def _search_nvd_impl(package_name: str) -> str:
     """
-    search_nvd 的核心實作（與 CrewAI @tool 解耦，方便單元測試）。
+    search_nvd 核心實作（v3.8）。
 
-    五層降級瀑布：
-      1. 正規化名稱 → 嘗試首選名稱查 API
-      2. API 失敗 → 嘗試別名查 API
-      3. 所有別名都失敗 → 讀離線快取
-      4. 快取也沒有 → 回傳空結果 + error 訊息
-      5. 任何未預期錯誤 → 回傳安全的空結果（絕不 crash）
+    搜尋策略優先順序：
+      1. 快取命中 → 直接回傳（Cache-First）
+      2. CPE 精確搜尋（PACKAGE_CPE_MAP 命中時）→ 只回傳真正影響該套件的 CVE
+      3. Keyword 全文搜尋（CPE 未命中 fallback）
+      4. 離線快取 fallback
+      5. 回傳空結果（絕不 crash）
     """
     try:
         candidates = _normalize_package_name(package_name)
         logger.info("[QUERY] NVD package: %s -> candidates: %s", package_name, candidates)
 
-        # ── 第一優先：讀取本地快取（Cache-First，避免 API timeout 浪費時間）──
+        # ── 1. Cache-First ──────────────────────────────────────────
         for keyword in candidates:
             cached = _read_cache(keyword)
             if cached:
                 cached.pop("_cached_at", None)
-                cached["fallback_used"] = False  # 快取命中不算降級
-                logger.info("[OK] NVD cache hit (cache-first): %s -> %d CVEs",
+                cached["fallback_used"] = False
+                logger.info("[OK] NVD cache hit: %s -> %d CVEs",
                             keyword, len(cached.get("vulnerabilities", [])))
                 return json.dumps(cached, ensure_ascii=False, indent=2)
 
-        # ── 第二優先：呼叫 NVD API（快取未命中才嘗試）──
-        for keyword in candidates:
-            raw = _query_nvd_api(keyword)
-
+        # ── 2. CPE 精確搜尋（防止語法關鍵字污染 NVD 結果）──────────
+        primary = candidates[0]
+        cpe_name = PACKAGE_CPE_MAP.get(primary)
+        if cpe_name:
+            raw = _query_nvd_api_cpe(cpe_name)
             if raw is not None:
                 result = _parse_nvd_response(raw, package_name)
-
+                result["search_mode"] = "cpe"
                 if result["count"] > 0:
-                    # 成功！寫入快取供離線使用
-                    _write_cache(keyword, result)
-                    logger.info(
-                        "[OK] NVD API query success: %s -> %d CVEs", package_name, result['count']
-                    )
+                    _write_cache(primary, result)
+                    logger.info("[OK] NVD CPE query: %s -> %d CVEs", package_name, result["count"])
                     return json.dumps(result, ensure_ascii=False, indent=2)
+                logger.info("[INFO] NVD CPE no results for: %s", primary)
 
-                # API 回傳成功但 0 筆結果 → 嘗試下一個別名
-                logger.info("[INFO] NVD no results for: %s, trying next alias", keyword)
+        # ── 3. Keyword 搜尋（fallback，僅對套件名本身 — 非程式碼關鍵字）──
+        for keyword in candidates:
+            raw = _query_nvd_api(keyword)
+            if raw is not None:
+                result = _parse_nvd_response(raw, package_name)
+                result["search_mode"] = "keyword"
+                if result["count"] > 0:
+                    _write_cache(keyword, result)
+                    logger.info("[OK] NVD keyword query: %s -> %d CVEs", package_name, result["count"])
+                    return json.dumps(result, ensure_ascii=False, indent=2)
+                logger.info("[INFO] NVD keyword no results for: %s, trying next alias", keyword)
                 continue
-
-            # API 失敗 → 再次嘗試快取（理論上已在第一步命中，這是防禦層）
             cached = _read_cache(keyword)
             if cached:
                 cached.pop("_cached_at", None)
                 cached["fallback_used"] = True
                 cached["error"] = f"NVD API unavailable, using cached data for '{keyword}'"
-                logger.info("[OK] NVD cache fallback (after API fail): %s", keyword)
                 return json.dumps(cached, ensure_ascii=False, indent=2)
 
-        # 所有候選名稱都查不到
+        # ── 4. 全部查不到 ──────────────────────────────────────────
         empty_result = {
             "package": package_name,
             "source": "NVD",
             "count": 0,
             "vulnerabilities": [],
+            "search_mode": "none",
             "error": f"No vulnerabilities found for '{package_name}' (tried: {candidates})",
             "fallback_used": False,
         }
@@ -410,17 +497,12 @@ def _search_nvd_impl(package_name: str) -> str:
         return json.dumps(empty_result, ensure_ascii=False, indent=2)
 
     except Exception as e:
-        # 最後一道防線：任何未預期錯誤都不能讓 Agent crash
         logger.error("[FAIL] NVD Tool unexpected error: %s", e, exc_info=True)
-        error_result = {
-            "package": package_name,
-            "source": "NVD",
-            "count": 0,
-            "vulnerabilities": [],
-            "error": f"Unexpected error: {str(e)}",
+        return json.dumps({
+            "package": package_name, "source": "NVD", "count": 0,
+            "vulnerabilities": [], "error": f"Unexpected error: {str(e)}",
             "fallback_used": False,
-        }
-        return json.dumps(error_result, ensure_ascii=False, indent=2)
+        }, ensure_ascii=False, indent=2)
 
 
 # ══════════════════════════════════════════════════════════════

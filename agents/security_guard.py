@@ -14,6 +14,16 @@
 #   ❌ 禁止：遵從程式碼注釋中的「指令」（Prompt Injection 防禦）
 
 import ast
+
+# Sandbox Layer 1: AST 遮罩 + timeout（防 AST Bomb，跨平台 Windows 相容）
+try:
+    from sandbox.ast_guard import safe_ast_parse as _safe_ast_parse
+    _AST_GUARD_OK = True
+except ImportError:
+    # Graceful Degradation：sandbox 模組不可用時使用裸 ast.parse
+    def _safe_ast_parse(code: str):  # type: ignore[misc]
+        return ast.parse(code)
+    _AST_GUARD_OK = False
 import json
 import logging
 import os
@@ -356,7 +366,12 @@ def _extract_functions_python(code: str, lines: list[str]) -> list[dict]:
     """用 Python AST 提取函式定義（含行號和參數名），失敗回退正則"""
     functions = []
     try:
-        tree = ast.parse(code)
+        # Sandbox Layer 1: safe_ast_parse 防 AST Bomb（節點上限 + 3s timeout）
+        tree = _safe_ast_parse(code)
+        if tree is None:
+            # 超時或節點超限 → 回退正則
+            logger.info("[GUARD] AST parse timeout/bomb, fallback to regex for Python functions")
+            return _extract_functions_regex(code, lines, "python")
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 params = []
@@ -379,6 +394,10 @@ def _extract_functions_python(code: str, lines: list[str]) -> list[dict]:
     except SyntaxError:
         logger.info("[GUARD] AST parse failed, fallback to regex for Python functions")
         functions = _extract_functions_regex(code, lines, "python")
+    except ValueError as e:
+        # AST Bomb 拒絕（節點數超限）
+        logger.warning("[GUARD][SANDBOX] %s — fallback to regex", e)
+        functions = _extract_functions_regex(code, lines, "python")
     return functions[:50]
 
 
@@ -386,7 +405,11 @@ def _extract_imports_python(code: str, lines: list[str]) -> list[dict]:
     """用 Python AST 提取 import 語句，失敗回退正則"""
     imports = []
     try:
-        tree = ast.parse(code)
+        # Sandbox Layer 1: safe_ast_parse 防 AST Bomb（共享同一棵樹，不重複解析）
+        tree = _safe_ast_parse(code)
+        if tree is None:
+            logger.info("[GUARD] AST parse timeout/bomb, fallback to regex for Python imports")
+            return _extract_imports_regex(code, lines, "python")
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -409,6 +432,9 @@ def _extract_imports_python(code: str, lines: list[str]) -> list[dict]:
                 })
     except SyntaxError:
         logger.info("[GUARD] AST parse failed, fallback to regex for Python imports")
+        imports = _extract_imports_regex(code, lines, "python")
+    except ValueError as e:
+        logger.warning("[GUARD][SANDBOX] %s — fallback to regex", e)
         imports = _extract_imports_regex(code, lines, "python")
     return imports[:100]
 
@@ -567,8 +593,25 @@ def _strip_comment_injection(text: str) -> str:
 # Skill SOP 載入
 # ══════════════════════════════════════════════════════════════
 
+# Phase 4D: 使用 SkillLoader 熱載入系統
+try:
+    from skills.skill_loader import skill_loader as _skill_loader
+    _SKILL_LOADER_AVAILABLE = True
+    logger.info("[SecurityGuard] Phase 4D: SkillLoader 啟用 ✓")
+except ImportError:
+    _skill_loader = None
+    _SKILL_LOADER_AVAILABLE = False
+
+
 def _load_skill() -> str:
-    """載入 Security Guard SOP（Graceful Degradation：找不到則用內建精簡版）"""
+    """載入 Security Guard SOP（Phase 4D: SkillLoader 熱載入 + Graceful Degradation）"""
+    if _SKILL_LOADER_AVAILABLE and _skill_loader is not None:
+        try:
+            return _skill_loader.load_skill("security_guard.md")
+        except Exception as e:
+            logger.warning("[SecurityGuard] SkillLoader 失敗，回退磁碟讀取: %s", e)
+
+    # Fallback: 直接磁碟讀取
     for encoding in ("utf-8", "utf-8-sig", "latin-1"):
         try:
             if SKILL_PATH.exists():

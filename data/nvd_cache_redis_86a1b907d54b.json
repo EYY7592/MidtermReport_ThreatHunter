@@ -1,5 +1,5 @@
 {
-  "package": "redis",
+  "package": "redis 7.0",
   "source": "NVD",
   "count": 10,
   "vulnerabilities": [
@@ -84,5 +84,5 @@
       "affected_versions": "<= 3.2.2, 8.0"
     }
   ],
-  "_cached_at": 1775965189.2174668
+  "_cached_at": 1776431868.2577233
 }

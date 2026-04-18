@@ -63,10 +63,36 @@ _scan_store: dict[str, dict[str, Any]] = {}
 # FastAPI App
 # ══════════════════════════════════════════════════════════════
 
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def _lifespan(application):  # type: ignore[override]
+    """Server 啟動時：自動清潔 Memory 中 year < 2005 的遠古 CVE 汙染。"""
+    import sys as _sys
+    _sys.path.insert(0, str(_HERE.parent))
+    try:
+        from scripts.clean_memory_contamination import clean_memory_file
+        for _fname in ["memory/scout_memory.json", "memory/advisor_memory.json"]:
+            _path = str(_HERE.parent / _fname)
+            _r = clean_memory_file(_path)
+            if _r.get("status") == "CLEANED":
+                logger.info(
+                    "[STARTUP] Memory cleaned: %s — removed %d ancient CVEs, kept %d",
+                    _fname, _r.get("removed", 0), _r.get("remaining", 0),
+                )
+            else:
+                logger.info("[STARTUP] Memory check: %s — %s", _fname, _r.get("status", "OK"))
+    except Exception as _me:
+        logger.warning("[STARTUP] Memory cleanup skipped: %s", _me)
+    yield
+
+
 app = FastAPI(
     title="ThreatHunter API",
     version="3.1",
     description="AI 多 Agent 資安威脅情報平台",
+    lifespan=_lifespan,
 )
 
 # ── 掛載靜態資源 ────────────────────────────────────────────
@@ -80,6 +106,7 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 class ScanRequest(BaseModel):
     tech_stack: str
+    input_type: str = "pkg"  # v3.7: forwarded from frontend input-type detector
 
 
 class ScanResponse(BaseModel):
@@ -158,10 +185,11 @@ def _enrich_result(result: dict[str, Any]) -> dict[str, Any]:
 # Pipeline Worker（在背景執行緒）
 # ══════════════════════════════════════════════════════════════
 
-def _pipeline_worker(scan_id: str, tech_stack: str) -> None:
+def _pipeline_worker(scan_id: str, tech_stack: str, input_type: str = "pkg") -> None:
     """
     在獨立執行緒中執行完整 Pipeline。
     透過 Queue 推送 SSE 事件給主執行緒。
+    v3.7: 接受 input_type 參數，傳給 run_pipeline 做 Path-Aware Skills 路由。
     """
     store = _scan_store[scan_id]
     q: queue.Queue = store["queue"]
@@ -177,17 +205,31 @@ def _pipeline_worker(scan_id: str, tech_stack: str) -> None:
             if status == "RUNNING":
                 emit("agent_start", {"agent": agent})
             elif status == "COMPLETE":
+                agent_status = detail.get("status", "SUCCESS")
+                # 讖別 DEGRADED 狀態：_degraded=True 或 status=="DEGRADED" 均觸發
+                is_degraded = (
+                    detail.get("_degraded", False)
+                    or str(agent_status).upper() == "DEGRADED"
+                )
+                if is_degraded:
+                    agent_status = "DEGRADED"
+                # 提取錯誤原因（供前端顯示）
+                error_msg = detail.get("_error", "")
+                if error_msg:
+                    # 截短至 200 字元，确保 SSE JSON 不狀
+                    error_msg = str(error_msg)[:200]
                 emit("agent_done", {
                     "agent": agent,
-                    "status": detail.get("status", "SUCCESS"),
+                    "status": agent_status,
                     "detail": detail,
+                    "error_msg": error_msg,
                 })
             elif status == "LOG":
                 # 部分 stage 會發送中間日誌
                 emit("agent_log", {"agent": agent, "message": str(detail)})
 
-        logger.info("[SCAN:%s] Pipeline start | tech_stack=%s", scan_id, tech_stack)
-        result = run_pipeline_with_callback(tech_stack, on_progress)
+        logger.info("[SCAN:%s] Pipeline start | tech_stack=%s | input_type=%s", scan_id, tech_stack, input_type)
+        result = run_pipeline_with_callback(tech_stack, on_progress, input_type=input_type)
 
         # ── 組裝完整報告：從 scout_memory.json 讀取漏洞資料 ──
         result = _enrich_result(result)
@@ -201,6 +243,15 @@ def _pipeline_worker(scan_id: str, tech_stack: str) -> None:
         logger.error("[SCAN:%s] Pipeline ERROR: %s", scan_id, err_msg)
         store["error"] = err_msg
         emit("pipeline_error", {"message": err_msg})
+    finally:
+        # v3.6: 存儲 checkpoint 檔名，供 Thinking Path API 查詢
+        try:
+            from checkpoint import recorder
+            if recorder.current_filename:
+                store["checkpoint_file"] = recorder.current_filename
+                logger.info("[SCAN:%s] Checkpoint file: %s", scan_id, recorder.current_filename)
+        except Exception as ex:
+            logger.debug("[SCAN:%s] Cannot retrieve checkpoint filename: %s", scan_id, ex)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -331,6 +382,178 @@ async def get_latest_checkpoint():
     })
 
 
+# ══════════════════════════════════════════════════════════════
+# Thinking Path API（v3.6 Observability)
+# ══════════════════════════════════════════════════════════════
+
+# 其他 Agent 的角色描述
+_AGENT_META: dict[str, dict] = {
+    "pipeline":        {"role": "Pipeline 管理",      "skill": None},
+    "input_sanitizer": {"role": "L0 輸入淨化",     "skill": "security_guard.md"},
+    "orchestrator":    {"role": "動態路由決策",  "skill": "orchestrator.md"},
+    "security_guard":  {"role": "LLM 隔離提取",   "skill": "security_guard.md"},
+    "intel_fusion":    {"role": "六維情報融合",  "skill": "intel_fusion.md"},
+    "layer1_parallel": {"role": "Layer-1 並行",    "skill": None},
+    "scout":           {"role": "威先情報偵察",  "skill": "scout.md"},
+    "analyst":         {"role": "漏洞連鎖分析",  "skill": "analyst.md"},
+    "critic":          {"role": "ColMAD 辩論",     "skill": "critic.md"},
+    "advisor":         {"role": "行動報告生成",  "skill": "advisor.md"},
+    "feedback_loop":   {"role": "回遈迴路",      "skill": None},
+}
+
+
+def _build_thinking_path(cp_file: Path) -> dict:
+    """
+    讀取 JSONL checkpoint 檔案，將事件依 Agent 分組。
+    對每個 Agent 計算：
+      - skill_applied: 是否有 LLM_RESULT 且 status=SUCCESS
+      - 所有方式事件（LLM_CALL/LLM_RESULT/TOOL_CALL/STAGE_ENTER/STAGE_EXIT/HARNESS_CHECK/DEGRADATION）
+    """
+    # 展示給使用者看的事件類型（排除不相關的）
+    DISPLAY_EVENTS = {
+        "LLM_CALL", "LLM_RESULT", "LLM_RETRY", "LLM_ERROR",
+        "TOOL_CALL", "STAGE_ENTER", "STAGE_EXIT",
+        "HARNESS_CHECK", "DEGRADATION",
+    }
+
+    agents: dict[str, dict] = {}
+    scan_meta: dict = {}
+
+    try:
+        with open(cp_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    evt = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                event_type = evt.get("event", "")
+                agent = evt.get("agent", "pipeline")
+                ts = evt.get("ts", "")
+                data = evt.get("data", {})
+                seq = evt.get("seq", 0)
+
+                # 提取掃描元資料
+                if event_type == "SCAN_START":
+                    scan_meta["scan_id"] = data.get("scan_id", "")
+                    scan_meta["start_ts"] = ts
+                elif event_type == "SCAN_END":
+                    scan_meta["end_ts"] = ts
+                    scan_meta["duration_seconds"] = data.get("total_duration_seconds", 0)
+                    scan_meta["total_events"] = data.get("total_checkpoints", seq)
+                    scan_meta["event_summary"] = data.get("event_summary", {})
+
+                # 將展示事件加入對應的 Agent
+                if event_type in DISPLAY_EVENTS:
+                    if agent not in agents:
+                        meta = _AGENT_META.get(agent, {"role": agent, "skill": None})
+                        agents[agent] = {
+                            "role": meta["role"],
+                            "skill_name": meta["skill"],
+                            "skill_file": None,       # v3.7: raw .md filename from checkpoint
+                            "input_type": None,       # v3.7: pkg/code/injection/config
+                            "skill_applied": False,
+                            "llm_calls": 0,
+                            "tool_calls": 0,
+                            "total_duration_ms": 0,
+                            "steps": [],
+                        }
+
+                    step = {"seq": seq, "event": event_type, "ts": ts, "data": data}
+                    agents[agent]["steps"].append(step)
+
+                # v3.7: extract skill_file + input_type from STAGE_ENTER
+                if event_type == "STAGE_ENTER":
+                    sf = data.get("skill_file", "")
+                    if sf:
+                        agents[agent]["skill_file"] = sf   # NEW: raw filename for badge
+                        agents[agent]["skill_name"] = sf   # legacy compat
+                        agents[agent]["skill_applied"] = True
+                    it = data.get("input_type", "")
+                    if it:
+                        agents[agent]["input_type"] = it
+
+                # 深化統計
+                if event_type == "LLM_CALL":
+                    agents[agent]["llm_calls"] += 1
+                elif event_type == "LLM_RESULT":
+                    if data.get("status") == "SUCCESS":
+                        agents[agent]["skill_applied"] = True
+                    agents[agent]["total_duration_ms"] += data.get("duration_ms", 0)
+                elif event_type == "TOOL_CALL":
+                    agents[agent]["tool_calls"] += 1
+                elif event_type == "DEGRADATION":
+                    # v3.7: DEGRADATION means skill was NOT properly applied
+                    agents[agent]["skill_applied"] = False
+
+    except Exception as e:
+        logger.warning("[THINKING] 讀取 checkpoint 失敗: %s", e)
+
+    # 按照 Agent 順序排列（主要 Pipeline 順序）
+    order = ["input_sanitizer", "orchestrator", "security_guard", "intel_fusion",
+             "layer1_parallel", "scout", "analyst", "critic", "advisor", "feedback_loop"]
+    ordered_agents = {}
+    for a in order:
+        if a in agents:
+            ordered_agents[a] = agents[a]
+    # 加入其他未在預期順序中的 Agent
+    for a, v in agents.items():
+        if a not in ordered_agents:
+            ordered_agents[a] = v
+
+    return {"scan_meta": scan_meta, "agents": ordered_agents}
+
+
+@app.get("/api/thinking/{scan_id}")
+async def get_thinking_path(scan_id: str):
+    """
+    v3.6 Thinking Path API
+    回傳指定掃描的完整思考軌跡：
+    - 依 Agent 分組的 LLM 呼叫 / Tool 呼叭 / Stage 展允事件
+    - 每個 Agent 的 skill_applied 狀態
+    資料來源：_scan_store[scan_id]["checkpoint_file"] 記錄的 JSONL
+    Graceful Degradation：尋找最新的 checkpoint 檔並回傳
+    """
+    cp_dir = _ROOT / "logs" / "checkpoints"
+    cp_file: Path | None = None
+
+    # 優先從 _scan_store 取對應檔名
+    store = _scan_store.get(scan_id)
+    if store and store.get("checkpoint_file"):
+        candidate = cp_dir / store["checkpoint_file"]
+        if candidate.exists():
+            cp_file = candidate
+
+    # Fallback：從 scan_id 模糊比對
+    if cp_file is None and cp_dir.exists():
+        # scan_id 格式：pipe_{timestamp_int}，檔名格式：scan_pipe_{8chars}_{timestamp}.jsonl
+        short_id = scan_id[:8] if len(scan_id) >= 8 else scan_id
+        candidates = sorted(
+            [f for f in cp_dir.glob(f"scan_{short_id}*.jsonl")],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if candidates:
+            cp_file = candidates[0]
+
+    # Fallback 最新 JSONL
+    if cp_file is None and cp_dir.exists():
+        all_files = sorted(cp_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if all_files:
+            cp_file = all_files[0]
+            logger.warning("[THINKING] scan_id=%s 找不到對應 checkpoint，使用最新: %s", scan_id, cp_file.name)
+
+    if cp_file is None:
+        raise HTTPException(status_code=404, detail="尚無 checkpoint 檔案")
+
+    thinking_data = _build_thinking_path(cp_file)
+    thinking_data["scan_id"] = scan_id
+    thinking_data["checkpoint_file"] = cp_file.name
+    return JSONResponse(thinking_data)
+
 
 
 def _extract_scan_label(filepath: Path) -> str:
@@ -450,22 +673,23 @@ async def start_scan(req: ScanRequest):
 
     # 初始化 store
     _scan_store[scan_id] = {
-        "queue":  queue.Queue(),
-        "result": None,
-        "error":  None,
+        "queue":      queue.Queue(),
+        "result":     None,
+        "error":      None,
         "tech_stack": tech_stack,
+        "input_type": req.input_type,
     }
 
     # 啟動背景執行緒
     t = threading.Thread(
         target=_pipeline_worker,
-        args=(scan_id, tech_stack),
+        args=(scan_id, tech_stack, req.input_type),
         daemon=True,
         name=f"pipeline-{scan_id}",
     )
     t.start()
 
-    logger.info("[API] Scan started | scan_id=%s | tech_stack=%s", scan_id, tech_stack)
+    logger.info("[API] Scan started | scan_id=%s | input_type=%s | tech_stack=%s", scan_id, req.input_type, tech_stack)
     return ScanResponse(scan_id=scan_id)
 
 
@@ -498,6 +722,192 @@ async def get_result(scan_id: str):
     if store.get("result") is None:
         raise HTTPException(status_code=202, detail="Scan still in progress")
     return JSONResponse(store["result"])
+
+
+# ══════════════════════════════════════════════════════════════
+# Phase 4D: Skill 熱載入管理 API
+# ══════════════════════════════════════════════════════════════
+
+# 延遲匯入 SkillLoader（避免在 import 時失敗影響整個 server）
+def _get_skill_loader():
+    """安全取得 SkillLoader 單例，若不可用回傳 None"""
+    try:
+        from skills.skill_loader import skill_loader
+        return skill_loader
+    except Exception as exc:
+        logger.warning("[Skills API] SkillLoader 不可用: %s", exc)
+        return None
+
+
+@app.get("/api/skills")
+async def list_skills():
+    """
+    列出所有 Skills 及其版本資訊（mtime、快取狀態）。
+
+    回傳格式：
+      { "skills": [{ "name": str, "mtime": float, "cached": bool, "size": int }],
+        "total": int, "skill_loader": "available"|"unavailable" }
+    """
+    loader = _get_skill_loader()
+    if loader is None:
+        return JSONResponse({
+            "skills": [],
+            "total": 0,
+            "skill_loader": "unavailable",
+        })
+
+    try:
+        registry_data = loader.get_registry()
+        skills_dir = _ROOT / "skills"
+        skills_list = []
+
+        for entry in registry_data.get("skills", []):
+            name = entry.get("filename", "")
+            skill_path = skills_dir / name
+            skills_list.append({
+                "name": name,
+                "mtime": entry.get("mtime", 0),
+                "cached": not entry.get("is_fallback", False),
+                "size": skill_path.stat().st_size if skill_path.exists() else 0,
+                "modified": time.strftime(
+                    "%Y-%m-%dT%H:%M:%S",
+                    time.localtime(entry.get("mtime", 0))
+                ) if entry.get("mtime", 0) > 0 else None,
+            })
+
+        # 也補充 skills/ 目錄中存在但尚未快取的 .md 檔
+        if skills_dir.exists():
+            cached_names = {s["name"] for s in skills_list}
+            for md_file in sorted(skills_dir.glob("*.md")):
+                if md_file.name not in cached_names:
+                    stat = md_file.stat()
+                    skills_list.append({
+                        "name": md_file.name,
+                        "mtime": stat.st_mtime,
+                        "cached": False,
+                        "size": stat.st_size,
+                        "modified": time.strftime("%Y-%m-%dT%H:%M:%S",
+                                                  time.localtime(stat.st_mtime)),
+                    })
+
+        skills_list.sort(key=lambda s: s["name"])
+        return JSONResponse({
+            "skills": skills_list,
+            "total": len(skills_list),
+            "skill_loader": "available",
+            "cache_ttl": registry_data.get("cache_ttl_seconds"),
+        })
+
+    except Exception as exc:
+        logger.error("[Skills API] list_skills error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/skills/{skill_name}")
+async def get_skill_content(skill_name: str):
+    """
+    取得指定 Skill 的 SOP 內容。
+
+    Args:
+        skill_name: .md 檔名（如 scout.md）
+
+    回傳格式：
+      { "name": str, "content": str, "cached": bool, "mtime": float }
+    """
+    # 安全性：只允許 .md 副檔名，且不含路徑分隔符
+    if not skill_name.endswith(".md") or "/" in skill_name or "\\" in skill_name:
+        raise HTTPException(status_code=400, detail="Invalid skill name")
+
+    skills_dir = _ROOT / "skills"
+    skill_path = skills_dir / skill_name
+    if not skill_path.exists():
+        raise HTTPException(status_code=404, detail=f"Skill not found: {skill_name}")
+
+    loader = _get_skill_loader()
+    content = ""
+    cached = False
+
+    if loader is not None:
+        try:
+            content = loader.load_skill(skill_name)
+            registry_data = loader.get_registry()
+            cached_entries = {e["filename"]: e for e in registry_data.get("skills", [])}
+            cached = not cached_entries.get(skill_name, {}).get("is_fallback", True)
+        except Exception as exc:
+            logger.warning("[Skills API] SkillLoader.load_skill failed: %s", exc)
+
+    # Fallback: 直接讀取
+    if not content:
+        try:
+            content = skill_path.read_text(encoding="utf-8").strip()
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Read error: {exc}")
+
+    stat = skill_path.stat()
+    return JSONResponse({
+        "name": skill_name,
+        "content": content,
+        "size": len(content),
+        "cached": cached,
+        "mtime": stat.st_mtime,
+        "modified": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stat.st_mtime)),
+    })
+
+
+class SkillReloadRequest(BaseModel):
+    skill_name: str | None = None  # None → 強制重載所有
+
+
+@app.post("/api/skills/reload")
+async def reload_skills(req: SkillReloadRequest):
+    """
+    強制重載指定 Skill（或全部）的快取。
+
+    Body: { "skill_name": "scout.md" }  ← 指定單一
+          { "skill_name": null }         ← 全部重載
+
+    回傳格式：
+      { "reloaded": ["scout.md", ...], "errors": [...] }
+    """
+    loader = _get_skill_loader()
+    if loader is None:
+        raise HTTPException(status_code=503, detail="SkillLoader unavailable")
+
+    reloaded = []
+    errors = []
+
+    try:
+        if req.skill_name:
+            # 單一重載
+            if not req.skill_name.endswith(".md"):
+                raise HTTPException(status_code=400, detail="skill_name must end with .md")
+            loader.reload_skill(req.skill_name)
+            reloaded.append(req.skill_name)
+            logger.info("[Skills API] Force reloaded: %s", req.skill_name)
+        else:
+            # 全部重載：清空快取，下次 load_skill 自動重新讀取
+            skills_dir = _ROOT / "skills"
+            if skills_dir.exists():
+                for md_file in skills_dir.glob("*.md"):
+                    try:
+                        loader.reload_skill(md_file.name)
+                        reloaded.append(md_file.name)
+                    except Exception as exc:
+                        errors.append({"name": md_file.name, "error": str(exc)})
+            logger.info("[Skills API] Force reloaded all: %d skills", len(reloaded))
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("[Skills API] reload error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return JSONResponse({
+        "reloaded": reloaded,
+        "reloaded_count": len(reloaded),
+        "errors": errors,
+        "status": "ok" if not errors else "partial",
+    })
 
 
 # ══════════════════════════════════════════════════════════════

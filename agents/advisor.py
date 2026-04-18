@@ -63,6 +63,14 @@ try:
 except FileNotFoundError:
     ADVISOR_SKILL = "## Skill: Action Report\nPrioritize URGENT → IMPORTANT → RESOLVED."
 
+# v3.7: Path-Aware Skill Map（對應 main.py recorder.stage_enter 使用）
+SKILL_MAP: dict[str, str] = {
+    "pkg":       "action_report.md",        # Path A: package scan report
+    "code":      "code_action_report.md",   # Path B-code: source code report
+    "injection": "ai_action_report.md",     # Path B-inject: AI security report
+    "config":    "config_action_report.md", # Path C: config report
+}
+
 # ══════════════════════════════════════════════════════════════
 # 第二部份：Agent 建立函式
 # ══════════════════════════════════════════════════════════════
@@ -418,15 +426,18 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
                 current_model = get_current_model_name(agent.llm)
                 mark_model_failed(current_model)
                 excluded_models.append(current_model)
-                wait_sec = (attempt + 1) * 12  # 遞增等待：12s, 24s
-                logger.warning("[RETRY] Advisor 429 on %s, waiting %ds before retry %d/%d",
-                              current_model, wait_sec, attempt + 1, MAX_LLM_RETRIES)
+                import re as _re
+                _m = _re.search(r'retry.{1,10}(\d+\.?\d*)s', error_str, _re.IGNORECASE)
+                retry_after = float(_m.group(1)) if _m else 0.0
+                logger.warning("[RETRY] Advisor 429 on %s (attempt %d/%d), api_retry_after=%.0fs",
+                              current_model, attempt + 1, MAX_LLM_RETRIES, retry_after)
                 try:
                     _cp.llm_retry("advisor", current_model, error_str[:200],
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                time.sleep(wait_sec)
+                from config import rate_limiter as _rl
+                _rl.on_429(retry_after=retry_after, caller="advisor")  # 最少 30s
                 continue
 
             logger.error("[FAIL] CrewAI execution failed: %s", e)

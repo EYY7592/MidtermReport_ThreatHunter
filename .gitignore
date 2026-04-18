@@ -47,3 +47,24 @@ Thumbs.db
 
 # OpenCode
 .opencode/
+
+# Rust build artifacts
+rust/target/
+*.whl
+
+# WASM build artifacts
+rust/prompt_sandbox/assets/*.wasm
+
+# Docker
+*.tar
+
+# CI artifacts
+bandit_report.json
+arch_linter_output.txt
+
+# ThreatHunter Runtime caches & logs
+logs/
+data/*cache*.json
+*.txt
+!requirements.txt
+memory/*.bak

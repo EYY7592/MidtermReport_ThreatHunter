@@ -63,7 +63,35 @@ from config import (
 )
 
 
+
 logger = logging.getLogger("threathunter.main")
+
+import os  # noqa: E402 (import after logger for ordering clarity)
+
+# ── Sandbox Layer 2：Docker 容器隔離整合 ──────────────────────────────
+# SANDBOX_ENABLED=true → 在 Docker 容器內執行整個 Pipeline（完整隔離）
+# SANDBOX_ENABLED=false（預設）→ 現有 in-process 模式（Graceful Degradation)
+SANDBOX_ENABLED = os.getenv("SANDBOX_ENABLED", "false").lower() == "true"
+
+try:
+    from sandbox.docker_sandbox import run_in_sandbox, is_docker_available
+    _DOCKER_SANDBOX_OK = True
+except ImportError:
+    _DOCKER_SANDBOX_OK = False
+    def run_in_sandbox(*args, **kwargs):  # type: ignore[misc]
+        return {"error": "SANDBOX_NOT_AVAILABLE", "fallback": True}
+    def is_docker_available() -> bool:  # type: ignore[misc]
+        return False
+
+if SANDBOX_ENABLED:
+    logger.info(
+        "[SANDBOX] Docker isolation ENABLED | docker_available=%s",
+        is_docker_available(),
+    )
+else:
+    logger.debug("[SANDBOX] Docker isolation DISABLED (in-process mode)")
+# ─────────────────────────────────────────────────────────────────────
+
 
 
 # ======================================================================
@@ -110,11 +138,13 @@ class StepLogger:
 # ======================================================================
 
 
-def stage_scout(tech_stack: str) -> tuple[dict[str, Any], StepLogger]:
+def stage_scout(tech_stack: str, input_type: str = "pkg") -> tuple[dict[str, Any], StepLogger]:
     """
     Stage 1: Scout Agent 偵察漏洞。
     使用 agents/scout.py 的真實實作。
     Graceful Degradation: 失敗時回傳空資料，讓後續 Agent 知道是第一次。
+
+    v3.7: input_type 決定加載哪個 Skill SOP (Path-Aware Skills)。
 
     Returns:
         (result_dict, step_logger) — 輸出和日誌追蹤器
@@ -122,11 +152,12 @@ def stage_scout(tech_stack: str) -> tuple[dict[str, Any], StepLogger]:
     from agents.scout import run_scout_pipeline
 
     sl = StepLogger("scout")
-    sl.log("INIT", "RUNNING", f"tech_stack={tech_stack}")
+    sl.log("INIT", "RUNNING", f"tech_stack={tech_stack} | input_type={input_type}")
 
     t0 = time.time()
     try:
-        result = run_scout_pipeline(tech_stack)
+        result = run_scout_pipeline(tech_stack, input_type=input_type)
+
         duration_ms = int((time.time() - t0) * 1000)
         vuln_count = len(result.get("vulnerabilities", []))
         sl.log(
@@ -159,25 +190,28 @@ def stage_scout(tech_stack: str) -> tuple[dict[str, Any], StepLogger]:
 # ======================================================================
 
 
-def stage_analyst(scout_output: dict[str, Any]) -> tuple[dict[str, Any], StepLogger]:
+def stage_analyst(
+    scout_output: dict[str, Any],
+    input_type: str = "pkg",
+) -> tuple[dict[str, Any], StepLogger]:
     """
-    Stage 2: Analyst Agent 分析漏洞連鎖風險。
-    使用 agents/analyst.py 的真實實作。
-    Graceful Degradation: 失敗時傳回 Scout 原始資料並標記 chain_analysis: SKIPPED。
+    Stage 2: Analyst Agent vulnerability chain analysis.
+    v3.7: input_type selects path-aware chain analysis skill.
 
     Returns:
-        (result_dict, step_logger) — 輸出和日誌追蹤器
+        (result_dict, step_logger)
     """
     from agents.analyst import run_analyst_pipeline
 
     sl = StepLogger("analyst")
     sl.log(
-        "INIT", "RUNNING", f"input_vulns={len(scout_output.get('vulnerabilities', []))}"
+        "INIT", "RUNNING",
+        f"input_vulns={len(scout_output.get('vulnerabilities', []))} | input_type={input_type}"
     )
 
     t0 = time.time()
     try:
-        result = run_analyst_pipeline(scout_output)
+        result = run_analyst_pipeline(scout_output, input_type=input_type)
         duration_ms = int((time.time() - t0) * 1000)
         risk = result.get("risk_score", 0)
         sl.log("COMPLETE", "SUCCESS", f"risk_score={risk}", duration_ms)
@@ -221,23 +255,26 @@ def stage_analyst(scout_output: dict[str, Any]) -> tuple[dict[str, Any], StepLog
 # ======================================================================
 
 
-def stage_critic(analyst_output: dict[str, Any]) -> tuple[dict[str, Any], StepLogger]:
+def stage_critic(
+    analyst_output: dict[str, Any],
+    input_type: str = "pkg",
+) -> tuple[dict[str, Any], StepLogger]:
     """
-    Stage 3 (pluggable): Critic Agent 對抗式辯論。
-    使用 agents/critic.py 的真實實作。
-    若 ENABLE_CRITIC=false，直接回傳 SKIPPED（由 Critic 本身的 Harness Layer 1 處理）。
+    Stage 3 (pluggable): Critic Agent adversarial debate.
+    v3.7: input_type selects path-aware debate skill.
+    If ENABLE_CRITIC=false, returns SKIPPED directly.
 
     Returns:
-        (result_dict, step_logger) — 輸出和日誌追蹤器
+        (result_dict, step_logger)
     """
     from agents.critic import run_critic_pipeline
 
     sl = StepLogger("critic")
-    sl.log("INIT", "RUNNING", f"enable_critic={ENABLE_CRITIC}")
+    sl.log("INIT", "RUNNING", f"enable_critic={ENABLE_CRITIC} | input_type={input_type}")
 
     t0 = time.time()
     try:
-        result = run_critic_pipeline(analyst_output)
+        result = run_critic_pipeline(analyst_output, input_type=input_type)
         duration_ms = int((time.time() - t0) * 1000)
         verdict = result.get("verdict", "UNKNOWN")
         score = result.get("weighted_score", 0)
@@ -262,6 +299,7 @@ def stage_critic(analyst_output: dict[str, Any]) -> tuple[dict[str, Any], StepLo
             "verdict": "MAINTAIN",
             "reasoning": "Critic degraded - debate skipped.",
             "_degraded": True,
+            "_error": str(e),        # 供 checkpoint.stage_exit 自動注入 DEGRADATION event
         }, sl
 
 
@@ -271,21 +309,22 @@ def stage_critic(analyst_output: dict[str, Any]) -> tuple[dict[str, Any], StepLo
 
 
 def stage_advisor(
-    analyst_output: dict[str, Any], critic_output: dict[str, Any]
+    analyst_output: dict[str, Any],
+    critic_output: dict[str, Any],
+    input_type: str = "pkg",
 ) -> tuple[dict[str, Any], StepLogger]:
     """
-    Stage 4: Advisor Agent 產出行動報告。
-    使用 agents/advisor.py 的真實實作。
-    將 Critic 裁決作為上下文傳遞給 Advisor（若 MAINTAIN 則信任分析，DOWNGRADE 則保守處理）。
+    Stage 4: Advisor Agent action report generation.
+    v3.7: input_type selects path-aware action report skill.
 
     Returns:
-        (result_dict, step_logger) — 輸出和日誌追蹤器
+        (result_dict, step_logger)
     """
     from agents.advisor import run_advisor_pipeline
 
     sl = StepLogger("advisor")
     verdict = critic_output.get("verdict", "SKIPPED")
-    sl.log("INIT", "RUNNING", f"critic_verdict={verdict}")
+    sl.log("INIT", "RUNNING", f"critic_verdict={verdict} | input_type={input_type}")
 
     # 若 Critic 建議降級，在傳入 Advisor 前調整風險上下文
     advisor_input = dict(analyst_output)
@@ -493,41 +532,62 @@ def _run_layer1_parallel(
 
 
 
-def run_pipeline(tech_stack: str) -> dict[str, Any]:
+def run_pipeline(tech_stack: str, input_type: str = "pkg") -> dict[str, Any]:
     """
     執行完整的 ThreatHunter 管線（v3.1 Orchestrator 驅動）。
 
     Pipeline: Orchestrator → [Layer 1 並行] → Scout → Analyst → [Critic] → Advisor
 
-    FINAL_PLAN.md 五柱架構對應：
-      Constraints    : 每個 Agent 的 backstory 有憲法約束 + Security Guard 隔離 LLM
-      Observability  : StepLogger 記錄每個原子步驟 + OrchestrationContext
-      Feedback Loops : memory_tool 雙層記憶 + Advisor Feedback Loop（路徑 D）
-      Graceful Degrad: 每個 Stage 有獨立的降級路徑（5 層降級瀑布）
-      Evaluation     : Critic Agent ColMAD 辯論 + Intel Fusion 六維評分
+    v3.7: input_type 決定 Path-Aware Skills 路由。
+    pkg=套件掃描 / code=源碼審計 / injection=AI安全 / config=設定檔
+
+    v3.9 Sandbox: 若 SANDBOX_ENABLED=true 且 Docker 可用，在容器內執行。
 
     Args:
         tech_stack: 使用者輸入的技術堆疊字串（如 "Django 4.2, Redis 7.0"）
+        input_type: 前端偵測的輸入類型 (pkg/code/config/injection)
 
     Returns:
         包含完整 Advisor 行動報告的 dict，加上 pipeline_meta 欄位
     """
-    return run_pipeline_with_callback(tech_stack, progress_callback=None)
+    # ── Sandbox Layer 2：Docker 容器隔離 ─────────────────────────────
+    if SANDBOX_ENABLED and _DOCKER_SANDBOX_OK and is_docker_available():
+        logger.info("[SANDBOX] Docker isolation ACTIVE — delegating to container")
+        result = run_in_sandbox(tech_stack=tech_stack, input_type=input_type)
+        if not result.get("fallback"):
+            return result          # 容器執行成功
+        # fallback=True → 降級回 in-process 模式
+        logger.warning(
+            "[SANDBOX] Container fallback: %s — using in-process mode",
+            result.get("error", "unknown"),
+        )
+    # ── In-process 模式（預設 / Graceful Degradation）─────────────────
+    return run_pipeline_with_callback(tech_stack, progress_callback=None, input_type=input_type)
+
+
+def run_pipeline_sync(tech_stack: str, input_type: str = "pkg") -> dict[str, Any]:
+    """
+    run_pipeline 的同步別名（供 sandbox/sandbox_runner.py 在容器內呼叫）。
+    注意：容器內呼叫此函式時 SANDBOX_ENABLED=false，避免遞迴進入 Docker。
+    """
+    # 強制 in-process（容器內不再遞迴 Docker）
+    return run_pipeline_with_callback(tech_stack, progress_callback=None, input_type=input_type)
 
 
 def run_pipeline_with_callback(
     tech_stack: str,
     progress_callback: Any = None,
+    input_type: str = "pkg",
 ) -> dict[str, Any]:
     """
     執行完整 Pipeline，每個 Stage 完成後呼叫 progress_callback。
 
-    與 run_pipeline() 相同邏輯，但在每個 Stage 完成後即時回報狀態。
-    用於 Streamlit UI 的即時監控。
+    v3.7: input_type 決定各 Agent 加載哪個 Skill SOP（Path-Aware Skills）。
 
     Args:
         tech_stack: 技術堆疊字串
         progress_callback: 接收 (agent_name: str, status: str, detail: dict) 的函式
+        input_type: 輸入類型 (pkg / code / config / injection)
 
     Returns:
         包含完整 Advisor 行動報告的 dict
@@ -552,6 +612,7 @@ def run_pipeline_with_callback(
     logger.info("=" * 60)
     logger.info("  ThreatHunter Pipeline v3.1 Start (Orchestrator-driven)")
     logger.info("  tech_stack : %s", tech_stack)
+    logger.info("  input_type : %s", input_type)
     logger.info("  ENABLE_CRITIC: %s", ENABLE_CRITIC)
     logger.info("=" * 60)
 
@@ -666,9 +727,13 @@ def run_pipeline_with_callback(
                     )
             # 將 Layer 1 結果寫入 stages_detail（供 done 事件更新 UI 卡片）
             for agent_name, result in layer1_results.items():
+                is_degraded = result.get("_degraded", False)
                 agent_detail = {
-                    "status": "DEGRADED" if result.get("_degraded") else "SUCCESS",
+                    "status": "DEGRADED" if is_degraded else "SUCCESS",
                     "duration_ms": result.get("_duration_ms", 0),
+                    # _degraded/_error 讓 checkpoint.stage_exit 自動注入 DEGRADATION event
+                    "_degraded": is_degraded,
+                    "_error": result.get("_error", "") if is_degraded else "",
                 }
                 # Security Guard 額外欄位
                 if agent_name == "security_guard":
@@ -703,7 +768,7 @@ def run_pipeline_with_callback(
     else:
         scout_input = tech_stack
         logger.info("[PIPELINE] Scout using raw tech_stack (no packages extracted)")
-    scout_output, scout_sl = stage_scout(scout_input)
+    scout_output, scout_sl = stage_scout(scout_input, input_type=input_type)
     # 若有 Intel Fusion 結果，附加到 Scout 輸出（供 Analyst 使用）
     if "intel_fusion" in layer1_results:
         scout_output["intel_fusion_result"] = layer1_results["intel_fusion"]
@@ -716,7 +781,11 @@ def run_pipeline_with_callback(
     stages_detail["scout"] = scout_detail
     completed_stages.append("scout")
     _notify("scout", "COMPLETE", scout_detail)
-    recorder.stage_enter("scout", {"tech_stack": scout_input[:200], "packages": extracted_packages})
+    # v3.7: stage_enter 包含 skill_file + input_type 供 Thinking Path 顯示
+    from agents.scout import SKILL_MAP as SCOUT_SKILL_MAP
+    recorder.stage_enter("scout", {"tech_stack": scout_input[:200], "packages": extracted_packages},
+                         skill_file=SCOUT_SKILL_MAP.get(input_type, "threat_intel.md"),
+                         input_type=input_type)
     recorder.stage_exit("scout", scout_detail.get("status", "SUCCESS"), scout_output, scout_detail.get("duration_ms", 0))
 
 
@@ -743,7 +812,7 @@ def run_pipeline_with_callback(
         # ── Stage 2: Analyst ───────────────────────────────────
         _notify("analyst", "RUNNING", {})
         rate_limiter.wait_if_needed("analyst")
-        analyst_output, analyst_sl = stage_analyst(scout_output)
+        analyst_output, analyst_sl = stage_analyst(scout_output, input_type=input_type)
         analyst_detail = {
             "status": "SUCCESS" if not analyst_output.get("_degraded") else "DEGRADED",
             "risk_score": analyst_output.get("risk_score", 0),
@@ -752,13 +821,17 @@ def run_pipeline_with_callback(
         stages_detail["analyst"] = analyst_detail
         completed_stages.append("analyst")
         _notify("analyst", "COMPLETE", analyst_detail)
-        recorder.stage_enter("analyst", scout_output)
+        # v3.7: stage_enter with skill_file + input_type
+        from agents.analyst import SKILL_MAP as ANALYST_SKILL_MAP
+        recorder.stage_enter("analyst", scout_output,
+                             skill_file=ANALYST_SKILL_MAP.get(input_type, "chain_analysis.md"),
+                             input_type=input_type)
         recorder.stage_exit("analyst", analyst_detail.get("status", "SUCCESS"), analyst_output, analyst_detail.get("duration_ms", 0))
 
         # ── Stage 3: Critic ────────────────────────────────────
         _notify("critic", "RUNNING", {})
         rate_limiter.wait_if_needed("critic")
-        critic_output, critic_sl = stage_critic(analyst_output)
+        critic_output, critic_sl = stage_critic(analyst_output, input_type=input_type)
         critic_detail = {
             "status": "SUCCESS" if not critic_output.get("_degraded") else "DEGRADED",
             "verdict": critic_output.get("verdict", "SKIPPED"),
@@ -768,13 +841,17 @@ def run_pipeline_with_callback(
         stages_detail["critic"] = critic_detail
         completed_stages.append("critic")
         _notify("critic", "COMPLETE", critic_detail)
-        recorder.stage_enter("critic", analyst_output)
+        # v3.7: stage_enter with skill_file + input_type
+        from agents.critic import SKILL_MAP as CRITIC_SKILL_MAP
+        recorder.stage_enter("critic", analyst_output,
+                             skill_file=CRITIC_SKILL_MAP.get(input_type, "debate_sop.md"),
+                             input_type=input_type)
         recorder.stage_exit("critic", critic_detail.get("status", "SUCCESS"), critic_output, critic_detail.get("duration_ms", 0))
 
     # ── Stage 4: Advisor ──────────────────────────────────────
     _notify("advisor", "RUNNING", {})
     rate_limiter.wait_if_needed("advisor")
-    advisor_output, advisor_sl = stage_advisor(analyst_output, critic_output)
+    advisor_output, advisor_sl = stage_advisor(analyst_output, critic_output, input_type=input_type)
     advisor_detail = {
         "status": "SUCCESS" if not advisor_output.get("_degraded") else "DEGRADED",
         "urgent_count": len(advisor_output.get("actions", {}).get("urgent", [])),
@@ -783,7 +860,11 @@ def run_pipeline_with_callback(
     stages_detail["advisor"] = advisor_detail
     completed_stages.append("advisor")
     _notify("advisor", "COMPLETE", advisor_detail)
-    recorder.stage_enter("advisor", analyst_output)
+    # v3.7: stage_enter with skill_file + input_type
+    from agents.advisor import SKILL_MAP as ADVISOR_SKILL_MAP
+    recorder.stage_enter("advisor", analyst_output,
+                         skill_file=ADVISOR_SKILL_MAP.get(input_type, "action_report.md"),
+                         input_type=input_type)
     recorder.stage_exit("advisor", advisor_detail.get("status", "SUCCESS"), advisor_output, advisor_detail.get("duration_ms", 0))
 
     # ── Advisor Feedback Loop（路徑 D）────────────────────────

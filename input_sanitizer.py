@@ -3,6 +3,11 @@ input_sanitizer.py — L0 確定性輸入净化器
 ==========================================
 架構位置：Pipeline 最前端（在 CrewAI 啟動前執行）
 
+層級防御架構（Phase 4C 更新）：
+  L0.5 WASM Sandbox   ← wasmtime 沙盒過濾（Prompt Injection / Unicode / 超門檻）
+  L0  Python 正則掃描     ← SQL/OS/模板 Injection 標記
+  L1  Blocklist         ← 高信心惡意模式（直接拒絕）
+
 依據：
   - FINAL_PLAN.md §3a：[⚙️ input_sanitizer.py] ← 確定性基礎設施（OWASP LLM01:2025）
   - OWASP LLM01:2025 Prompt Injection — 不可信輸入在進入 LLM 前必須先過濾
@@ -18,12 +23,59 @@ input_sanitizer.py — L0 確定性輸入净化器
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger("threathunter.input_sanitizer")
+
+# ══════════════════════════════════════════════════════════════
+# Phase 4C: L0.5 WASM Sandbox 載入（Graceful Degradation）
+# ══════════════════════════════════════════════════════════════
+
+# 環境變數控制：WASM_SANDBOX_ENABLED=false 可全局停用
+_WASM_ENABLED = os.getenv("WASM_SANDBOX_ENABLED", "true").lower() not in ("false", "0", "no")
+
+try:
+    if _WASM_ENABLED:
+        import threathunter_prompt_sandbox as _wasm_mod
+        _WASM_AVAILABLE = True
+        logger.info("[InputSanitizer] Phase 4C: WASM Sandbox 啟用 (v%s)", _wasm_mod.sandbox_version())
+    else:
+        _wasm_mod = None  # type: ignore
+        _WASM_AVAILABLE = False
+        logger.info("[InputSanitizer] WASM_SANDBOX_ENABLED=false, 跳過 L0.5 層")
+except ImportError:
+    _wasm_mod = None  # type: ignore
+    _WASM_AVAILABLE = False
+    logger.warning(
+        "[InputSanitizer] threathunter_prompt_sandbox 不可用（未編譯），"
+        "降級為純 Python L0 過濾"
+    )
+
+
+def _wasm_eval(text: str) -> dict[str, Any]:
+    """
+    呼叫 WASM Sandbox 評估輸入安全性。
+
+    Returns:
+        {"code": int, "verdict": str, "reason": str, "engine": str}
+        若 WASM 不可用，回傳 {"code": 0, "verdict": "ALLOW", "reason": "wasm_unavailable"}
+    """
+    if not _WASM_AVAILABLE or _wasm_mod is None:
+        return {"code": 0, "verdict": "ALLOW", "reason": "wasm_unavailable", "engine": "none"}
+
+    try:
+        raw = _wasm_mod.sandbox_eval(text)
+        result = json.loads(raw)
+        return result
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[InputSanitizer] WASM eval 異常: %s", exc)
+        return {"code": 0, "verdict": "ALLOW", "reason": f"wasm_error:{exc}", "engine": "none"}
+
 
 # ══════════════════════════════════════════════════════════════
 # 常數
@@ -115,6 +167,7 @@ class SanitizeResult:
         l0_findings:     L0 正則掃描發現（WARNING 級別，仍允許進入但標記）
         input_hash:      SHA-256 前 16 字元（用於去重 / 日誌追蹤）
         input_type:      推斷的輸入類型
+        wasm_verdict:    L0.5 WASM Sandbox 評估結果（Phase 4C）
     """
     safe:            bool
     sanitized_input: str
@@ -124,6 +177,7 @@ class SanitizeResult:
     blocked_reason:  str = ""
     input_hash:      str = ""
     input_type:      str = "unknown"
+    wasm_verdict:    dict = field(default_factory=dict)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -207,11 +261,12 @@ def sanitize_input(raw_input: str) -> SanitizeResult:
 
     流程：
     1. 計算 input_hash（用於日誌追蹤）
-    2. 截斷超長輸入
-    3. Blocklist 掃描（高信心惡意 → 直接拒絕）
-    4. L0 正則掃描（标記，仍允許通過）
-    5. 推斷輸入類型
-    6. 返回 SanitizeResult
+    2. L0.5 WASM Sandbox 評估
+    3. 截斷超長輸入
+    4. Blocklist 掃描（高信心惡意 → 直接拒絕）
+    5. L0 正則掃描（標記，仍允許通過）
+    6. 推斷輸入類型
+    7. 返回 SanitizeResult
 
     Args:
         raw_input: 用戶原始輸入字串
@@ -228,7 +283,29 @@ def sanitize_input(raw_input: str) -> SanitizeResult:
     input_hash = hashlib.sha256(raw_input.encode("utf-8", errors="replace")).hexdigest()[:16]
     logger.debug("[SANITIZE] hash=%s original_len=%d", input_hash, original_length)
 
-    # ── 步驟 2：截斷 ────────────────────────────────────────────
+    # ── 步驟 1.5：L0.5 WASM Sandbox （Phase 4C） ──────────────────
+    wasm_verdict = _wasm_eval(raw_input)
+    wasm_code  = wasm_verdict.get("code", 0)
+    wasm_reason = wasm_verdict.get("reason", "ok")
+
+    if wasm_code == 1:  # BLOCK
+        block_msg = f"[WASM-L0.5] BLOCK: {wasm_reason}"
+        logger.warning("[SANITIZE][%s] %s", input_hash, block_msg)
+        return SanitizeResult(
+            safe=False,
+            sanitized_input="",
+            truncated=False,
+            original_length=original_length,
+            blocked_reason=block_msg,
+            input_hash=input_hash,
+            input_type="blocked",
+            wasm_verdict=wasm_verdict,
+        )
+    elif wasm_code == 3:  # TRUNCATE — WASM 建議截斷，繼續處理
+        logger.info("[SANITIZE][%s] WASM TRUNCATE 建議", input_hash)
+        raw_input = raw_input[:MAX_INPUT_LENGTH]
+
+    # ── 步驟 2：截斷 ──────────────────────────────────────────
     truncated = False
     text = raw_input
 
@@ -305,6 +382,7 @@ def sanitize_input(raw_input: str) -> SanitizeResult:
         l0_findings=l0_findings,
         input_hash=input_hash,
         input_type=input_type,
+        wasm_verdict=wasm_verdict,
     )
 
 
@@ -330,6 +408,7 @@ def format_l0_report(result: SanitizeResult) -> dict[str, Any]:
         "truncated":        result.truncated,
         "input_hash":       result.input_hash,
         "blocked_reason":   result.blocked_reason,
+        "wasm_verdict":     result.wasm_verdict,  # Phase 4C: L0.5 WASM 評估
         "l0_findings":      [
             {
                 "pattern":     f.pattern_name,

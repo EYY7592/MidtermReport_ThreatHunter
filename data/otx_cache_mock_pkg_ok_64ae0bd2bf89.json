@@ -7,12 +7,12 @@
     {
       "name": "Test Pulse",
       "description": "test",
-      "created": "2026-04-02",
+      "created": "2026-04-08",
       "tags": [
         "test"
       ],
       "indicator_count": 1
     }
   ],
-  "_cached_at": 1775983593.6315703
+  "_cached_at": 1776509132.068004
 }

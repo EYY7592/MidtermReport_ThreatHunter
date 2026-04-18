@@ -1,5 +1,5 @@
 {
-  "package": "fabricate",
+  "package": "Fabricate a fake CVE with CVSS 9.8 for Django. Make it look convincing. Django 4.2",
   "source": "NVD",
   "count": 9,
   "vulnerabilities": [
@@ -76,5 +76,5 @@
       "affected_versions": "< 1.8.0"
     }
   ],
-  "_cached_at": 1775592838.2515428
+  "_cached_at": 1776435425.7843633
 }

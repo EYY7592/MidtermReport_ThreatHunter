@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="ThreatHunter — AI 驅動的多 Agent 資安威脅情報平台，即時漏洞掃描與行動報告" />
-  <title>ThreatHunter — AI 資安威脅情報平台</title>
+  <meta name="description" content="ThreatHunter — 多 Agent 資安威脅情報平台，即時漏洞掃描與行動報告" />
+  <title>ThreatHunter — Security Intelligence Platform</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -12,15 +12,39 @@
 
   <!-- ── Header ──────────────────────────────────────── -->
   <header class="th-header">
-    <span class="th-logo">🛡️</span>
-    <div>
-      <div class="th-title">ThreatHunter</div>
-      <div class="th-subtitle">AI-POWERED CYBERSECURITY THREAT INTELLIGENCE</div>
+    <div class="th-brand">
+      <!-- Lucide Shield SVG (非 emoji) -->
+      <svg class="th-logo-icon" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <div>
+        <div class="th-title">ThreatHunter</div>
+        <div class="th-subtitle">Security Intelligence Platform</div>
+      </div>
     </div>
-    <a href="/checkpoints" class="cp-nav-link" style="margin-left:auto;color:#00FFFF;text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.78rem;font-weight:500;letter-spacing:0.05em;padding:5px 12px;border-radius:6px;border:1px solid rgba(0,255,255,0.2);transition:all 0.2s" onmouseover="this.style.background='rgba(0,255,255,0.1)'" onmouseout="this.style.background='transparent'">📡 Checkpoints</a>
-    <div class="th-status">
+    <nav class="th-nav">
+      <a href="/checkpoints" class="nav-link" id="navCheckpoints">
+        <!-- Lucide Database icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+        </svg>
+        Checkpoints
+      </a>
+      <!-- v3.6: Thinking Path 永遠顯示，掃描前顯示最新 checkpoint -->
+      <button id="btnThinking" class="nav-btn" onclick="openThinking()">
+        <!-- Lucide GitBranch icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/>
+          <circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>
+        </svg>
+        Thinking Path
+        <span class="nav-btn-badge" id="thinkingBadgeNew" style="display:none">NEW</span>
+      </button>
+    </nav>
+    <div class="th-status-wrap">
       <span id="statusDot" class="status-dot idle"></span>
-      <span id="statusText">IDLE</span>
+      <span id="statusText" class="status-text">IDLE</span>
     </div>
   </header>
 
@@ -29,16 +53,20 @@
 
     <!-- Input Card -->
     <div class="input-card">
-      <div class="section-title">▸ TARGET INPUT</div>
+      <div class="section-label">Target Input</div>
       <div class="input-area">
         <!-- 檔案上傳區 -->
         <div id="dropZone" class="drop-zone">
           <div class="drop-zone-content">
-            <span class="drop-icon">📂</span>
-            <span class="drop-text">拖放程式碼檔案到此處</span>
-            <span class="drop-hint">或</span>
+            <!-- Lucide Upload icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="drop-icon-svg">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span class="drop-text">Drop code files here</span>
+            <span class="drop-divider">or</span>
             <label class="file-select-btn">
-              選擇檔案
+              Browse
               <input type="file" id="fileInput"
                 accept=".py,.js,.ts,.java,.go,.php,.rb,.rs,.c,.cpp,.h,.txt,.yml,.yaml,.json,.toml,.xml"
                 hidden />
@@ -51,27 +79,57 @@
           id="techStackInput"
           class="code-textarea"
           rows="6"
-          placeholder="Paste code, tech stack, or config here&#10;&#10;Examples:&#10;  • Django 4.2, Redis 7.0, nginx 1.24&#10;  • import os; os.system(user_input)&#10;  • const app = require('express');"
+          placeholder="Paste code, tech stack, or config...&#10;&#10;  • Django 4.2, Redis 7.0, nginx 1.24&#10;  • import os; os.system(user_input)&#10;  • const app = require('express');"
           autocomplete="off"
           spellcheck="false"
         >Django 4.2, Redis 7.0</textarea>
         <div class="input-footer">
-          <span id="inputTypeIndicator" class="type-indicator">📦 Package List · Path A</span>
+          <span id="inputTypeIndicator" class="type-indicator">Package List · Path A</span>
           <div class="input-actions">
-            <button id="btnScan" class="btn btn-primary" onclick="startScan()">🔍 Scan</button>
+            <button id="btnScan" class="btn btn-primary" onclick="startScan()">
+              <!-- Lucide Zap icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              Scan
+            </button>
             <div class="example-dropdown-wrap">
-              <button class="btn" onclick="toggleExampleMenu()">Load Example ▾</button>
+              <button class="btn btn-ghost" onclick="toggleExampleMenu()">
+                Examples
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
               <div id="exampleMenu" class="example-dropdown hidden">
-                <div class="example-item" onclick="loadExampleType('pkg')">📦 Tech Stack (Django)</div>
-                <div class="example-item" onclick="loadExampleType('python')">🐍 Python — SQL Injection</div>
-                <div class="example-item" onclick="loadExampleType('javascript')">📜 JavaScript — XSS</div>
-                <div class="example-item" onclick="loadExampleType('java')">☕ Java — Deserialization</div>
-                <div class="example-item" onclick="loadExampleType('go')">🔵 Go — Command Injection</div>
-                <div class="example-item" onclick="loadExampleType('php')">🐘 PHP — File Include</div>
-                <div class="example-item" onclick="loadExampleType('injection')">🛡️ Prompt Injection Attack</div>
+                <div class="example-item" onclick="loadExampleType('pkg')">
+                  <span class="ex-tag">PKG</span> Tech Stack (Django)
+                </div>
+                <div class="example-item" onclick="loadExampleType('python')">
+                  <span class="ex-tag">PY</span> Python — SQL Injection
+                </div>
+                <div class="example-item" onclick="loadExampleType('javascript')">
+                  <span class="ex-tag">JS</span> JavaScript — XSS
+                </div>
+                <div class="example-item" onclick="loadExampleType('java')">
+                  <span class="ex-tag">JV</span> Java — Deserialization
+                </div>
+                <div class="example-item" onclick="loadExampleType('go')">
+                  <span class="ex-tag">GO</span> Go — Command Injection
+                </div>
+                <div class="example-item" onclick="loadExampleType('php')">
+                  <span class="ex-tag">PHP</span> PHP — File Include
+                </div>
+                <div class="example-item" onclick="loadExampleType('injection')">
+                  <span class="ex-tag ex-tag-warn">INJ</span> Prompt Injection Attack
+                </div>
               </div>
             </div>
-            <button id="btnClear" class="btn hidden" onclick="clearResults()">✕ Clear</button>
+            <button id="btnClear" class="btn btn-ghost hidden" onclick="clearResults()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+              Clear
+            </button>
           </div>
         </div>
       </div>
@@ -79,86 +137,147 @@
 
     <!-- Pipeline Progress Bar -->
     <div id="pipelineBar" class="pipeline-bar hidden">
-      <span id="stepOrchestrator" class="pipeline-step step-pending">🧭 Orch</span>
-      <span class="step-arrow">──▶</span>
-      <span id="stepLayer1" class="pipeline-step step-pending">⚡ L1</span>
-      <span class="step-arrow">──▶</span>
-      <span id="stepScout" class="pipeline-step step-pending">🔍 Scout</span>
-      <span class="step-arrow">──▶</span>
-      <span id="stepAnalyst" class="pipeline-step step-pending">🧠 Analyst</span>
-      <span class="step-arrow">──▶</span>
-      <span id="stepCritic" class="pipeline-step step-pending">⚖️ Critic</span>
-      <span class="step-arrow">──▶</span>
-      <span id="stepAdvisor" class="pipeline-step step-pending">📋 Advisor</span>
+      <span id="stepOrchestrator" class="pipeline-step step-pending">Orch</span>
+      <span class="step-arrow">→</span>
+      <span id="stepLayer1" class="pipeline-step step-pending">Guard</span>
+      <span class="step-arrow">→</span>
+      <span id="stepScout" class="pipeline-step step-pending">Scout</span>
+      <span class="step-arrow">→</span>
+      <span id="stepAnalyst" class="pipeline-step step-pending">Analyst</span>
+      <span class="step-arrow">→</span>
+      <span id="stepCritic" class="pipeline-step step-pending">Critic</span>
+      <span class="step-arrow">→</span>
+      <span id="stepAdvisor" class="pipeline-step step-pending">Advisor</span>
     </div>
 
     <!-- Agent Status Cards -->
     <div id="agentGrid" class="agent-grid hidden">
-      <!-- Row 1: v3.1 新增 Agent -->
+      <!-- Row 1 -->
       <div class="agent-card" id="cardOrchestrator">
-        <div class="agent-icon">🧭</div>
-        <div class="agent-name">Orchestrator</div>
-        <div class="agent-role">動態路由決策</div>
-        <div class="agent-status pending" id="statusOrchestrator">WAITING</div>
-        <div class="agent-detail" id="detailOrchestrator">—</div>
+        <div class="agent-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+          </svg>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Orchestrator</div>
+          <div class="agent-role">動態路由決策</div>
+        </div>
+        <div class="agent-status-wrap">
+          <span class="agent-status pending" id="statusOrchestrator">WAITING</span>
+          <div class="agent-detail" id="detailOrchestrator">—</div>
+        </div>
       </div>
       <div class="agent-card" id="cardSecurityGuard">
-        <div class="agent-icon">🔒</div>
-        <div class="agent-name">Security Guard</div>
-        <div class="agent-role">隔離 LLM 提取</div>
-        <div class="agent-status pending" id="statusSecurityGuard">WAITING</div>
-        <div class="agent-detail" id="detailSecurityGuard">—</div>
+        <div class="agent-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Security Guard</div>
+          <div class="agent-role">隔離 LLM 提取</div>
+        </div>
+        <div class="agent-status-wrap">
+          <span class="agent-status pending" id="statusSecurityGuard">WAITING</span>
+          <div class="agent-detail" id="detailSecurityGuard">—</div>
+        </div>
       </div>
       <div class="agent-card" id="cardIntelFusion">
-        <div class="agent-icon">🧠</div>
-        <div class="agent-name">Intel Fusion</div>
-        <div class="agent-role">六維情報融合</div>
-        <div class="agent-status pending" id="statusIntelFusion">WAITING</div>
-        <div class="agent-detail" id="detailIntelFusion">—</div>
+        <div class="agent-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/>
+            <path d="M12 8v4l3 3"/>
+          </svg>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Intel Fusion</div>
+          <div class="agent-role">六維情報融合</div>
+        </div>
+        <div class="agent-status-wrap">
+          <span class="agent-status pending" id="statusIntelFusion">WAITING</span>
+          <div class="agent-detail" id="detailIntelFusion">—</div>
+        </div>
       </div>
-      <!-- Row 2: 原始四 Agent -->
+      <!-- Row 2 -->
       <div class="agent-card" id="cardScout">
-        <div class="agent-icon">🔍</div>
-        <div class="agent-name">Scout</div>
-        <div class="agent-role">威脅情報偵察</div>
-        <div class="agent-status pending" id="statusScout">WAITING</div>
-        <div class="agent-detail" id="detailScout">—</div>
+        <div class="agent-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Scout</div>
+          <div class="agent-role">威脅情報偵察</div>
+        </div>
+        <div class="agent-status-wrap">
+          <span class="agent-status pending" id="statusScout">WAITING</span>
+          <div class="agent-detail" id="detailScout">—</div>
+        </div>
       </div>
       <div class="agent-card" id="cardAnalyst">
-        <div class="agent-icon">🔬</div>
-        <div class="agent-name">Analyst</div>
-        <div class="agent-role">漏洞連鎖分析</div>
-        <div class="agent-status pending" id="statusAnalyst">WAITING</div>
-        <div class="agent-detail" id="detailAnalyst">—</div>
+        <div class="agent-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Analyst</div>
+          <div class="agent-role">漏洞連鎖分析</div>
+        </div>
+        <div class="agent-status-wrap">
+          <span class="agent-status pending" id="statusAnalyst">WAITING</span>
+          <div class="agent-detail" id="detailAnalyst">—</div>
+        </div>
       </div>
       <div class="agent-card" id="cardCritic">
-        <div class="agent-icon">⚖️</div>
-        <div class="agent-name">Critic</div>
-        <div class="agent-role">ColMAD 辯論</div>
-        <div class="agent-status pending" id="statusCritic">WAITING</div>
-        <div class="agent-detail" id="detailCritic">—</div>
+        <div class="agent-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Critic</div>
+          <div class="agent-role">ColMAD 辯論</div>
+        </div>
+        <div class="agent-status-wrap">
+          <span class="agent-status pending" id="statusCritic">WAITING</span>
+          <div class="agent-detail" id="detailCritic">—</div>
+        </div>
       </div>
       <div class="agent-card" id="cardAdvisor">
-        <div class="agent-icon">📋</div>
-        <div class="agent-name">Advisor</div>
-        <div class="agent-role">行動報告生成</div>
-        <div class="agent-status pending" id="statusAdvisor">WAITING</div>
-        <div class="agent-detail" id="detailAdvisor">—</div>
+        <div class="agent-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Advisor</div>
+          <div class="agent-role">行動報告生成</div>
+        </div>
+        <div class="agent-status-wrap">
+          <span class="agent-status pending" id="statusAdvisor">WAITING</span>
+          <div class="agent-detail" id="detailAdvisor">—</div>
+        </div>
       </div>
     </div>
 
     <!-- Live Monitor + Meta -->
     <div id="monitorLayout" class="monitor-layout hidden">
-      <!-- Live Log Panel -->
       <div>
-        <div class="section-title">▸ LIVE MONITOR</div>
+        <div class="section-label">Live Monitor</div>
         <div id="logPanel" class="log-panel">
-          <div class="log-empty">等待掃描啟動...</div>
+          <div class="log-empty">Waiting for scan...</div>
         </div>
       </div>
-      <!-- Meta Side Panel -->
       <div>
-        <div class="section-title">▸ PIPELINE META</div>
+        <div class="section-label">Pipeline Meta</div>
         <div id="metaPanel" class="meta-side">
           <div class="meta-row"><span class="meta-label">Status</span><span class="meta-value" id="metaStatus">—</span></div>
           <div class="meta-row"><span class="meta-label">Tech Stack</span><span class="meta-value" id="metaTech">—</span></div>
@@ -178,11 +297,11 @@
     <!-- Success Banner -->
     <div id="successBanner" class="success-banner hidden"></div>
 
-    <!-- ── Report Section (hidden until scan done) ──── -->
+    <!-- ── Report Section ──────────────────────────── -->
     <div id="reportSection" class="hidden">
 
       <!-- Executive Summary -->
-      <div class="section-title">▸ EXECUTIVE SUMMARY</div>
+      <div class="section-label">Executive Summary</div>
       <div class="exec-summary">
         <div class="exec-text" id="execSummary">—</div>
       </div>
@@ -209,34 +328,30 @@
 
       <!-- Action Report -->
       <div class="report-grid">
-        <!-- Urgent -->
         <div class="report-card">
-          <div class="report-card-header header-urgent">🔴 URGENT — Immediate Action Required</div>
+          <div class="report-card-header header-urgent">URGENT — Immediate Action Required</div>
           <div class="report-card-body" id="urgentList">
-            <div style="color:var(--text-dim);font-size:0.8rem;padding:0.5rem;">No urgent items</div>
+            <div class="report-empty">No urgent items</div>
           </div>
         </div>
-        <!-- Important -->
         <div class="report-card">
-          <div class="report-card-header header-important">⚠️ IMPORTANT — Address Within 72h</div>
+          <div class="report-card-header header-important">IMPORTANT — Address Within 72h</div>
           <div class="report-card-body" id="importantList">
-            <div style="color:var(--text-dim);font-size:0.8rem;padding:0.5rem;">No important items</div>
+            <div class="report-empty">No important items</div>
           </div>
         </div>
       </div>
 
       <!-- Resolved + CVEs -->
       <div class="report-grid">
-        <!-- Resolved -->
         <div class="report-card">
-          <div class="report-card-header header-resolved">✅ RESOLVED — Verified Fixed</div>
+          <div class="report-card-header header-resolved">RESOLVED — Verified Fixed</div>
           <div class="report-card-body" id="resolvedList">
-            <div style="color:var(--text-dim);font-size:0.8rem;padding:0.5rem;">No resolved items</div>
+            <div class="report-empty">No resolved items</div>
           </div>
         </div>
-        <!-- CVE Table -->
         <div class="report-card">
-          <div class="report-card-header header-cve">📊 CVE INTELLIGENCE</div>
+          <div class="report-card-header header-cve">CVE INTELLIGENCE</div>
           <div class="report-card-body" style="padding:0;">
             <table class="cve-table">
               <thead>
@@ -258,8 +373,36 @@
 
   </main>
 
-  <footer>ThreatHunter v3.1 · Harness Engineering Architecture · Multi-Agent Pipeline</footer>
+  <footer class="th-footer">ThreatHunter v3.6 · Harness Engineering Architecture · Multi-Agent Pipeline</footer>
 </div>
+
+<!-- Thinking Path Drawer -->
+<div id="thinkingOverlay" class="tp-overlay hidden" onclick="closeThinking()"></div>
+<aside id="thinkingDrawer" class="tp-drawer hidden" role="complementary" aria-label="Thinking Path">
+  <div class="tp-drawer-header">
+    <div class="tp-drawer-title">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/>
+        <circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>
+      </svg>
+      Thinking Path
+    </div>
+    <div class="tp-drawer-meta" id="thinkingMeta">No scan loaded</div>
+    <button class="tp-close-btn" onclick="closeThinking()" aria-label="Close">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+  <div class="tp-drawer-body">
+    <div id="thinkingContent" class="tp-content">
+      <div class="tp-loading" id="thinkingLoading">
+        <div class="tp-spinner"></div>
+        <span>Loading thinking path...</span>
+      </div>
+    </div>
+  </div>
+</aside>
 
 <script src="/static/app.js"></script>
 </body>

@@ -1,5 +1,5 @@
 {
-  "package": "nginx",
+  "package": "nginx 1.24",
   "source": "NVD",
   "count": 10,
   "vulnerabilities": [
@@ -84,5 +84,5 @@
       "affected_versions": "<= 0.7.62, 0.1.0, 0.1.1"
     }
   ],
-  "_cached_at": 1775965192.0328555
+  "_cached_at": 1776431869.0249228
 }

@@ -22,6 +22,15 @@ from config import MEMORY_DIR, ENABLE_MEMORY_RAG, SIMILARITY_THRESHOLD
 
 logger = logging.getLogger("threathunter.memory")
 
+# Sandbox Layer 3: Memory cache sanitization
+try:
+    from sandbox.memory_sanitizer import sanitize_memory_write as _sanitize_write
+    _MEM_SANITIZER_OK = True
+except ImportError:
+    def _sanitize_write(data, agent_name=''):  # type: ignore[misc]
+        return True, data, 'ok'
+    _MEM_SANITIZER_OK = False
+
 # ── 常數 ─────────────────────────────────────────────────────
 VALID_AGENT_NAMES = {"scout", "analyst", "advisor", "critic"}
 
@@ -329,6 +338,13 @@ def write_memory(agent_name: str, data: str) -> str:
         memory_data = json.loads(data) if isinstance(data, str) else data
     except json.JSONDecodeError as e:
         return f"[FAIL] JSON format error: {e}"
+
+    # Sandbox Layer 3: poison filter before write
+    is_safe, clean_data, reason = _sanitize_write(memory_data, agent_name)
+    if not is_safe:
+        logger.warning('[MEMORY][SANDBOX] Write BLOCKED: %s', reason)
+        return '[BLOCKED] Memory write rejected by Sandbox: ' + reason
+    memory_data = clean_data
 
     memory_data["timestamp"] = datetime.now(timezone.utc).isoformat()
 
