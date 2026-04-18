@@ -37,37 +37,101 @@ Traditional vulnerability scanners give you a list of CVEs sorted by CVSS score.
 
 ### Architecture
 
-```
-User Input: "Django 4.2, Redis 7.0, PostgreSQL 16"
-                    │
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    ┃         CrewAI Sequential Process       ┃
-    ┃                                         ┃
-    ┃  ┌───────────────────────────────────┐  ┃
-    ┃  │  🔍 Scout Agent                    │  ┃
-    ┃  │  NVD API → OTX API → Memory       │──── → Threat Intel
-    ┃  │  ReAct: Thought→Action→Observe    │  ┃
-    ┃  └────────────────┬──────────────────┘  ┃
-    ┃                   │                      ┃
-    ┃  ┌────────────────▼──────────────────┐  ┃
-    ┃  │  🧠 Analyst Agent                  │  ┃
-    ┃  │  CISA KEV → Exploit DB → Memory   │──── → Risk Assessment
-    ┃  │  Chain Analysis + Confidence       │  ┃
-    ┃  └────────────────┬──────────────────┘  ┃
-    ┃                   │                      ┃
-    ┃  ┌────────────────▼──────────────────┐  ┃
-    ┃  │  📋 Advisor Agent                  │  ┃
-    ┃  │  Action Plan + Priority Ranking   │──── → Final Report
-    ┃  │  🔴 URGENT / 🟡 IMPORTANT / 🟢 OK │  ┃
-    ┃  └───────────────────────────────────┘  ┃
-    ┃                                         ┃
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                        │
-                        ▼
-              ┌─────────────────┐
-              │  Streamlit UI    │
-              │  Report + Feedback│
-              └─────────────────┘
+```text
+User Input: "Package List / Source Code / AI Prompt / Config File"
+                         │
+                         ▼
+╔════════════════════════════════════════════════╗
+║  🦀 L0.5 WASM Runtime Sandbox (Phase 4C)       ║
+║  ┌─────────────────────────────────────────┐   ║
+║  │ prompt_guard.wasm (Guest)               │   ║
+║  │ Defenses: Length · UTF-8 · Prompt DB    │   ║
+║  └─────────────────────────────────────────┘   ║
+╚════════════════════════════════════════════════╝
+                         │ ALLOW
+                         ▼
+╔════════════════════════════════════════════════╗
+║  🦀 L0 Rust Security Layer (Phase 2)           ║
+║  ┌─────────────────────────────────────────┐   ║
+║  │ threathunter_sanitizer                  │   ║
+║  │ scan_blocklist() · infer_input_type()   │   ║
+║  │ sha256_hex() · O(n) regex · ReDoS Prev. │   ║
+║  └─────────────────────────────────────────┘   ║
+╚════════════════════════════════════════════════╝
+                         │
+                         ▼
+╔════════════════════════════════════════════════╗
+║  🐍 L1 AST Guard (Phase 1 · sandbox/)          ║
+║  safe_ast_parse() · Max Nodes 50k              ║
+║  3s timeout · AST Bomb DoS Protection          ║
+╚════════════════════════════════════════════════╝
+                         │
+                         ▼
+┌────────────────────────────────────────────────┐
+│  🎯 Orchestrator Agent                         │
+│  Dynamic Routing → Paths A/B/C/D               │
+│  A: PKG Scan  B: Code Audit                    │
+│  C: CFG Audit D: Refinement                    │
+└──────────────┬─────────────────────────────────┘
+               │
+       ┌───────┴───────┐
+       ▼               ▼
+┌─────────────┐ ┌──────────────────┐
+│ Security    │ │ Intel Fusion     │
+│ Guard Agent │ │ 6D Intelligence  │
+│ (Parallel)  │ │ NVD/OTX/EPSS...  │
+└──────┬──────┘ └────────┬─────────┘
+       └────────┬─────────┘
+                ▼
+        ┌───────────────┐
+        │  Scout Agent  │
+        │  CVE Indexing │
+        └───────┬───────┘
+                ▼
+        ┌───────────────┐
+        │ Analyst Agent │
+        │ Chain Analysis│
+        └───────┬───────┘
+                ▼
+        ┌───────────────┐
+        │ Critic Agent  │
+        │ Debate & Auth │
+        └───────┬───────┘
+                ▼
+        ┌───────────────┐
+        │ Advisor Agent │
+        │ Action Report │
+        └───────┬───────┘
+                │
+                ▼
+╔════════════════════════════════════════════════╗
+║  🦀 L0 JSON Validator (Phase 2 · Rust)         ║
+║  safe_parse_json() · depth≤32 · Verify Years   ║
+╚════════════════════════════════════════════════╝
+                │
+                ▼
+╔════════════════════════════════════════════════╗
+║  🐍 L3 Memory Sanitizer (Phase 1)              ║
+║  + 🦀 Memory Validator (Phase 2 · Rust)        ║
+║  Toxic Scan · Hallucination Filter             ║
+╚════════════════════════════════════════════════╝
+                │
+                ▼
+        ┌───────────────┐
+        │ Checkpoints   │
+        │ JSONL Events  │
+        └───────┬───────┘
+                │
+                ▼
+╔════════════════════════════════════════════════╗
+║  FastAPI + SSE Real-Time Streaming → Frontend  ║
+╚════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🐳 L2 Docker Sandbox (Phase 3 · Optional)
+   Full Pipeline execution in isolated container
+   --network none · --read-only · seccomp
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 ### What Makes It Different?
@@ -98,38 +162,69 @@ ThreatHunter:
 | Threat Data | NVD API, AlienVault OTX |
 | Risk Validation | CISA KEV, GitHub Exploit DB |
 | Memory | JSON-based persistent storage |
-| UI | Streamlit |
+| UI | FastAPI (SSE) + HTML/JS/CSS |
 | Methodology | Harness Engineering (OpenAI) |
 
 ### Project Structure
 
-```
+```text
 ThreatHunter/
-├── main.py                    # CrewAI Crew orchestration
-├── config.py                  # LLM + API configuration
-├── requirements.txt
+├── main.py                    # Pipeline Entrypoint (Orchestrator driven)
+├── config.py                  # LLM configs + API Keys + Degradation Waterfall
+├── checkpoint.py              # JSONL event persistence layer
+├── input_sanitizer.py         # L0 input sanitation (Python core + Rust bindings)
 │
-├── tools/                     # @tool decorated functions
-│   ├── nvd_tool.py            # NVD vulnerability lookup
-│   ├── otx_tool.py            # OTX threat intelligence
-│   ├── kev_tool.py            # CISA KEV verification
-│   ├── exploit_tool.py        # GitHub exploit search
-│   └── memory_tool.py         # Persistent memory R/W
+├── agents/                    # Multi-Agent Definitions (7 Agents)
+│   ├── orchestrator.py        # Dynamic Routing (Path A/B/C/D)
+│   ├── security_guard.py      # Code Static Analysis (AST + Regex)
+│   ├── intel_fusion.py        # 6D Intelligence Aggregation
+│   ├── scout.py               # CVE Threat Scouting
+│   ├── analyst.py             # Chain Vulnerability Reasoning
+│   ├── critic.py              # Adversarial Debate & Review
+│   └── advisor.py             # Final Action Plan Generation
 │
-├── agents/
-│   ├── scout.py               # Scout Agent definition
-│   ├── analyst.py             # Analyst Agent definition
-│   └── advisor.py             # Advisor Agent definition
+├── tools/                     # CrewAI @tool functions (8 Tools)
+│   ├── nvd_tool.py            # NVD API (Primary CVE DB / CPE Search)
+│   ├── otx_tool.py            # AlienVault OTX (Threat Intelligence)
+│   ├── kev_tool.py            # CISA KEV (Known Exploited Vulnerabilities)
+│   ├── epss_tool.py           # EPSS (Exploit Prediction Scoring)
+│   ├── exploit_tool.py        # GitHub Exploit DB / PoCs
+│   ├── ghsa_tool.py           # GitHub Security Advisory
+│   ├── memory_tool.py         # Hybrid Memory Persistence (JSON + LlamaIndex)
+│   └── package_extractor.py   # Extract package names from source ast imports
 │
-├── skills/                    # Agent SOP documents
-│   ├── threat_intel.md        # Scout reasoning guide
-│   ├── chain_analysis.md      # Chain vulnerability SOP
-│   └── action_report.md       # Report generation SOP
+├── sandbox/                   # Multi-Layer Sandbox Security (Phase 1, 3)
+│   ├── ast_guard.py           # AST Bomb DoS Protection
+│   ├── memory_sanitizer.py    # Memory Poison & Hallucination Defense
+│   ├── docker_sandbox.py      # Docker Runner API for total isolation
+│   ├── Dockerfile             # Minimal Pipeline Container Definition
+│   └── seccomp-profile.json   # Syscall allowlist
 │
-├── memory/                    # Persistent scan history
-├── data/                      # Offline caches
-└── ui/
-    └── app.py                 # Streamlit interface
+├── rust/                      # Rust High-Performance Security Layer (Phase 2, 4)
+│   ├── sanitizer/             # Regex DFA engine & hashes
+│   ├── json_validator/        # JSON payload verification
+│   ├── memory_validator/      # Swift memory screening
+│   ├── url_builder/           # SSRF protection and API routing constraints
+│   ├── prompt_sandbox/        # Host PyO3 wrapper for WASM guest
+│   └── prompt_sandbox_guest/  # WASM Guest runtime for malicious payload filter
+│
+├── skills/                    # Agent SOP System (20+ markdown directives)
+│   ├── threat_intel.md...     # Path-aware instructions (Pkg/Code/AI/Config)
+│   └── skill_loader.py        # Hot-reload skill caching system
+│
+├── harness/                   # Harness Engineering Architecture
+│   ├── context/               # Layer 1: Core system Context rules
+│   ├── constraints/           # Layer 2: Architectural boundary definitions
+│   └── entropy/               # Layer 3: Entropy management & repair loop
+│
+├── memory/                    # Persistent Agent Memory and Indexes
+├── data/                      # Offline API caches (NVD/CISA)
+├── ui/                        # Web Interface and Server
+│   ├── server.py              # FastAPI + SSE active streaming backend
+│   └── static/                # HTML/JS/CSS frontend UI
+│
+├── project_CONSTITUTION.md    # Development Standards and Guardrails
+└── HARNESS_ENGINEERING.md     # Methodologies and constraint guidelines
 ```
 
 ### Quick Start
@@ -148,7 +243,7 @@ export NVD_API_KEY="your-key"
 export LLM_PROVIDER="openrouter"
 
 # 4. Run
-streamlit run ui/app.py
+uv run python ui/server.py
 ```
 
 ### Development Methodology: Harness Engineering
@@ -204,6 +299,109 @@ ThreatHunter：
   傳統工具做不到。
 ```
 
+### 整體架構圖
+
+```text
+┌─────────────────── 用戶輸入 ───────────────────┐
+│  套件清單 / 原始碼 / AI 提示 / 配置檔           │
+└────────────────────────┬───────────────────────┘
+                         │
+                         ▼
+╔════════════════════════════════════════════════╗
+║  🦀 L0.5 WASM 執行環境隔離 (Phase 4C)          ║
+║  ┌─────────────────────────────────────────┐   ║
+║  │ prompt_guard.wasm (Guest)               │   ║
+║  │ 防護: 長度檢查 · UTF-8 驗證 · 提示詞注入       │   ║
+║  └─────────────────────────────────────────┘   ║
+╚════════════════════════════════════════════════╝
+                         │ ALLOW
+                         ▼
+╔════════════════════════════════════════════════╗
+║  🦀 L0 Rust 安全層（Phase 2）                  ║
+║  ┌─────────────────────────────────────────┐   ║
+║  │ threathunter_sanitizer                  │   ║
+║  │ scan_blocklist() · infer_input_type()   │   ║
+║  │ sha256_hex() · O(n) 正則防 ReDoS        │   ║
+║  └─────────────────────────────────────────┘   ║
+╚════════════════════════════════════════════════╝
+                         │
+                         ▼
+╔════════════════════════════════════════════════╗
+║  🐍 L1 AST Guard（Phase 1 · sandbox/）         ║
+║  safe_ast_parse() · 節點上限 50,000            ║
+║  3s 超時保護 · AST Bomb DoS 防護              ║
+╚════════════════════════════════════════════════╝
+                         │
+                         ▼
+┌────────────────────────────────────────────────┐
+│  🎯 Orchestrator Agent                         │
+│  動態路由 → Path A/B/C/D                       │
+│  A: 套件掃描  B: 源碼審計                       │
+│  C: 配置審計  D: 回饋補充                       │
+└──────────────┬─────────────────────────────────┘
+               │
+       ┌───────┴───────┐
+       ▼               ▼
+┌─────────────┐ ┌──────────────────┐
+│ Security    │ │ Intel Fusion     │
+│ Guard Agent │ │ 六維情報查詢     │
+│ (Layer 1    │ │ NVD/OTX/KEV      │
+│  並行)      │ │ EPSS/GHSA/Exploit│
+└──────┬──────┘ └────────┬─────────┘
+       └────────┬─────────┘
+                ▼
+        ┌───────────────┐
+        │  Scout Agent  │
+        │  CVE 情報偵察 │
+        └───────┬───────┘
+                ▼
+        ┌───────────────┐
+        │ Analyst Agent │
+        │ 漏洞鏈推理    │
+        └───────┬───────┘
+                ▼
+        ┌───────────────┐
+        │ Critic Agent  │
+        │ 對抗式辯論    │
+        └───────┬───────┘
+                ▼
+        ┌───────────────┐
+        │ Advisor Agent │
+        │ 最終行動報告  │
+        └───────┬───────┘
+                │
+                ▼
+╔════════════════════════════════════════════════╗
+║  🦀 L0 JSON Validator（Phase 2 · Rust）        ║
+║  safe_parse_json() · 深度≤32 · CVE 年份驗證   ║
+╚════════════════════════════════════════════════╝
+                │
+                ▼
+╔════════════════════════════════════════════════╗
+║  🐍 L3 Memory Sanitizer（Phase 1 · sandbox/）  ║
+║  ＋ 🦀 Memory Validator（Phase 2 · Rust）      ║
+║  毒素掃描 · 幻覺 CVE 過濾 · 寫入前攔截         ║
+╚════════════════════════════════════════════════╝
+                │
+                ▼
+        ┌───────────────┐
+        │ Checkpoint    │
+        │  JSONL 事件記錄│
+        │ （Rust 高效寫入）│
+        └───────┬───────┘
+                │
+                ▼
+╔════════════════════════════════════════════════╗
+║  FastAPI + SSE 即時串流 → 前端介面             ║
+╚════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🐳 L2 Docker Sandbox（Phase 3 · 可選）
+   整個 Pipeline 在隔離容器內執行
+   --network none · --read-only · seccomp · non-root
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
 ### 技術棧
 
 | 元件 | 技術 |
@@ -212,8 +410,8 @@ ThreatHunter：
 | LLM | Llama 3.3 70B，透過 vLLM 部署於 AMD Cloud |
 | 威脅資料 | NVD API、AlienVault OTX |
 | 風險驗證 | CISA KEV、GitHub Exploit DB |
-| 記憶系統 | JSON 持久化儲存 |
-| 介面 | Streamlit |
+| 記憶系統 | JSON 持久化儲存 + 快取 |
+| 介面 | FastAPI (SSE) + HTML/JS/CSS |
 | 開發方法論 | Harness Engineering（OpenAI） |
 
 ### 開發方法：Harness Engineering
@@ -228,11 +426,92 @@ ThreatHunter：
 | **Graceful Degradation（優雅降級）** | 離線快取 + 備用 LLM 供應商 |
 | **Evaluation（驗證）** | 信心度標記（HIGH/MEDIUM/NEEDS_VERIFICATION） |
 
+### 目錄結構
+
+```text
+ThreatHunter/
+├── main.py                    # Pipeline 主程式（Orchestrator 驅動）
+├── config.py                  # LLM 設定 + API Key + 降級瀑布
+├── checkpoint.py              # JSONL 事件持久化 + Checkpoint API
+├── input_sanitizer.py         # L0 輸入淨化（Python 版 + Rust 橋接）
+│
+├── agents/                    # Agent 定義（7 個）
+│   ├── orchestrator.py        # 動態路由（Path A/B/C/D）
+│   ├── security_guard.py      # 程式碼靜態分析（AST + 正則）
+│   ├── intel_fusion.py        # 六維情報整合（並行 API 查詢）
+│   ├── scout.py               # CVE 情報偵察
+│   ├── analyst.py             # 漏洞鏈推理
+│   ├── critic.py              # 對抗式質疑辯論
+│   └── advisor.py             # 最終行動報告
+│
+├── tools/                     # CrewAI @tool 函式（8 個）
+│   ├── nvd_tool.py            # NVD API（主要 CVE 資料庫 / CPE 搜尋）
+│   ├── otx_tool.py            # AlienVault OTX（威脅情報）
+│   ├── kev_tool.py            # CISA KEV（已知被利用漏洞）
+│   ├── epss_tool.py           # EPSS（漏洞利用預測）
+│   ├── exploit_tool.py        # Exploit-DB / PoC 查詢
+│   ├── ghsa_tool.py           # GitHub Security Advisory
+│   ├── memory_tool.py         # 雙層記憶持久化（JSON + LlamaIndex）
+│   └── package_extractor.py   # 從 import 提取第三方套件名稱
+│
+├── sandbox/                   # 多層安全防護（ Phase 1, Phase 3 ）
+│   ├── ast_guard.py           # L1 AST Bomb 防護
+│   ├── memory_sanitizer.py    # L3 記憶毒素掃描
+│   ├── docker_sandbox.py      # L2 Docker Python API
+│   ├── Dockerfile             # 最小化隔離容器 Dockerfile
+│   └── seccomp-profile.json   # Linux syscall 白名單
+│
+├── rust/                      # Rust 高效能安全層（ Phase 2, Phase 4 ）
+│   ├── sanitizer/             # L0 輸入淨化（regex O(n)·SHA256）
+│   ├── json_validator/        # JSON Bomb 防護（depth≤32）
+│   ├── memory_validator/      # 記憶毒素掃描（高效能版）
+│   ├── url_builder/           # URL 安全建構（SSRF·白名單）
+│   ├── prompt_sandbox/        # Host PyO3 供 Python 呼叫 WASM
+│   └── prompt_sandbox_guest/  # WASM Guest 用於隔離惡意負載
+│
+├── skills/                    # Agent SOP 文件（20 餘個 .md 各路徑配置）
+│   ├── threat_intel.md...     # Path-aware instructions (Pkg/Code/AI/Config)
+│   └── skill_loader.py        # 動態載入 SOP 系統
+│
+├── harness/                   # Harness Engineering 三柱架構
+│   ├── context/               # 第 1 層：專案上下文 Context
+│   ├── constraints/           # 第 2 層：架構邊界規則 + linter
+│   └── entropy/               # 第 3 層：熵掃描 + UNTIL CLEAN 迴圈
+│
+├── memory/                    # 雙層記憶持久化與向量快取
+├── data/                      # NVD/KEV 等離線快取
+├── ui/                        # 前端介面與 API Server
+│   ├── server.py              # FastAPI + SSE 即時串流後端
+│   └── static/                # HTML/CSS/JS 前端檔案
+│
+├── project_CONSTITUTION.md    # 開發規範與憲法指引
+└── HARNESS_ENGINEERING.md     # 方法論規範
+```
+
+### 快速開始
+
+```bash
+# 1. 複製專案
+git clone https://github.com/EYY7592/ThreatHunter.git
+cd ThreatHunter
+
+# 2. 啟動環境與安裝套件
+uv sync
+# 如果需要編譯 rust (可選)，請執行： python build_rust_crates.py
+
+# 3. 設定環境變數
+export OPENROUTER_API_KEY="your-key"
+
+# 4. 執行
+uv run python ui/server.py
+# 接著打開瀏覽器訪問 http://localhost:1000
+```
+
 ### 團隊
 
 | 角色 | 職責 |
 |---|---|
-| 👑 組長 | 架構設計、CrewAI 串接、Streamlit UI、Memory Tool |
+| 👑 組長 | 架構設計、CrewAI 串接、FastAPI + SSE UI、Memory Tool |
 | 🔍 成員 B | Scout Agent Pipeline（NVD Tool + OTX Tool + Skill） |
 | 🧠 成員 C | Analyst Agent Pipeline（KEV Tool + Exploit Tool + Chain Analysis Skill） |
 
