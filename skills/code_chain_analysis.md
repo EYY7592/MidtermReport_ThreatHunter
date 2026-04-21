@@ -13,8 +13,31 @@ Work from both Scout CVEs AND code_patterns.
 
 ## SOP
 
-### Step 1: Parse Scout Output
-Extract both `vulnerabilities` (package CVEs) and `code_patterns` fields.
+### Step 1: Parse Scout Output (CRITICAL)
+The Scout output will contain TWO types of findings:
+
+**A. `vulnerabilities`** — Package CVEs from NVD/OSV queries:
+```json
+{"cve_id": "CVE-2024-...", "cvss_score": 9.8, "severity": "CRITICAL", ...}
+```
+
+**B. `code_patterns`** — Code-level security findings from Security Guard (v4.0):
+```json
+{
+  "finding_id": "CODE-001",
+  "type": "code_pattern",
+  "pattern_type": "SQL_INJECTION",
+  "cwe_id": "CWE-89",
+  "owasp_category": "A03:2021-Injection",
+  "severity": "CRITICAL",
+  "snippet": "cursor.execute(f\"SELECT * FROM users WHERE id={user_id}\")",
+  "line_no": 45,
+  "language": "python"
+}
+```
+
+If `code_patterns` is present and non-empty → analyze code chains (priority).
+If `code_patterns` is absent or empty → only analyze CVE-based chains.
 
 ### Step 2: KEV Check for Package CVEs
 ```

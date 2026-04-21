@@ -516,7 +516,7 @@ function buildAgentDetail(agent, info) {
   switch (agent) {
     case 'orchestrator':    return info.scan_path   ? `Path: ${info.scan_path}` : '';
     case 'layer1_parallel': return info.agents_completed ? `${info.agents_completed.join(', ')} done` : '';
-    case 'security_guard':  return info.functions_found != null ? `${info.functions_found} functions` : (info.extraction_status || '');
+    case 'security_guard':  return info.patterns_found != null ? `${info.patterns_found} patterns${info.functions_found ? ', ' + info.functions_found + ' funcs' : ''}` : (info.extraction_status || '');
     case 'intel_fusion':    return info.cves_scored != null ? `${info.cves_scored} CVEs scored` : '';
     case 'scout':           return info.vuln_count  != null ? `${info.vuln_count} CVEs found` : '';
     case 'analyst':         return info.risk_score  != null ? `Risk: ${info.risk_score}` : '';
@@ -557,10 +557,7 @@ function renderReport(result) {
   setText('mRisk',     riskScore);
   setText('mNew',      newCVEs);
 
-  // Actions
-  renderActionList('urgentList',    actions.urgent    || [], 'action-urgent');
-  renderActionList('importantList', actions.important || [], 'action-important');
-  renderActionList('resolvedList',  actions.resolved  || [], 'action-resolved');
+  // Actions – rendered below after merging with code_patterns
 
   // CVE Table — 從 vulnerability_detail，備援從 actions
   const cveSource = vulns.length > 0 ? vulns : allItems.map(i => ({
@@ -572,6 +569,129 @@ function renderReport(result) {
     is_new:      i.is_new || false,
   }));
   renderCveTable(cveSource);
+
+  // ── Merge Security Guard code_patterns into URGENT/IMPORTANT ──────────────
+  // CRITICAL patterns → urgent, HIGH/MEDIUM → important
+  // Each entry gets MITRE CWE evidence shown inline.
+  const codePatterns = result.code_patterns_summary || [];
+  const cpUrgent    = codePatterns.filter(p => p.severity === 'CRITICAL').map(codePatternToAction);
+  const cpImportant = codePatterns.filter(p => ['HIGH', 'MEDIUM'].includes(p.severity)).map(codePatternToAction);
+
+  renderActionList('urgentList',    [...(actions.urgent || []), ...cpUrgent],    'action-urgent');
+  renderActionList('importantList', [...(actions.important || []), ...cpImportant], 'action-important');
+  renderActionList('resolvedList',  actions.resolved  || [], 'action-resolved');
+
+  // Hide the standalone SECURITY GUARD section (no longer needed)
+  const sgSection = document.getElementById('codePatternsCWESection');
+  if (sgSection) sgSection.style.display = 'none';
+}
+
+
+/* ══ Security Guard: Code Patterns with MITRE CWE Evidence ══════════════════ */
+function renderCodePatternsWithCWE(patterns) {
+  const container = document.getElementById('codePatternsCWEList');
+  if (!container) return;
+  if (!patterns || !patterns.length) {
+    container.innerHTML = '<div style="color:var(--text-dim);font-size:0.8rem;padding:0.5rem;">No code patterns detected</div>';
+    return;
+  }
+
+  const SEVERITY_COLOR = {
+    'CRITICAL': '#f85149',
+    'HIGH':     '#e3a340',
+    'MEDIUM':   '#58a6ff',
+    'LOW':      '#3fb950',
+  };
+
+  const html = patterns.map(p => {
+    const sev = (p.severity || 'MEDIUM').toUpperCase();
+    const sevColor = SEVERITY_COLOR[sev] || '#8b949e';
+    const cweRef = p.cwe_reference || {};
+    const cweId = p.cwe_id || p.cve_id || 'CWE-???';
+    const cweName = cweRef.name || cweId;
+    const nist = cweRef.nist_severity || sev;
+    const cvss = cweRef.cvss_base != null ? cweRef.cvss_base : '—';
+    const owasp = cweRef.owasp_2021 || '';
+    const cweUrl = cweRef.cwe_url || `https://cwe.mitre.org/data/definitions/${cweId.replace('CWE-','')}.html`;
+    const remediation = cweRef.remediation_zh || cweRef.remediation_en || '';
+    const source = cweRef.source || 'MITRE CWE v4.14';
+    const disclaimer = cweRef.disclaimer || '';
+    const repCves = cweRef.representative_cves || [];
+    const snippet = p.snippet || p.code_snippet || '';
+    const lineNo = p.line_no != null ? ` (L${p.line_no})` : '';
+
+    const repCveHtml = repCves.length ? `
+      <div style="margin-top:0.4rem;font-size:0.72rem;color:#8b949e;">
+        <strong style="color:#58a6ff;">📚 代表性 CVE（同類弱點真實案例）：</strong>
+        ${repCves.slice(0,3).map(c =>
+          `<div style="margin-left:0.6rem;">→ <strong>${c.id}</strong> | CVSS ${c.cvss} | ${c.vendor||''} (${c.year||''}) — ${escapeHtml(c.note||'')}</div>`
+        ).join('')}
+        ${disclaimer ? `<div style="margin-top:0.2rem;color:#666;font-style:italic;font-size:0.68rem;">⚠️ ${escapeHtml(disclaimer)}</div>` : ''}
+      </div>` : '';
+
+    return `<div class="action-item action-cwe" style="border-left:3px solid ${sevColor};margin-bottom:0.8rem;padding:0.7rem 1rem;background:rgba(248,81,73,0.04);border-radius:6px;">
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;">
+        <span style="background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;border-radius:4px;padding:1px 6px;font-size:0.7rem;font-weight:700;">${sev}</span>
+        <span style="font-weight:600;font-size:0.9rem;">${escapeHtml(cweName)}</span>
+        <a href="${escapeHtml(cweUrl)}" target="_blank" style="color:#58a6ff;font-size:0.72rem;text-decoration:none;" title="MITRE 官方定義">🔗 ${escapeHtml(cweId)}</a>
+        ${lineNo ? `<span style="color:#8b949e;font-size:0.72rem;">${escapeHtml(lineNo)}</span>` : ''}
+      </div>
+      <div style="font-size:0.72rem;color:#8b949e;margin-bottom:0.3rem;">
+        <strong style="color:#3fb950;">📖 來源：</strong>${escapeHtml(source)} &nbsp;|&nbsp;
+        <strong>NIST：</strong>${escapeHtml(nist)} &nbsp;|&nbsp;
+        <strong>CVSS Base：</strong>${cvss}
+        ${owasp ? ` &nbsp;|&nbsp; <strong>OWASP：</strong>${escapeHtml(owasp)}` : ''}
+      </div>
+      ${snippet ? `<div style="font-family:monospace;font-size:0.72rem;background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:0.3rem 0.5rem;margin:0.3rem 0;color:#e3a340;overflow-x:auto;">${escapeHtml(snippet.slice(0,120))}</div>` : ''}
+      ${remediation ? `<div style="font-size:0.75rem;color:#e3a340;margin-top:0.25rem;">🔧 修復：${escapeHtml(remediation)}</div>` : ''}
+      ${repCveHtml}
+    </div>`;
+  }).join('');
+
+  container.innerHTML = html;
+
+  // Show the section
+  const section = document.getElementById('codePatternsCWESection');
+  if (section) section.style.display = 'block';
+}
+
+
+/* Convert a code_patterns_summary entry into an action-item format */
+function codePatternToAction(p) {
+  const cweRef = p.cwe_reference || {};
+  const cweName = cweRef.name || p.pattern_type || 'Unknown';
+  const cweId   = p.cwe_id || cweRef.id || '';
+  const cweUrl  = cweRef.cwe_url || (cweId ? `https://cwe.mitre.org/data/definitions/${cweId.replace('CWE-','')}.html` : '');
+  const nist    = cweRef.nist_severity || p.severity || 'UNKNOWN';
+  const cvss    = cweRef.cvss_base != null ? cweRef.cvss_base : null;
+  const owasp   = cweRef.owasp_2021 || '';
+  const remediation = cweRef.remediation_zh || cweRef.remediation_en || '';
+  const repCves = cweRef.representative_cves || [];
+  const disclaimer = cweRef.disclaimer || '';
+  const snippet = p.snippet || '';
+  const lineNo  = p.line_no ? ` (Line ${p.line_no})` : '';
+
+  return {
+    finding_id:   p.finding_id,
+    cve_id:       cweId,                       // shown as "CWE-78" badge
+    package:      `Code${lineNo}`,
+    severity:     p.severity || 'HIGH',
+    action:       `[${cweId}] ${cweName}`,
+    reason:       remediation || `${cweName} detected in source code`,
+    command:      'Manual code fix required (see snippet below)',
+    // Extra fields for inline CWE rendering
+    _is_code_pattern: true,
+    _cwe_name:    cweName,
+    _cwe_url:     cweUrl,
+    _nist:        nist,
+    _cvss:        cvss,
+    _owasp:       owasp,
+    _remediation: remediation,
+    _snippet:     snippet,
+    _rep_cves:    repCves,
+    _disclaimer:  disclaimer,
+    _source:      cweRef.source || 'MITRE CWE v4.14',
+  };
 }
 
 function renderActionList(containerId, items, cls) {
@@ -580,21 +700,90 @@ function renderActionList(containerId, items, cls) {
     return;
   }
   const html = items.map(item => {
-    const cve   = escapeHtml(item.cve_id   || 'UNKNOWN');
+    // CODE-pattern 偵測：多重信號判斷
+    // 1) finding_id 存在（如 CODE-001）
+    // 2) cve_id 以 CWE- 開頭
+    // 3) cve_id 為空/null 且 有 vulnerable_snippet 或 package 含 "Code"
+    const hasFindingId = !!(item.finding_id);
+    const hasCweId = !!(item.cve_id && item.cve_id.startsWith('CWE-'));
+    const isNullCveWithSnippet = !item.cve_id && (item.vulnerable_snippet || item.fixed_snippet);
+    const isNullCveWithCodePkg = !item.cve_id && item.package && /code/i.test(item.package);
+    const isCodePattern = hasFindingId || hasCweId || isNullCveWithSnippet || isNullCveWithCodePkg;
+
+    const cveDisplay = isCodePattern
+      ? escapeHtml(item.finding_id || item.cve_id || 'CODE')
+      : escapeHtml(item.cve_id || 'UNKNOWN');
+    const cveCls = isCodePattern ? 'action-cwe' : '';
+
+    // Build CWE inline evidence block for code patterns
+    const cweInlineHtml = item._is_code_pattern ? (() => {
+      const repCveHtml = (item._rep_cves || []).slice(0, 3).map(c =>
+        `<div style="margin-left:0.5rem;">→ <strong>${escapeHtml(c.id||'')}</strong> | CVSS ${c.cvss||'?'} | ${escapeHtml((c.vendor||''))} (${c.year||''}) — ${escapeHtml((c.note||'').slice(0,80))}</div>`
+      ).join('');
+      return `
+        <div style="margin-top:0.5rem;padding:0.5rem 0.7rem;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:0.72rem;">
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;color:#8b949e;margin-bottom:0.3rem;">
+            <span>📖 <strong style="color:#3fb950;">來源：</strong>${escapeHtml(item._source||'MITRE CWE v4.14')}</span>
+            ${item._nist ? `<span><strong>NIST：</strong>${escapeHtml(item._nist)}</span>` : ''}
+            ${item._cvss != null ? `<span><strong>CVSS Base：</strong>${item._cvss}</span>` : ''}
+            ${item._owasp ? `<span><strong>OWASP：</strong>${escapeHtml(item._owasp)}</span>` : ''}
+            ${item._cwe_url ? `<a href="${escapeHtml(item._cwe_url)}" target="_blank" style="color:#58a6ff;text-decoration:none;">🔗 官方定義</a>` : ''}
+          </div>
+          ${item._snippet ? `<div style="font-family:monospace;color:#e3a340;margin:0.2rem 0;white-space:pre-wrap;word-break:break-all;">${escapeHtml(item._snippet.slice(0,120))}</div>` : ''}
+          ${item._remediation ? `<div style="color:#e3a340;margin-top:0.2rem;">🔧 ${escapeHtml(item._remediation)}</div>` : ''}
+          ${repCveHtml ? `<div style="margin-top:0.3rem;color:#8b949e;"><strong style="color:#58a6ff;">📚 代表性 CVE（同類弱點真實案例）：</strong>${repCveHtml}</div>` : ''}
+          ${item._disclaimer ? `<div style="margin-top:0.2rem;color:#555;font-style:italic;">${escapeHtml(item._disclaimer)}</div>` : ''}
+        </div>`;
+    })() : '';
+
     const pkg   = escapeHtml(item.package  || 'unknown');
     const sev   = escapeHtml(item.severity || 'MEDIUM');
     const desc  = escapeHtml(item.action   || '');
-    const cmd   = item.command ? `<code class="action-cmd">$ ${escapeHtml(item.command)}</code>` : '';
+
+    // v5.1: 過濾不當 command（如 PHP 程式碼顯示 pip install）
+    let cmdHtml = '';
+    if (item.command) {
+      const cmdStr = item.command;
+      const isBogusCmd = /pip install/.test(cmdStr) && isCodePattern;
+      if (!isBogusCmd && cmdStr !== 'Manual code fix required') {
+        cmdHtml = `<code class="action-cmd">$ ${escapeHtml(cmdStr)}</code>`;
+      }
+    }
     const rep   = item.is_repeated ? '<span class="badge badge-repeated">⚠ REPEATED</span>' : '';
+
+    // v4.1: vulnerable_snippet + fixed_snippet 對比顯示（Advisor 產出的修復程式碼）
+    let snippetHtml = '';
+    if (item.vulnerable_snippet || item.fixed_snippet) {
+      snippetHtml = '<div class="snippet-compare">';
+      if (item.vulnerable_snippet) {
+        snippetHtml += `<div class="snippet-block snippet-vuln">
+          <div class="snippet-label">❌ Vulnerable</div>
+          <pre class="snippet-code">${escapeHtml(item.vulnerable_snippet)}</pre>
+        </div>`;
+      }
+      if (item.fixed_snippet) {
+        snippetHtml += `<div class="snippet-block snippet-fix">
+          <div class="snippet-label">✅ Fixed</div>
+          <pre class="snippet-code">${escapeHtml(item.fixed_snippet)}</pre>
+        </div>`;
+      }
+      if (item.why_this_works) {
+        snippetHtml += `<div class="snippet-why"><strong>Why:</strong> ${escapeHtml(item.why_this_works)}</div>`;
+      }
+      snippetHtml += '</div>';
+    }
+
     return `
     <div class="action-card ${cls}">
-      <div class="action-cve">${cve}${rep}</div>
+      <div class="action-cve ${cveCls}">${cveDisplay}${rep}</div>
       <div style="margin:0.25rem 0;">
         <span class="action-pkg">${pkg}</span>
         <span class="badge badge-${sev}">${sev}</span>
       </div>
       <div class="action-desc">${desc}</div>
-      ${cmd}
+      ${snippetHtml}
+      ${cmdHtml}
+      ${cweInlineHtml}
     </div>`;
   }).join('');
   setHTML(containerId, html);

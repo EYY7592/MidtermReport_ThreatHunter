@@ -162,7 +162,15 @@ _IMPORT_PATTERNS: dict[str, re.Pattern] = {
 _DANGER_UNIVERSAL: list[tuple[str, re.Pattern]] = [
     ("SQL_INJECTION", re.compile(
         r"(?:SELECT|INSERT|UPDATE|DELETE|DROP|UNION|CREATE|ALTER)\s+.*?"
-        r"(?:\+\s*['\"]|\$\{|%s|%r|f['\"]|\.format\(|str\(|\bconcat\b)",
+        r"(?:\+\s*['\"]"             # 字串拼接: + 'value'
+        r"|\$\{"                      # JS 模板字串: ${var}
+        r"|%s|%r"                     # % 格式化
+        r"|f['\"]"                    # f-string: f"SELECT...{var}"
+        r"|\.format\("               # .format() 拼接
+        r"|str\("                     # str() 拼接
+        r"|\bconcat\b"               # SQL CONCAT 函式
+        r"|\{[\w_]+\})"              # f-string 花括號變數: {variable}
+        ,
         re.IGNORECASE | re.DOTALL,
     )),
     ("CMD_INJECTION", re.compile(
@@ -221,6 +229,15 @@ _DANGER_LANG: dict[str, list[tuple[str, re.Pattern]]] = {
         ("FILE_INCLUDE", re.compile(r"(?:include|require)(?:_once)?\s*\(\s*\$", re.IGNORECASE)),
         ("SHELL_EXEC", re.compile(r"(?:shell_exec|passthru|system|exec|popen)\s*\(", re.IGNORECASE)),
         ("TAINT_SUPERGLOBAL", re.compile(r"\$_(?:GET|POST|REQUEST|COOKIE|SERVER)\s*\[", re.IGNORECASE)),
+        # v5.1: PHP SQL 字串拼接偵測（PHP 用 . 拼接，不是 +）
+        ("SQL_CONCAT_PHP", re.compile(
+            r"(?:SELECT|INSERT|UPDATE|DELETE|DROP)\s+.*?"
+            r"(?:\.\s*\$\w+"                   # PHP: . $var
+            r"|\"\s*\.\s*\$\w+\s*\.\s*\""      # PHP: " . $var . "
+            r"|\$\w+\s*\.\s*['\"]"             # PHP: $var . '...'
+            r")",
+            re.IGNORECASE | re.DOTALL,
+        )),
     ],
     "ruby": [
         ("EVAL_USAGE", re.compile(r"(?:eval|instance_eval|class_eval|send)\s*\(")),
@@ -472,6 +489,40 @@ def _extract_functions_regex(code: str, lines: list[str], language: str) -> list
 def _extract_imports_regex(code: str, lines: list[str], language: str) -> list[dict]:
     """用正則提取 import/require/use 語句（多語言）"""
     imports = []
+
+    # Go 語言特殊處理：只從 import block 內提取，防止把函式呼叫字串誤認為 package
+    if language == "go":
+        # 匹配 import ( ... ) 區塊內的字串，或單行 import "pkg"
+        import_block_pattern = re.compile(
+            r'import\s+\(\s*([\s\S]*?)\s*\)|import\s+"([^"]+)"',
+            re.MULTILINE,
+        )
+        # 合法 Go package 路徑：只能包含字母數字 / . - _，不能有空格或特殊符號
+        pkg_path_pattern = re.compile(r'^[\w./\-]+$')
+        full_text = "\n".join(lines)
+        for block_m in import_block_pattern.finditer(full_text):
+            block_content = block_m.group(1) or block_m.group(2) or ""
+            if block_m.group(2):
+                # 單行 import "pkg"
+                pkg = block_m.group(2).strip()
+                if pkg and pkg_path_pattern.match(pkg):
+                    line_no = full_text[:block_m.start()].count("\n") + 1
+                    imports.append({
+                        "module": pkg, "items": [], "alias": None,
+                        "line": line_no, "type": "import",
+                    })
+            else:
+                # import block 內每個字串
+                for pkg_m in re.finditer(r'"([^"]+)"', block_content):
+                    pkg = pkg_m.group(1).strip()
+                    if pkg and pkg_path_pattern.match(pkg):
+                        line_no = full_text[:block_m.start()].count("\n") + 1
+                        imports.append({
+                            "module": pkg, "items": [], "alias": None,
+                            "line": line_no, "type": "import",
+                        })
+        return imports[:100]
+
     pattern = _IMPORT_PATTERNS.get(language)
     if not pattern:
         # 未知語言：嘗試通用匹配

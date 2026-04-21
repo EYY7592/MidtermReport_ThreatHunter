@@ -16,6 +16,7 @@
 
 import json
 import logging
+import re
 import time
 from typing import Any, Callable
 
@@ -255,6 +256,13 @@ def build_intel_fusion_agent(excluded_models: list[str] | None = None) -> Agent:
     except Exception as e:
         logger.warning("[WARN] GHSA Tool not available: %s", e)
 
+    # Phase 7.5: 加入 search_osv（ecosystem-aware，不會返回 CVE-1999 遠古漏洞）
+    try:
+        from tools.osv_tool import search_osv as _search_osv_tool
+        optional_tools.append(_search_osv_tool)
+    except Exception as _osv_ex:
+        logger.warning("[WARN] OSV Tool not available for Intel Fusion: %s", _osv_ex)
+
     core_tools = [search_nvd, check_cisa_kev, search_otx, read_memory, write_memory]
     all_tools = core_tools + optional_tools
 
@@ -268,7 +276,8 @@ def build_intel_fusion_agent(excluded_models: list[str] | None = None) -> Agent:
 {skill_content}
 
 === 可用 Tools ===
-- search_nvd：查 NVD CVSS 分數（幾乎永遠查）
+- search_osv：查 OSV.dev CVE（優先使用，不會返回 CVE-1999 遠古漏洞）
+- search_nvd：備用（search_osv 返回 count=0 時才用）
 - check_cisa_kev：查 CISA KEV 清單（幾乎永遠查，批次輸入逗號分隔）
 - search_otx：查 OTX 威脅情報（CVSS >= 7.0 時查）
 {('- fetch_epss_score: 查 EPSS 惡意利用機率（NOT in_kev 時查）' + chr(10)) if any(t.name == 'search_epss' for t in optional_tools) else ''}
@@ -414,36 +423,67 @@ def run_intel_fusion(
 
             agent = build_intel_fusion_agent(excluded_models=excluded_models)
 
-            # v3.4：根據輸入類型使用不同的 task description
+            # v5.3：根據輸入類型使用不同的 task description（支援 CWE 查詢模式）
             if package_list_for_task:
-                pkg_lines = "\n".join(f"  - {pkg}" for pkg in package_list_for_task)
-                task_desc = (
-                    f"分析以下第三方套件的安全漏洞情報（由靜態分析從原始碼提取）：\n\n"
-                    f"待查套件清單：\n{pkg_lines}\n\n"
-                    f"輸入類型：{input_type}（套件名稱列表）\n\n"
-                    f"你必須對每個套件逐一查詢，不可跳過任何一個：\n"
-                    f"1. 先呼叫 read_memory(intel_fusion) 取得 API 健康狀態\n"
-                    f"2. 對每個套件分別呼叫 search_nvd（例如：search_nvd('requests')）\n"
-                    f"3. 批次呼叫 check_cisa_kev 查詢 KEV 狀態\n"
-                    f"4. 若 NOT in_kev，呼叫 search_otx\n"
-                    f"5. 呼叫 write_memory 儲存 API 健康狀態\n"
-                    f"6. 輸出純 JSON fusion_results（格式如 SOP Step 7）\n\n"
-                    f"重要提示：\n"
-                    f"- 上方列出的是套件名稱（如 requests、flask），不是程式碼\n"
-                    f"- 對每個套件名稱呼叫 search_nvd，例如 search_nvd('requests')\n"
-                    f"- 每個套件可能有 0 到多個 CVE，如實回報\n"
-                    f"絕對禁止：\n"
-                    f"- 不可編造任何 CVE 編號或 EPSS 分數\n"
-                    f"- 不可跳過工具呼叫\n"
-                    f"- 輸出必須是純 JSON"
-                )
+                # 判斷是套件名稱 還是 CWE targets（Security Guard 偵測後傳入）
+                is_cwe_mode = all(str(p).upper().startswith("CWE-") for p in package_list_for_task)
+
+                if is_cwe_mode:
+                    # CWE 模式：用 search_nvd(cwe_id) 查對應真實 CVE，提供佐證
+                    cwe_lines = "\n".join(f"  - {cwe}" for cwe in package_list_for_task)
+                    task_desc = (
+                        f"Security Guard 從原始碼中偵測到以下程式碼弱點（CWE 分類）：\n\n"
+                        f"待查 CWE 分類：\n{cwe_lines}\n\n"
+                        f"你的任務：為每個 CWE，查詢 NVD 找到近年（2018-2024）"
+                        f"最相關的真實 CVE 並取得 CVSS 分數，以提供漏洞佐證：\n"
+                        f"1. 先呼叫 read_memory(intel_fusion) 取得 API 健康狀態\n"
+                        f"2. 對每個 CWE，呼叫 search_nvd(keyword=cwe_id) 查詢相關 CVE\n"
+                        f"   例如：search_nvd('CWE-89') → SQL Injection 相關 CVE\n"
+                        f"   例如：search_nvd('CWE-502') → Insecure Deserialization 相關 CVE\n"
+                        f"3. 從結果選取最具代表性的 CVE（CVSS 最高、最近年份優先）\n"
+                        f"4. 對選取的 CVE，呼叫 check_cisa_kev 確認 KEV 狀態\n"
+                        f"5. 呼叫 write_memory 儲存 API 健康狀態\n"
+                        f"6. 輸出純 JSON fusion_results（格式如 SOP Step 7）\n\n"
+                        f"重要提示：\n"
+                        f"- 輸入是 CWE ID（弱點分類），不是套件名稱\n"
+                        f"- 查詢目的：找真實 CVE 提供 CVSS 佐證給 Security Guard 的偵測結果\n"
+                        f"- 每個 CWE 必須至少回報 1 個相關 CVE（若 NVD 有資料）\n"
+                        f"絕對禁止：\n"
+                        f"- 不可編造任何 CVE 編號或 EPSS 分數\n"
+                        f"- 不可跳過工具呼叫\n"
+                        f"- 輸出必須是純 JSON"
+                    )
+                else:
+                    # 套件模式（原本邏輯）：search_osv 優先，search_nvd 為 fallback
+                    pkg_lines = "\n".join(f"  - {pkg}" for pkg in package_list_for_task)
+                    task_desc = (
+                        f"分析以下第三方套件的安全漏洞情報（由靜態分析從原始碼提取）：\n\n"
+                        f"待查套件清單：\n{pkg_lines}\n\n"
+                        f"輸入類型：{input_type}（套件名稱列表）\n\n"
+                        f"你必須對每個套件逐一查詢，不可跳過任何一個：\n"
+                        f"1. 先呼叫 read_memory(intel_fusion) 取得 API 健康狀態\n"
+                        f"2. 對每個套件呼叫 search_osv（ecosystem-aware CVE，不含 CVE-1999）\n"
+                        f"   如果 search_osv 返回 count=0，再用 search_nvd 作為 fallback\n"
+                        f"3. 批次呼叫 check_cisa_kev 查詢 KEV 狀態\n"
+                        f"4. 若 NOT in_kev，呼叫 search_otx\n"
+                        f"5. 呼叫 write_memory 儲存 API 健康狀態\n"
+                        f"6. 輸出純 JSON fusion_results（格式如 SOP Step 7）\n\n"
+                        f"重要提示：\n"
+                        f"- 上方列出的是套件名稱（如 requests、flask），不是程式碼\n"
+                        f"- 對每個套件呼叫 search_osv，例如 search_osv('requests')\n"
+                        f"- 每個套件可能有0 到多個 CVE，如實回報\n"
+                        f"絕對禁止：\n"
+                        f"- 不可編造任何 CVE 編號或 EPSS 分數\n"
+                        f"- 不可跳過工具呼叫\n"
+                        f"- 輸出必須是純 JSON"
+                    )
             else:
                 task_desc = (
                     f"分析以下技術堆疊或 CVE 列表的情報：\n{input_str[:2000]}\n\n"
                     f"輸入類型：{input_type}\n\n"
                     f"你需要：\n"
                     f"1. 先呼叫 read_memory(intel_fusion) 取得 API 健康狀態\n"
-                    f"2. 對每個套件呼叫 search_nvd 取得 CVE 和 CVSS\n"
+                    f"2. 對每個套件呼叫 search_osv 取得 CVE（ecosystem-aware，為空才用 search_nvd fallback）\n"
                     f"3. 批次呼叫 check_cisa_kev 查詢 KEV 狀態\n"
                     f"4. 若 NOT in_kev，呼叫 search_epss 或 search_otx\n"
                     f"5. Python 套件 → 呼叫 search_ghsa\n"
@@ -490,24 +530,66 @@ def run_intel_fusion(
                 pass
 
             # ── 解析 JSON 輸出 ──────────────────────────
-            if "```json" in result_str:
-                result_str = result_str.split("```json")[1].split("```")[0].strip()
-            elif "```" in result_str:
-                parts = result_str.split("```")
+            # v5.2: 超短輸出保護（< 500 chars 且無 JSON → CrewAI 純文字 forceRun 回覆）
+            # 例：len=168 "In the Final Answer, do not use JSON..." → 空 fusion_results
+            MIN_JSON_LEN = 500
+            if len(result_str) < MIN_JSON_LEN and "{" not in result_str:
+                logger.warning(
+                    "[INTEL] LLM output too short for JSON (%d chars, no '{'), "
+                    "likely CrewAI forceRun plain-text reply. Returning empty fusion.",
+                    len(result_str)
+                )
+                result = {
+                    "fusion_results": [],
+                    "packages_queried": [],
+                    "_degraded": True,
+                    "_reason": f"Intel Fusion plain-text response ({len(result_str)} chars): {result_str[:100]}",
+                }
+                break
+
+            # v5.1: 超長輸出保護（LLM 輸出 >50k chars 通常是 CrewAI forceRun 觸發）
+            MAX_RESULT_LEN = 50_000
+            if len(result_str) > MAX_RESULT_LEN:
+                logger.warning(
+                    "[INTEL] LLM output too long (%d chars), truncating and extracting JSON",
+                    len(result_str)
+                )
+                # 嘗試從末尾 10000 chars 找 JSON（CrewAI 強迫完成時 JSON 通常放最後）
+                tail = result_str[-10_000:]
+                # 從中間提取，不截斷 result_str（以免破壞完整 JSON block）
+                result_str_for_parse = tail
+            else:
+                result_str_for_parse = result_str
+
+            if "```json" in result_str_for_parse:
+                result_str_for_parse = result_str_for_parse.split("```json")[1].split("```")[0].strip()
+            elif "```" in result_str_for_parse:
+                parts = result_str_for_parse.split("```")
                 if len(parts) >= 3:
-                    result_str = parts[1].strip()
+                    result_str_for_parse = parts[1].strip()
+
+            # 若尾部沒有，回頭從完整輸出找
+            if len(result_str) > MAX_RESULT_LEN and "{" not in result_str_for_parse:
+                result_str_for_parse = result_str
 
             result = None
             try:
-                result = json.loads(result_str)
+                result = json.loads(result_str_for_parse)
             except json.JSONDecodeError:
-                # 層 2：從大段文字中提取 {} block（LLM 加了解釋文字的情況）
-                _jm = re.search(r'\{[\s\S]*\}', result_str)
-                if _jm:
+                # 層 2：非貪婪匹配最後一個完整 {} block
+                # 用 findall 取所有候選，優先嘗試最後一個（通常是 LLM 真實輸出）
+                _candidates = re.findall(r'\{[\s\S]+?\}', result_str_for_parse)
+                if not _candidates and len(result_str) > MAX_RESULT_LEN:
+                    # 若尾部沒找到，掃整個輸出找最大的 JSON block
+                    _candidates = re.findall(r'\{[\s\S]+?\}', result_str)
+                for _candidate in reversed(_candidates):
                     try:
-                        result = json.loads(_jm.group(0))
+                        result = json.loads(_candidate)
+                        if isinstance(result, dict):
+                            logger.info("[INTEL] JSON extracted from long output (candidate len=%d)", len(_candidate))
+                            break
                     except json.JSONDecodeError:
-                        pass
+                        continue
                 if result is None:
                     # 層 3：無法解析，讓外層 except 捕獲並 graceful degrade
                     raise ValueError(
@@ -657,6 +739,38 @@ def _verify_and_recalculate(result: dict) -> dict:
             recalculated.append(fusion)  # 保留原始值
 
     result["fusion_results"] = recalculated
+
+    # Harness Layer 2.5：CVE 年份過濾（最后防線）
+    # 任何進入 Intel Fusion 的远古 CVE（ < 2005）在此一律濾除
+    CVE_YEAR_MIN = 2005
+    fresh_fusions = []
+    ancient_removed = []
+    for fusion in result["fusion_results"]:
+        cve_id = fusion.get("cve_id", "")
+        if cve_id.startswith("GHSA-") or not cve_id.startswith("CVE-"):
+            fresh_fusions.append(fusion)
+            continue
+        try:
+            yr = int(cve_id.split("-")[1])
+            if yr < CVE_YEAR_MIN:
+                ancient_removed.append(cve_id)
+                logger.warning(
+                    "[INTEL HARNESS 2.5] Ancient CVE filtered (year=%d < %d): %s",
+                    yr, CVE_YEAR_MIN, cve_id
+                )
+            else:
+                fresh_fusions.append(fusion)
+        except (IndexError, ValueError):
+            fresh_fusions.append(fusion)
+
+    if ancient_removed:
+        result["fusion_results"] = fresh_fusions
+        result["ancient_cves_filtered"] = ancient_removed
+        logger.warning(
+            "[INTEL] Removed %d ancient CVEs from fusion_results: %s",
+            len(ancient_removed), ancient_removed
+        )
+
     return result
 
 
