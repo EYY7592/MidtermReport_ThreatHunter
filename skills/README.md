@@ -1,29 +1,29 @@
-# ThreatHunter Skill 系統說明
+# ThreatHunter Skill Guide
 
-## Skill 是什麼？
+## What Is a Skill?
 
-Skill = 寫在 Agent backstory 裡的 SOP（標準作業程序）。
-告訴 Agent「怎麼思考」，不是「怎麼呼叫 API」。
+A Skill is an SOP embedded into an Agent's backstory.
+It tells the Agent how to reason, not how to call an API.
 
-## Skill 與 Tool 的差別
+## Skill vs. Tool
 
 | | Skill | Tool |
 |---|---|---|
-| 本質 | .md 文件（自然語言指引） | Python 函式（@tool 裝飾器） |
-| 位置 | 寫進 Agent 的 backstory | 掛在 Agent 的 tools 列表 |
-| 作用 | 引導推理方向（SOP） | 執行具體操作（API 呼叫） |
-| 範例 | 「比對歷史後判斷 is_new」 | `search_nvd("django 4.2")` |
+| Nature | Markdown guidance written in natural language | Python function exposed with `@tool` |
+| Location | Injected into the Agent backstory | Attached to the Agent `tools` list |
+| Purpose | Steers reasoning and decision flow | Executes concrete operations such as API calls |
+| Example | "Compare with history before setting `is_new`." | `search_nvd("django 4.2")` |
 
-## 本專案的 Skill 清單
+## Skill Files in This Project
 
-| Skill 文件 | 負責人 | 對應 Agent |
+| Skill File | Owner | Agent |
 |---|---|---|
-| `threat_intel.md` | 成員 B | Scout Agent |
-| `chain_analysis.md` | 成員 C | Analyst Agent |
-| `action_report.md` | 組長 | Advisor Agent |
+| `threat_intel.md` | Member B | Scout Agent |
+| `chain_analysis.md` | Member C | Analyst Agent |
+| `action_report.md` | Team Lead | Advisor Agent |
 
-## 品質要求
+## Quality Expectations
 
-Skill 是每個成員**最重要的產出之一**。
-Agent 的推理品質 = Skill 的品質。
-Code 可以用 AI 寫，但 Skill 的設計需要你自己想。
+Skills are one of the most important deliverables in this project.
+Agent reasoning quality depends directly on Skill quality.
+AI can help write code, but Skill design still requires human judgment.

@@ -29,11 +29,12 @@ import logging
 import os
 import re
 import time
-from typing import Any, Callable
-
-from crewai import Agent, Task
+from typing import TYPE_CHECKING, Any, Callable
 
 from config import SKILLS_DIR, SYSTEM_CONSTITUTION, get_llm
+
+if TYPE_CHECKING:
+    from crewai import Agent
 
 logger = logging.getLogger("ThreatHunter.security_guard")
 
@@ -201,6 +202,11 @@ _DANGER_UNIVERSAL: list[tuple[str, re.Pattern]] = [
     )),
     ("PATH_TRAVERSAL", re.compile(r"\.{2,}[/\\]")),
     ("XXE_ENTITY", re.compile(r"<!ENTITY|<!DOCTYPE\s+\w+\s+\[", re.IGNORECASE)),
+    # CVE-2021-44228: Log4Shell JNDI Lookup 任意語言通用偵測
+    ("LOG4SHELL_JNDI", re.compile(
+        r"\$\{jndi:\s*(?:ldap|rmi|dns|iiop|corba|nds|http)s?://",
+        re.IGNORECASE,
+    )),
 ]
 
 _DANGER_LANG: dict[str, list[tuple[str, re.Pattern]]] = {
@@ -208,10 +214,31 @@ _DANGER_LANG: dict[str, list[tuple[str, re.Pattern]]] = {
         ("PICKLE_UNSAFE", re.compile(r"pickle\.(?:loads?|dumps?)\s*\(", re.IGNORECASE)),
         ("YAML_UNSAFE", re.compile(r"yaml\.(?:load|unsafe_load)\s*\((?!.*Loader)", re.IGNORECASE | re.DOTALL)),
         ("EVAL_EXEC", re.compile(r"(?:eval|exec)\s*\(", re.IGNORECASE)),
+        # v5.3: 升級 SSRF_RISK — 支援更多觸發譜（f-string / 變數 / 字串拼接）
         ("SSRF_RISK", re.compile(
-            r"requests\.(?:get|post|put|delete|head)\s*\(.*?"
-            r"(?:request\.|user_input|args\.|params\.|input\(|f['\"])",
+            r"requests\.(?:get|post|put|delete|head|patch)\s*\("
+            r"(?:.*?(?:request\.|user_input|args\.|params\.|input\(|f['\"]|"
+            r"\+\s*\w+|\w+\s*\+)|[^)]{0,40}(?:url|uri|endpoint|target|host))",
             re.IGNORECASE | re.DOTALL,
+        )),
+        # v5.3: SSRF_VARIABLE — 純變數 URL 傳入（最常見型態）
+        ("SSRF_VARIABLE", re.compile(
+            r"(?:requests|httpx|urllib\.request)"
+            r"\s*\.(?:get|post|put|delete|head|patch|urlopen)\s*"
+            r"\(\s*(?!(?:['\"]https?://|b['\"]))[\w_]+\s*[,)]",
+            re.IGNORECASE,
+        )),
+        # v5.3: SSTI_RISK — Server-Side Template Injection (Jinja2/Mako/Flask)
+        ("SSTI_RISK", re.compile(
+            # Flask render_template_string 加上使用者輸入
+            r"render_template_string\s*\("
+            r"(?:.*?(?:\+|%|f['\"]|format\s*\(|request\.))",
+            re.IGNORECASE | re.DOTALL,
+        )),
+        # v5.3: SSTI_DIRECT — 直接拼接的 template string
+        ("SSTI_DIRECT", re.compile(
+            r"render_template_string\s*\([^)]*\+[^)]*\)",
+            re.IGNORECASE,
         )),
     ],
     "javascript": [
@@ -337,6 +364,9 @@ _PATTERNS = {
     ),
 }
 
+_HASH_COMMENT_LANGS = {"python", "ruby", "php", "unknown"}
+_SLASH_COMMENT_LANGS = {"javascript", "typescript", "java", "go", "c_cpp", "csharp", "php"}
+
 
 # ══════════════════════════════════════════════════════════════
 # 確定性提取引擎（核心 — 不依賴 LLM）
@@ -434,6 +464,143 @@ def extract_code_surface(code_input: str) -> dict:
         language, total_lines, len(functions), len(imports), len(patterns), len(hardcoded),
     )
     return result
+
+
+def _mask_inline_comments(code: str, language: str) -> str:
+    """
+    以空白遮罩單行註解，保留原始行數與欄位位置。
+
+    目的不是做完整 parser，而是避免 regex 掃描把純註解文字當成真實漏洞。
+    """
+    masked_lines = []
+    for line in code.splitlines(keepends=True):
+        masked_lines.append(_mask_line_comment(line, language))
+    return "".join(masked_lines)
+
+
+def _mask_line_comment(line: str, language: str) -> str:
+    """遮罩單行註解內容，但不破壞原本字元長度。"""
+    supports_hash = language in _HASH_COMMENT_LANGS
+    supports_slash = language in _SLASH_COMMENT_LANGS
+
+    in_single = False
+    in_double = False
+    escaped = False
+
+    for idx, ch in enumerate(line):
+        if escaped:
+            escaped = False
+            continue
+
+        if ch == "\\" and (in_single or in_double):
+            escaped = True
+            continue
+
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            continue
+
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            continue
+
+        if in_single or in_double:
+            continue
+
+        if supports_hash and ch == "#":
+            return line[:idx] + (" " * (len(line) - idx))
+
+        if supports_slash and ch == "/" and idx + 1 < len(line) and line[idx + 1] == "/":
+            return line[:idx] + (" " * (len(line) - idx))
+
+    return line
+
+
+def _iter_assignment_target_names(target: ast.AST) -> list[str]:
+    """展開 assignment target，抽出可追蹤的變數名。"""
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names = []
+        for elt in target.elts:
+            names.extend(_iter_assignment_target_names(elt))
+        return names
+    return []
+
+
+def _is_http_url_literal(node: ast.AST | None) -> bool:
+    """判斷節點是否為安全的常量 HTTP/HTTPS URL。"""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value.startswith(("http://", "https://"))
+    return False
+
+
+def _collect_python_safe_url_names(code: str) -> set[str]:
+    """找出被指派為常量 HTTP/HTTPS URL 的 Python 變數名。"""
+    safe_names: set[str] = set()
+    try:
+        tree = _safe_ast_parse(code)
+        if tree is None:
+            return safe_names
+    except (SyntaxError, ValueError):
+        return safe_names
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and _is_http_url_literal(node.value):
+            for target in node.targets:
+                safe_names.update(_iter_assignment_target_names(target))
+        elif isinstance(node, ast.AnnAssign) and _is_http_url_literal(node.value):
+            safe_names.update(_iter_assignment_target_names(node.target))
+    return safe_names
+
+
+def _collect_python_safe_yaml_lines(code: str) -> set[int]:
+    """找出使用顯式 Loader 的 yaml.load 呼叫所在行，避免 legacy 誤報。"""
+    safe_lines: set[int] = set()
+    try:
+        tree = _safe_ast_parse(code)
+        if tree is None:
+            return safe_lines
+    except (SyntaxError, ValueError):
+        return safe_lines
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute):
+            continue
+        if not isinstance(node.func.value, ast.Name):
+            continue
+        if node.func.value.id != "yaml" or node.func.attr != "load":
+            continue
+        if any(keyword.arg == "Loader" for keyword in node.keywords):
+            end_lineno = getattr(node, "end_lineno", node.lineno)
+            safe_lines.update(range(node.lineno, end_lineno + 1))
+    return safe_lines
+
+
+def _should_skip_python_pattern(
+    pattern_name: str,
+    matched_text: str,
+    line_no: int,
+    safe_url_names: set[str],
+    safe_yaml_lines: set[int],
+) -> bool:
+    """依 Python AST 上下文過濾已知誤報。"""
+    if pattern_name in {"YAML_UNSAFE", "YAML_UNSAFE_PATTERN"} and line_no in safe_yaml_lines:
+        return True
+
+    if pattern_name in {"SSRF_RISK", "SSRF_VARIABLE"}:
+        network_match = re.search(
+            r"(?:requests|httpx|urllib\.request)"
+            r"\s*\.(?:get|post|put|delete|head|patch|urlopen)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)",
+            matched_text,
+            re.IGNORECASE,
+        )
+        if network_match and network_match.group(1) in safe_url_names:
+            return True
+
+    return False
 
 
 # ── Python 專用：AST 提取（最精確）────────────────────────────
@@ -617,13 +784,20 @@ def _extract_patterns_multilang(code: str, lines: list[str], language: str) -> l
     2. 語言特定模式（如 Python 的 pickle/yaml，JS 的 prototype pollution）
     """
     patterns = []
+    scan_code = _mask_inline_comments(code, language)
+    safe_url_names: set[str] = set()
+    safe_yaml_lines: set[int] = set()
+
+    if language == "python":
+        safe_url_names = _collect_python_safe_url_names(code)
+        safe_yaml_lines = _collect_python_safe_yaml_lines(code)
 
     # 層 1：universal 模式（跳過 HARDCODED_SECRET — 另外在 _extract_hardcoded 處理）
     for pattern_name, regex in _DANGER_UNIVERSAL:
         if pattern_name == "HARDCODED_SECRET":
             continue
-        for match in regex.finditer(code):
-            line_no = code[:match.start()].count("\n") + 1
+        for match in regex.finditer(scan_code):
+            line_no = scan_code[:match.start()].count("\n") + 1
             snippet = match.group(0).strip()[:80]
             snippet = _strip_comment_injection(snippet)
             patterns.append({
@@ -636,8 +810,16 @@ def _extract_patterns_multilang(code: str, lines: list[str], language: str) -> l
     # 層 2：語言特定模式
     lang_patterns = _DANGER_LANG.get(language, [])
     for pattern_name, regex in lang_patterns:
-        for match in regex.finditer(code):
-            line_no = code[:match.start()].count("\n") + 1
+        for match in regex.finditer(scan_code):
+            line_no = scan_code[:match.start()].count("\n") + 1
+            if language == "python" and _should_skip_python_pattern(
+                pattern_name,
+                match.group(0),
+                line_no,
+                safe_url_names,
+                safe_yaml_lines,
+            ):
+                continue
             snippet = match.group(0).strip()[:80]
             snippet = _strip_comment_injection(snippet)
             patterns.append({
@@ -656,8 +838,16 @@ def _extract_patterns_multilang(code: str, lines: list[str], language: str) -> l
             continue
         if any(pn == pattern_name for pn, _ in lang_patterns):
             continue
-        for match in regex.finditer(code):
-            line_no = code[:match.start()].count("\n") + 1
+        for match in regex.finditer(scan_code):
+            line_no = scan_code[:match.start()].count("\n") + 1
+            if language == "python" and _should_skip_python_pattern(
+                pattern_name,
+                match.group(0),
+                line_no,
+                safe_url_names,
+                safe_yaml_lines,
+            ):
+                continue
             snippet = match.group(0).strip()[:80]
             snippet = _strip_comment_injection(snippet)
             patterns.append({
@@ -673,10 +863,11 @@ def _extract_patterns_multilang(code: str, lines: list[str], language: str) -> l
 def _extract_hardcoded(code: str, lines: list[str]) -> list[dict]:
     """偵測硬編碼密鑰（只記錄行號和類型，不回傳實際值）— 多語言通用"""
     hardcoded = []
+    scan_code = _mask_inline_comments(code, detect_language(code))
     # 使用 universal HARDCODED_SECRET 模式
     pattern = _DANGER_UNIVERSAL[2][1]  # HARDCODED_SECRET
-    for match in pattern.finditer(code):
-        line_no = code[:match.start()].count("\n") + 1
+    for match in pattern.finditer(scan_code):
+        line_no = scan_code[:match.start()].count("\n") + 1
         matched_text = match.group(0)
         type_match = re.match(r"(\w+)\s*[=:]", matched_text, re.IGNORECASE)
         secret_type = type_match.group(1).upper() if type_match else "UNKNOWN_SECRET"
@@ -755,7 +946,7 @@ _FALLBACK_SKILL = """
 # Agent 工廠（CrewAI 隔離 LLM）
 # ══════════════════════════════════════════════════════════════
 
-def build_security_guard_agent() -> Agent:
+def build_security_guard_agent() -> "Agent":
     """
     建立 Security Guard Agent（隔離 LLM；Quarantined LLM）。
 
@@ -769,6 +960,8 @@ def build_security_guard_agent() -> Agent:
     Returns:
         CrewAI Agent 實例（已設定隔離邊界）
     """
+    from crewai import Agent
+
     skill_content = _load_skill()
 
     # Security Guard 的 backstory 必須極其嚴格
@@ -875,6 +1068,7 @@ def run_security_guard(
     llm_confirmation: dict[str, Any] = {}
     try:
         agent = build_security_guard_agent()
+        from crewai import Crew, Process, Task
         task = Task(
             description=(
                 f"程式碼表面提取已完成。統計：\n"
@@ -890,7 +1084,6 @@ def run_security_guard(
             expected_output="隔離確認 JSON（不含任何安全推理）",
             agent=agent,
         )
-        from crewai import Crew, Process
         try:
             from checkpoint import recorder as _cp
             from config import get_current_model_name as _gcmn_sg
