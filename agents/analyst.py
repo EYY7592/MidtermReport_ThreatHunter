@@ -321,6 +321,15 @@ Step 1: Read historical memory
    Action: read_memory
    Action Input: analyst
 
+   !! CRITICAL MEMORY RULES — DO NOT SKIP !!
+   Memory contains CVEs from PREVIOUS scans (different packages/code contexts).
+   STRICT RULES:
+   a) ONLY use memory to check if a CVE from THIS scan was seen before → mark is_repeated=true
+   b) NEVER add CVEs from memory to the current analysis if Scout did NOT find them in THIS scan
+   c) If Scout reports 0 CVEs (empty vulnerabilities[]), analysis[] has 0 CVE entries
+   d) Old scan data (e.g. Redis, Python2, Django from 6+ months ago) must be IGNORED entirely
+   e) A CVE is REPEATED only if: Scout found it NOW + it appears in memory history
+
 Step 2: Parse the Scout intelligence from context
    Extract all CVE entries from the vulnerabilities array.
    Note each CVE's cve_id, cvss_score, severity, package, description, and is_new.
@@ -345,6 +354,18 @@ Step 5: Chain analysis
    - in_kev + exploit -> CRITICAL
    - chain alone -> at least original severity
    Risk can ONLY escalate, never downgrade.
+
+   !! CODE-LEVEL PATTERNS (v4.0) !!
+   If the Scout output contains a `code_patterns` field, you MUST also analyze it:
+   - Each entry has: finding_id (CODE-NNN), pattern_type, cwe_id, owasp_category,
+     severity, snippet (up to 200 chars), line_no
+   - Map each code_pattern to its OWASP attack chain (use the table in your Skill SOP)
+   - Include them in your analysis[] alongside CVE findings
+   - Use finding_id starting with CODE- (not CVE-) for these entries
+   - CRITICAL code patterns (SQL_INJECTION, CMD_INJECTION, EVAL_EXEC, PICKLE_UNSAFE,
+     PROTOTYPE_POLLUTION): always add to analysis with severity=CRITICAL
+   - HIGH code patterns (INNERHTML_XSS, SSRF_RISK, HARDCODED_SECRET, PATH_TRAVERSAL,
+     YAML_UNSAFE): add to analysis with severity=HIGH
 
 Step 6: Risk scoring
    risk_score = min(100, sum of (cvss x weight))
@@ -389,16 +410,30 @@ Below is the Scout Agent's intelligence report:
 
 === YOUR GOAL ===
 1. Read your historical memory using the `read_memory` tool.
-2. Parse the Scout JSON above to extract all CVEs.
-3. Once (and ONLY once) you have the tool result, output your Final Answer in this JSON structure:
+2. Parse the Scout JSON above to extract:
+   a) ALL CVEs from the `vulnerabilities` array
+   b) ALL code-level findings from the `code_patterns` array (if present)
+
+!! CRITICAL MEMORY RULES !!
+- Memory is from PREVIOUS scans. Only use it to mark is_repeated=true for CVEs found in THIS scan
+- NEVER add CVEs from memory that are NOT in the current vulnerabilities[] list
+- If vulnerabilities[] is empty, parsed_cves must be empty too
+
+3. Output your Final Answer in this JSON structure:
 {{
   "historical_risk_score": <number or null>,
   "parsed_cves": [
     {{ "cve_id": "...", "package": "...", "cvss_score": 0.0, "severity": "...", "description": "...", "is_new": true }}
   ],
+  "code_patterns": [
+    {{ "finding_id": "CODE-001", "pattern_type": "EVAL_EXEC", "cwe_id": "CWE-95", "owasp_category": "A03:2021-Injection", "severity": "CRITICAL", "snippet": "eval(data)", "line_no": 14, "language": "python" }}
+  ],
   "tech_stack": ["..."],
   "total_cves": <number>
 }}
+
+If no code_patterns exist in Scout output, use an empty array [].
+Copy ALL code_patterns entries from Scout output EXACTLY as-is into your output.
 
 === ⛔ CRITICAL RULE FOR FREE LLMS ⛔ ===
 You MUST NOT generate the JSON response right now.
@@ -407,8 +442,9 @@ If you generate the Final Answer JSON without calling the tool, you will be pena
 Stop thinking about the Final Answer and output your thought and action to call `read_memory` immediately!
 """,
         expected_output=(
-            "JSON with historical_risk_score (number or null) and "
-            "parsed_cves array containing all CVEs from Scout intelligence."
+            "JSON with historical_risk_score (number or null), "
+            "parsed_cves array containing all CVEs from Scout intelligence, "
+            "AND code_patterns array (empty [] if none)."
         ),
         agent=agent,
     )
@@ -423,36 +459,69 @@ def _create_analysis_task(agent: Agent) -> Task:
     return Task(
         description="""You are the Analyst Agent performing Step 2 of 3: Verification & Analysis.
 
-The previous task gave you parsed CVE data. Now you must verify and analyze each CVE.
+The previous task gave you parsed CVE data AND code_patterns. Now you must verify and analyze both.
 
-=== YOUR GOAL ===
+=== PART A: CVE Analysis (if parsed_cves is non-empty) ===
 1. Use `check_cisa_kev` tool to check ALL CVE IDs with cvss_score >= 7.0 (comma-separated).
 2. Use `search_exploits` tool for each CVE where in_kev=true OR cvss_score >= 9.0.
-3. Perform chain analysis using your logic (risk can only escalate).
-4. Once you have ALL tool results, output your Final Answer in this JSON structure:
+3. Perform chain analysis (risk can only escalate).
+
+=== PART B: Code Pattern Analysis (if code_patterns is non-empty) ===
+For each code_pattern entry in the previous task output:
+- Map pattern_type to OWASP attack chain (e.g. EVAL_EXEC → A03:2021-Injection → Arbitrary Code Execution)
+- Assign risk using CWE severity:
+  CRITICAL (cvss_equivalent=9.0): EVAL_EXEC, EVAL_USAGE, SQL_INJECTION, CMD_INJECTION, PICKLE_UNSAFE,
+                                   PROTOTYPE_POLLUTION, DESERIALIZE_UNSAFE
+  HIGH (cvss_equivalent=7.5):     INNERHTML_XSS, SSRF_RISK, HARDCODED_SECRET, PATH_TRAVERSAL, YAML_UNSAFE
+- Do NOT call check_cisa_kev for CODE- findings (they are code patterns, not CVEs)
+- Include CODE- findings in analysis[] with these fields:
+  finding_id, pattern_type, cwe_id, owasp_category, severity, snippet, line_no,
+  original_cvss (use cvss_equivalent above), adjusted_risk, in_cisa_kev=false,
+  exploit_available=false (deterministic scan, no external lookup needed),
+  chain_risk, reasoning
+
+=== YOUR OUTPUT ===
+Once you have ALL tool results (or if no CVEs, directly from code_patterns), output:
 {
   "analysis": [
     {
-      "cve_id": "...",
+      "cve_id": "CVE-2024-XXXX",   <-- for CVE findings
       "original_cvss": 9.8,
       "adjusted_risk": "CRITICAL",
       "in_cisa_kev": true,
       "exploit_available": true,
       "chain_risk": { "is_chain": true, "chain_with": ["..."], "chain_description": "...", "confidence": "HIGH" },
       "reasoning": "..."
+    },
+    {
+      "finding_id": "CODE-001",     <-- for code pattern findings
+      "cve_id": null,
+      "pattern_type": "EVAL_EXEC",
+      "cwe_id": "CWE-95",
+      "owasp_category": "A03:2021-Injection",
+      "severity": "CRITICAL",
+      "snippet": "eval(data)",
+      "line_no": 14,
+      "original_cvss": 9.0,
+      "adjusted_risk": "CRITICAL",
+      "in_cisa_kev": false,
+      "exploit_available": false,
+      "chain_risk": { "is_chain": true, "chain_with": [], "chain_description": "eval() with user-controlled input enables remote code execution", "confidence": "HIGH" },
+      "reasoning": "eval(data) executes arbitrary Python code. If data comes from user input (network, file, env), this is a direct RCE vector. CWE-95: Neutralization of Directives in Dynamically Evaluated Code."
     }
   ]
 }
 
-=== ⛔ CRITICAL RULE FOR FREE LLMS ⛔ ===
-You MUST NOT generate the JSON response right now.
-You MUST call the `check_cisa_kev` tool FIRST!
-DO NOT FABRICATE DATA. 
-Stop thinking about the Final Answer and output your thought and action to call the tools immediately!
+=== ⛔ CRITICAL RULES ⛔ ===
+- If parsed_cves is empty but code_patterns is non-empty: ONLY analyze code_patterns, no CVE tool calls
+- If both are present: analyze both
+- DO NOT fabricate CVE IDs
+- DO NOT call check_cisa_kev for CODE- findings
+- Stop thinking and call tools immediately!
 """,
         expected_output=(
-            "JSON with analysis array. Each entry has: cve_id, original_cvss, "
-            "adjusted_risk, in_cisa_kev, exploit_available, chain_risk, reasoning."
+            "JSON with analysis array containing BOTH CVE findings (with KEV/exploit data) "
+            "AND code pattern findings (finding_id starting CODE-, with chain_risk and reasoning)."
         ),
         agent=agent,
     )
@@ -479,8 +548,10 @@ def _create_scoring_task(agent: Agent) -> Task:
 === YOUR GOAL ===
 
 1. Look at the analysis results from the previous task context.
-2. Calculate risk_score: min(100, sum of (each CVE's cvss_score × weight))
+2. Calculate risk_score: min(100, sum of (each finding's cvss_equivalent x weight))
    Weight by adjusted_risk: CRITICAL=3, HIGH=2, MEDIUM=1, LOW=0.5
+   - For CODE- findings: CRITICAL code pattern = cvss_equivalent 9.0, HIGH = 7.5
+   - For CVE findings: use original_cvss
 3. Calculate risk_trend: compare with historical_risk_score from task 1 context.
    If no history, use "+0". Format: "+7" or "-3" or "+0".
 4. Call `write_memory` tool with these EXACT arguments:
@@ -493,7 +564,7 @@ def _create_scoring_task(agent: Agent) -> Task:
   "scan_id": "{scan_id}",
   "risk_score": <calculated number 0-100>,
   "risk_trend": "<+N or -N or +0>",
-  "analysis": <copy the analysis array from previous task context>
+  "analysis": <copy the COMPLETE analysis array from previous task context, including both CVE and CODE- entries>
 }}
 
 === ⛔ RULES ⛔ ===
@@ -501,11 +572,12 @@ def _create_scoring_task(agent: Agent) -> Task:
 - Do NOT call check_cisa_kev (you don't have it).
 - Do NOT call search_exploits (you don't have it).
 - DO call write_memory FIRST, then output Final Answer.
+- INCLUDE all CODE- findings from analysis[] in your final output.
 - Final Answer must be pure JSON only. No markdown, no explanation.
 """,
         expected_output=(
             "Pure JSON: scan_id, risk_score (0-100), risk_trend, "
-            "and complete analysis array from previous task."
+            "and complete analysis array from previous task (including CODE- findings)."
         ),
         agent=agent,
     )
@@ -640,7 +712,7 @@ def _harness_filter_ancient_cves(output: dict[str, Any]) -> None:
       3. Trivy/Grype 都有類似的年份過濾/suppress 機制
     """
     for item in output.get("analysis", []):
-        cve_id = item.get("cve_id", "")
+        cve_id = item.get("cve_id") or ""
         year_m = re.match(r"CVE-(\d{4})-", cve_id)
         if not year_m:
             continue
@@ -882,7 +954,7 @@ def run_analyst_pipeline(scout_output: str | dict, input_type: str = "pkg") -> d
 
     # ── 確保 analysis 中每個項目都有 chain_risk ────────────────
     for item in output.get("analysis", []):
-        cve_id = item.get("cve_id", "")
+        cve_id = item.get("cve_id") or ""
         orig_severity = scout_vulns.get(cve_id, "LOW")
         adj_risk = item.get("adjusted_risk", orig_severity)
         

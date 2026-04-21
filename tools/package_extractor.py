@@ -104,6 +104,43 @@ NODEJS_BUILTIN_BLACKLIST: frozenset[str] = frozenset({
     "trace_events", "diagnostics_channel", "node:fs", "node:path",
 })
 
+# Go 標準庫黑名單（不應視為第三方套件查詢 NVD）
+# 來源：https://pkg.go.dev/std (Go 1.22)
+# 格式：Go import path 的頂層 + 完整路徑（因為 Go 用 / 不用 .）
+GO_STDLIB_BLACKLIST: frozenset[str] = frozenset({
+    # 頂層模組名（經過 _normalize_package_name 後的結果）
+    "fmt", "log", "os", "io", "net", "sync", "time", "math",
+    "sort", "strings", "strconv", "bytes", "errors", "context",
+    "flag", "regexp", "reflect", "runtime", "unsafe", "builtin",
+    "testing", "debug", "embed", "encoding", "archive", "compress",
+    "crypto", "database", "image", "index", "mime", "path",
+    "plugin", "text", "unicode", "html", "hash", "container",
+    "expvar", "go", "internal", "maps", "slices", "cmp", "iter",
+    # 常見完整路徑（_normalize_package_name 只取 / 前第一段，
+    # 但若 Go import regex 保留完整路徑則需要匹配）
+    "net/http", "net/url", "os/exec", "os/signal", "io/ioutil",
+    "encoding/json", "encoding/xml", "encoding/csv", "encoding/base64",
+    "crypto/tls", "crypto/sha256", "crypto/md5", "crypto/rand",
+    "database/sql", "html/template", "text/template", "path/filepath",
+    "log/slog", "sync/atomic", "testing/fstest",
+})
+
+# Java JDK 標準庫黑名單（不應視為第三方套件查詢 NVD）
+# import java.io.ObjectInputStream、import java.sql.Statement 均是 JDK 內建
+# 對這些套件查詢 NVD 只會得到雜訊，或導致 Intel Fusion forceRun 失敗
+JAVA_STDLIB_BLACKLIST: frozenset[str] = frozenset({
+    # 頂層前綴：java.* 和 javax.*
+    "java", "javax",
+    # 常見完整子套件（防止 module_raw 直接比對）
+    "java.io", "java.sql", "java.lang", "java.util",
+    "java.net", "java.nio", "java.security", "java.math",
+    "java.time", "java.text", "java.beans", "java.rmi",
+    "java.awt", "java.applet", "javax.swing", "java.swing",
+    "java.management", "javax.sql", "javax.net",
+    "javax.security", "javax.crypto", "javax.xml", "javax.naming",
+    # Android / Kotlin 內建
+    "android", "dalvik", "kotlin",
+})
 
 def _is_valid_package_name(name: str) -> bool:
     """
@@ -202,6 +239,16 @@ def extract_third_party_packages(
                 logger.debug("[PKG_EX] Filtered Node.js builtin: %s", top_level)
                 continue
 
+            # 過濾 Go 標準庫（完整路徑 + 頂層模組）
+            if module_raw.strip() in GO_STDLIB_BLACKLIST or top_level in GO_STDLIB_BLACKLIST:
+                logger.debug("[PKG_EX] Filtered Go stdlib: %s (raw: %s)", top_level, module_raw)
+                continue
+
+            # 過濾 Java JDK 標準庫（java.io, java.sql, java.lang 等均為 JDK 內建）
+            if top_level in JAVA_STDLIB_BLACKLIST or module_raw.strip() in JAVA_STDLIB_BLACKLIST:
+                logger.debug("[PKG_EX] Filtered Java stdlib: %s (raw: %s)", top_level, module_raw)
+                continue
+
             # 過濾不合理名稱
             if not _is_valid_package_name(top_level):
                 logger.debug("[PKG_EX] Filtered invalid name: %s", top_level)
@@ -265,3 +312,104 @@ def format_packages_for_intel_fusion(packages: list[str]) -> str:
         逗號分隔的套件字串
     """
     return ", ".join(packages) if packages else ""
+
+
+# ══════════════════════════════════════════════════════════════════
+# 版本感知提取（v5.3 新增）
+# ══════════════════════════════════════════════════════════════════
+
+def extract_packages_with_versions(source_text: str, filename: str = "") -> list[dict]:
+    """
+    從依賴文件（requirements.txt / package.json / pom.xml / Pipfile）
+    提取套件名稱 + 版本號。
+
+    若版本未知（例如直接從 import 提取），
+    回傳 version=None, version_known=False。
+
+    Args:
+        source_text: 文件內容
+        filename: 文件名稱（用於判斷格式）
+
+    Returns:
+        list[dict]: [{"package": "requests", "version": "2.28.0", "version_known": True}, ...]
+    """
+    results = []
+    fname = filename.lower()
+
+    # ── requirements.txt ──────────────────────────────────────────
+    if "requirements" in fname or fname.endswith(".txt"):
+        for line in source_text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            # requests==2.28.0 / requests>=2.28.0 / requests~=2.28.0
+            m = re.match(r"^([a-zA-Z0-9_.-]+)\s*(?:==|>=|<=|~=|!=|>|<)\s*([^\s;]+)", line)
+            if m:
+                pkg, ver = m.group(1), m.group(2)
+                results.append({"package": pkg.lower(), "version": ver, "version_known": True})
+            else:
+                # 無版本號的行（如 requests）
+                m2 = re.match(r"^([a-zA-Z0-9_.-]+)\s*$", line)
+                if m2:
+                    results.append({"package": m2.group(1).lower(), "version": None, "version_known": False})
+
+    # ── package.json ──────────────────────────────────────────────
+    elif fname.endswith("package.json"):
+        import json as _json
+        try:
+            data = _json.loads(source_text)
+            for section in ["dependencies", "devDependencies"]:
+                for pkg, ver in data.get(section, {}).items():
+                    # 清除 ^, ~, >= 前綴
+                    clean_ver = re.sub(r"^[^0-9]*", "", ver) if ver else None
+                    known = bool(clean_ver and re.match(r"^\d", clean_ver))
+                    results.append({"package": pkg.lower(), "version": clean_ver if known else ver, "version_known": known})
+        except Exception:
+            pass
+
+    # ── pom.xml（Maven）──────────────────────────────────────────
+    elif fname.endswith("pom.xml"):
+        # 簡單提取 <artifactId> + 對應 <version>
+        deps = re.findall(
+            r"<dependency>.*?<artifactId>([^<]+)</artifactId>.*?(?:<version>([^<]+)</version>)?.*?</dependency>",
+            source_text,
+            re.DOTALL,
+        )
+        for art, ver in deps:
+            if art.strip() and not art.strip().startswith("$"):
+                results.append({
+                    "package": art.strip().lower(),
+                    "version": ver.strip() if ver and not ver.strip().startswith("$") else None,
+                    "version_known": bool(ver and not ver.strip().startswith("$")),
+                })
+
+    # ── Pipfile ────────────────────────────────────────────────────
+    elif fname == "pipfile" or fname.endswith("pipfile"):
+        for line in source_text.splitlines():
+            m = re.match(r'''(?x)^([a-zA-Z0-9_.\-]+)\s*=\s*["\']?([^"\' \t]+)["\']?''', line.strip())
+            if m:
+                pkg, ver = m.group(1), m.group(2)
+                clean = re.sub(r"^[^0-9]*", "", ver)
+                known = bool(clean and re.match(r"^\d", clean))
+                results.append({"package": pkg.lower(), "version": clean if known else ver, "version_known": known})
+
+    return results
+
+
+def build_version_disclaimer(package: str, version: str | None) -> str:
+    """
+    為 Intel Fusion 的 CVE 輸出生成版本免責聲明。
+
+    Args:
+        package: 套件名稱
+        version: 版本號（None 表示未知）
+
+    Returns:
+        免責聲明字串（若版本已知則為空字串）
+    """
+    if version:
+        return ""  # 版本已知，無需免責聲明
+    return (
+        f"[版本未知] 無法確認 {package} 的確切版本。"
+        f"以下 CVE 為該套件的所有已知漏洞，請確認你的版本是否落在受影響範圍內再採取行動。"
+    )

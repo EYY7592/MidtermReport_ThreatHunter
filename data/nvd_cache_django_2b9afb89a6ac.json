@@ -1,5 +1,5 @@
 {
-  "package": "django 4.2",
+  "package": "django",
   "source": "NVD",
   "count": 10,
   "vulnerabilities": [
@@ -9,7 +9,10 @@
       "severity": "HIGH",
       "description": "bin/compile-messages.py in Django 0.95 does not quote argument strings before invoking the msgfmt program through the os.system function, which allows attackers to execute arbitrary commands via shell metacharacters in a (1) .po or (2) .mo file.",
       "published": "2007-01-23T00:28:00.000",
-      "affected_versions": "0.95"
+      "affected_versions": "0.95",
+      "cpe_vendors": [
+        "django_project:django"
+      ]
     },
     {
       "cve_id": "CVE-2007-5828",
@@ -17,7 +20,10 @@
       "severity": "MEDIUM",
       "description": "Cross-site request forgery (CSRF) vulnerability in the admin panel in Django 0.96 allows remote attackers to change passwords of arbitrary users via a request to admin/auth/user/1/password/.  NOTE: this issue has been disputed by Debian, since product documentation includes a recommendation for a CSRF protection module that is included with the product.  However, CVE considers this an issue because the default configuration does not use this module",
       "published": "2007-11-05T19:46:00.000",
-      "affected_versions": "0.96"
+      "affected_versions": "0.96",
+      "cpe_vendors": [
+        "django_project:django"
+      ]
     },
     {
       "cve_id": "CVE-2007-0405",
@@ -25,7 +31,10 @@
       "severity": "MEDIUM",
       "description": "The LazyUser class in the AuthenticationMiddleware for Django 0.95 does not properly cache the user name across requests, which allows remote authenticated users to gain the privileges of a different user.",
       "published": "2007-01-23T00:28:00.000",
-      "affected_versions": "0.95"
+      "affected_versions": "0.95",
+      "cpe_vendors": [
+        "django_project:django"
+      ]
     },
     {
       "cve_id": "CVE-2008-3909",
@@ -33,7 +42,10 @@
       "severity": "MEDIUM",
       "description": "The administration application in Django 0.91, 0.95, and 0.96 stores unauthenticated HTTP POST requests and processes them after successful authentication occurs, which allows remote attackers to conduct cross-site request forgery (CSRF) attacks and delete or modify data via unspecified requests.",
       "published": "2008-09-04T17:41:00.000",
-      "affected_versions": "< 0.91.3, < 0.95.4, < 0.96.3"
+      "affected_versions": "< 0.91.3, < 0.95.4, < 0.96.3",
+      "cpe_vendors": [
+        "djangoproject:django"
+      ]
     },
     {
       "cve_id": "CVE-2009-2659",
@@ -41,7 +53,10 @@
       "severity": "MEDIUM",
       "description": "The Admin media handler in core/servers/basehttp.py in Django 1.0 and 0.96 does not properly map URL requests to expected \"static media files,\" which allows remote attackers to conduct directory traversal attacks and read arbitrary files via a crafted URL.",
       "published": "2009-08-04T16:30:00.437",
-      "affected_versions": "0.96, 1.0"
+      "affected_versions": "0.96, 1.0",
+      "cpe_vendors": [
+        "django_project:django"
+      ]
     },
     {
       "cve_id": "CVE-2009-3695",
@@ -49,7 +64,10 @@
       "severity": "MEDIUM",
       "description": "Algorithmic complexity vulnerability in the forms library in Django 1.0 before 1.0.4 and 1.1 before 1.1.1 allows remote attackers to cause a denial of service (CPU consumption) via a crafted (1) EmailField (email address) or (2) URLField (URL) that triggers a large amount of backtracking in a regular expression.",
       "published": "2009-10-13T10:30:00.767",
-      "affected_versions": "1.0, 1.1"
+      "affected_versions": "1.0, 1.1",
+      "cpe_vendors": [
+        "djangoproject:django"
+      ]
     },
     {
       "cve_id": "CVE-2008-2302",
@@ -57,7 +75,10 @@
       "severity": "MEDIUM",
       "description": "Cross-site scripting (XSS) vulnerability in the login form in the administration application in Django 0.91 before 0.91.2, 0.95 before 0.95.3, and 0.96 before 0.96.2 allows remote attackers to inject arbitrary web script or HTML via the URI of a certain previous request.",
       "published": "2008-05-23T15:32:00.000",
-      "affected_versions": "0.91, 0.95, 0.96"
+      "affected_versions": "0.91, 0.95, 0.96",
+      "cpe_vendors": [
+        "django_project:django"
+      ]
     },
     {
       "cve_id": "CVE-2010-3082",
@@ -65,7 +86,10 @@
       "severity": "MEDIUM",
       "description": "Cross-site scripting (XSS) vulnerability in Django 1.2.x before 1.2.2 allows remote attackers to inject arbitrary web script or HTML via a csrfmiddlewaretoken (aka csrf_token) cookie.",
       "published": "2010-09-14T19:00:02.953",
-      "affected_versions": "1.2.1, 1.2.1, 1.2.2"
+      "affected_versions": "1.2.1, 1.2.1, 1.2.2",
+      "cpe_vendors": [
+        "djangoproject:django"
+      ]
     },
     {
       "cve_id": "CVE-2010-4534",
@@ -73,7 +97,10 @@
       "severity": "MEDIUM",
       "description": "The administrative interface in django.contrib.admin in Django before 1.1.3, 1.2.x before 1.2.4, and 1.3.x before 1.3 beta 1 does not properly restrict use of the query string to perform certain object filtering, which allows remote authenticated users to obtain sensitive information via a series of requests containing regular expressions, as demonstrated by a created_by__password__regex parameter.",
       "published": "2011-01-10T20:00:16.877",
-      "affected_versions": "<= 1.1.2, 0.91, 0.95"
+      "affected_versions": "<= 1.1.2, 0.91, 0.95",
+      "cpe_vendors": [
+        "djangoproject:django"
+      ]
     },
     {
       "cve_id": "CVE-2007-5712",
@@ -81,8 +108,12 @@
       "severity": "LOW",
       "description": "The internationalization (i18n) framework in Django 0.91, 0.95, 0.95.1, and 0.96, and as used in other products such as PyLucid, when the USE_I18N option and the i18n component are enabled, allows remote attackers to cause a denial of service (memory consumption) via many HTTP requests with large Accept-Language headers.",
       "published": "2007-10-30T19:46:00.000",
-      "affected_versions": "0.91, 0.95, 0.95.1"
+      "affected_versions": "0.91, 0.95, 0.95.1",
+      "cpe_vendors": [
+        "django_project:django"
+      ]
     }
   ],
-  "_cached_at": 1776431867.792047
+  "search_mode": "keyword",
+  "_cached_at": 1776747006.188171
 }

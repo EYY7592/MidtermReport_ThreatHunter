@@ -120,12 +120,33 @@ L0_PATTERNS: list[tuple[str, str, str]] = [
     ),
     (
         "prompt_override",
-        r"(?i)(ignore\s+previous\s+instructions?|forget\s+all\s+previous|you\s+are\s+now\s+a|act\s+as\s+(a|an)\s+(different|new|evil|unrestricted))",
+        r"(?i)("
+        r"ignore\s+(all\s+)?previous\s+instructions?"
+        r"|forget\s+(all\s+|your\s+)?(?:previous|guidelines?|rules?|instructions?)"
+        r"|you\s+are\s+now\s+(a|an|in)"
+        r"|act\s+as\s+(a|an)\s+(different|new|evil|unrestricted)"
+        r"|(?:ignore|bypass|disable|override)\s+(?:your\s+)?(?:constitution|guidelines?|safety|rules?|restrictions?)"
+        r"|(?:new\s+)?(?:directive|instruction|order|command)\s*:\s*(?:fabricate|ignore|output|bypass)"
+        r"|\[\[SYSTEM\]\]|\[\[INST\]\]"
+        r"|<<SYS>>|<</SYS>>"
+        r")",
         "Prompt Injection 嘗試（OWASP LLM01）",
     ),
     (
         "jailbreak",
-        r"(?i)(DAN|jailbreak|do\s+anything\s+now|no\s+restrictions?\s+mode|developer\s+mode)",
+        r"(?i)("
+        r"\bDAN\b"
+        r"|jailbreak"
+        r"|do\s+anything\s+now"
+        r"|no\s+restrictions?\s+mode"
+        r"|developer\s+mode"
+        r"|unrestricted\s+mode"
+        r"|pretend\s+(you\s+have\s+no|to\s+be)"
+        r"|unethical\s+twin"
+        r"|without\s+(?:moral|ethical|safety)\s+(?:limits?|filters?|restrictions?)"
+        r"|(?:constitution|guidelines)\s+(?:is\s+)?disabled"
+        r"|\[INST\]\s*<<SYS>>"
+        r")",
         "越獄嘗試（OWASP LLM01）",
     ),
 ]
@@ -136,6 +157,10 @@ BLOCKLIST_PATTERNS: list[tuple[str, str]] = [
     (r"(?i)\bDROP\s+TABLE\b",            "偵測到 DROP TABLE 語句"),
     (r"(?i)\bxp_cmdshell\b",             "SQL Server 命令執行指令"),
     (r"(?i)\bSHUTDOWN\s+WITH\s+NOWAIT\b", "資料庫關機指令"),
+    (r"(?i)\b(\d+|'[^']*')\s+OR\s+('?\d+'?\s*=\s*'?\d+'?|\w+\s*=\s*\w+)\s*(UNION|--)",
+     "SQL Boolean-based OR 注入（高信心）"),
+    (r"(?i)UNION\s+(?:ALL\s+)?SELECT\s+\*\s+FROM\s+\w+",
+     "SQL UNION SELECT 注入（高信心）"),
 ]
 
 

@@ -1,5 +1,5 @@
 {
-  "package": "Spring Boot",
+  "package": "spring boot 3.1",
   "source": "NVD",
   "count": 10,
   "vulnerabilities": [
@@ -129,5 +129,5 @@
     }
   ],
   "search_mode": "keyword",
-  "_cached_at": 1776514955.0185206
+  "_cached_at": 1776602863.4152148
 }

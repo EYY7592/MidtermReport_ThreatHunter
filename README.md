@@ -171,60 +171,85 @@ ThreatHunter:
 ThreatHunter/
 ├── main.py                    # Pipeline Entrypoint (Orchestrator driven)
 ├── config.py                  # LLM configs + API Keys + Degradation Waterfall
-├── checkpoint.py              # JSONL event persistence layer
+├── checkpoint.py              # JSONL event persistence + Checkpoint recorder API
 ├── input_sanitizer.py         # L0 input sanitation (Python core + Rust bindings)
+├── build_nvd_cache.py         # Offline NVD cache builder utility
 │
 ├── agents/                    # Multi-Agent Definitions (7 Agents)
-│   ├── orchestrator.py        # Dynamic Routing (Path A/B/C/D)
-│   ├── security_guard.py      # Code Static Analysis (AST + Regex)
-│   ├── intel_fusion.py        # 6D Intelligence Aggregation
-│   ├── scout.py               # CVE Threat Scouting
+│   ├── orchestrator.py        # Dynamic Path Routing (A: PKG / B: Code / C: Config / D: Refine)
+│   ├── security_guard.py      # Deterministic Code Static Analysis (AST + Regex, 20+ patterns)
+│   ├── intel_fusion.py        # 6D Intelligence Aggregation (NVD/OTX/KEV/EPSS/GHSA/Exploit)
+│   ├── scout.py               # CVE Threat Scouting (ReAct + memory-aware)
 │   ├── analyst.py             # Chain Vulnerability Reasoning
-│   ├── critic.py              # Adversarial Debate & Review
-│   └── advisor.py             # Final Action Plan Generation
+│   ├── critic.py              # Adversarial Debate & Authenticity Review
+│   └── advisor.py             # Final Action Report
+│                              #   Harness Layer 4.5: Constitution CI-1/CI-2 Guard
+│                              #   (CODE-pattern blocked from URGENT, moved to code_patterns_summary)
 │
-├── tools/                     # CrewAI @tool functions (8 Tools)
-│   ├── nvd_tool.py            # NVD API (Primary CVE DB / CPE Search)
+├── tools/                     # CrewAI @tool functions (10 Tools)
+│   ├── nvd_tool.py            # NVD API (Primary CVE DB / CPE-aware search)
 │   ├── otx_tool.py            # AlienVault OTX (Threat Intelligence)
 │   ├── kev_tool.py            # CISA KEV (Known Exploited Vulnerabilities)
-│   ├── epss_tool.py           # EPSS (Exploit Prediction Scoring)
-│   ├── exploit_tool.py        # GitHub Exploit DB / PoCs
+│   ├── epss_tool.py           # EPSS (Exploit Prediction Scoring System)
+│   ├── exploit_tool.py        # GitHub Exploit DB / PoC Finder
 │   ├── ghsa_tool.py           # GitHub Security Advisory
+│   ├── osv_tool.py            # OSV (Open Source Vulnerabilities, ecosystem-aware)
+│   ├── attck_tool.py          # MITRE ATT&CK TTP Mapping
 │   ├── memory_tool.py         # Hybrid Memory Persistence (JSON + LlamaIndex)
-│   └── package_extractor.py   # Extract package names from source ast imports
+│   └── package_extractor.py   # Extract 3rd-party packages from source AST imports
 │
 ├── sandbox/                   # Multi-Layer Sandbox Security (Phase 1, 3)
-│   ├── ast_guard.py           # AST Bomb DoS Protection
-│   ├── memory_sanitizer.py    # Memory Poison & Hallucination Defense
-│   ├── docker_sandbox.py      # Docker Runner API for total isolation
-│   ├── Dockerfile             # Minimal Pipeline Container Definition
-│   └── seccomp-profile.json   # Syscall allowlist
+│   ├── ast_guard.py           # L1 AST Bomb DoS Protection (50k node limit, 3s timeout)
+│   ├── memory_sanitizer.py    # L3 Memory Poison & Hallucination Scan
+│   ├── docker_sandbox.py      # L2 Docker Runner API for full pipeline isolation
+│   ├── sandbox_runner.py      # Sandbox execution entrypoint (inside container)
+│   ├── Dockerfile             # Minimal pipeline container (non-root, read-only)
+│   └── seccomp-profile.json   # Linux syscall allowlist
 │
-├── rust/                      # Rust High-Performance Security Layer (Phase 2, 4)
-│   ├── sanitizer/             # Regex DFA engine & hashes
-│   ├── json_validator/        # JSON payload verification
-│   ├── memory_validator/      # Swift memory screening
-│   ├── url_builder/           # SSRF protection and API routing constraints
-│   ├── prompt_sandbox/        # Host PyO3 wrapper for WASM guest
-│   └── prompt_sandbox_guest/  # WASM Guest runtime for malicious payload filter
+├── rust/                      # Rust High-Performance Security Layer (Phase 2)
+│   ├── sanitizer/             # L0 Input Sanitizer (regex DFA, SHA-256, ReDoS O(n))
+│   ├── json_validator/        # JSON Bomb Protection (depth ≤ 32)
+│   ├── memory_validator/      # Memory Hallucination Screening (Rust speed)
+│   ├── url_builder/           # Safe URL Builder (SSRF prevention, allowlist)
+│   └── prompt_sandbox/        # PyO3 host wrapper for WASM guest isolation
 │
-├── skills/                    # Agent SOP System (20+ markdown directives)
-│   ├── threat_intel.md...     # Path-aware instructions (Pkg/Code/AI/Config)
+├── skills/                    # Agent SOP Directives (path-aware .md files)
+│   ├── threat_intel.md        # Scout: Threat intelligence SOP
+│   ├── source_code_audit.md   # Security Guard: Code audit SOP
+│   ├── chain_analysis.md      # Analyst: Chain vulnerability reasoning SOP
+│   ├── debate_sop.md          # Critic: Adversarial debate SOP
+│   ├── code_action_report.md  # Advisor: Code findings action report (v5.1 Anti-Fabrication)
+│   ├── intel_fusion.md        # Intel Fusion: 6D weighting SOP
+│   ├── orchestrator.md        # Orchestrator: Path routing SOP
+│   ├── security_guard.md      # Security Guard: Pattern match SOP
 │   └── skill_loader.py        # Hot-reload skill caching system
 │
-├── harness/                   # Harness Engineering Architecture
-│   ├── context/               # Layer 1: Core system Context rules
-│   ├── constraints/           # Layer 2: Architectural boundary definitions
-│   └── entropy/               # Layer 3: Entropy management & repair loop
+├── harness/                   # Harness Engineering 3-Pillar Architecture
+│   ├── context/               # Layer 1: System Context Rules
+│   ├── constraints/           # Layer 2: Boundary definitions + arch_linter.py
+│   └── entropy/               # Layer 3: Entropy scanner + UNTIL CLEAN loop
 │
-├── memory/                    # Persistent Agent Memory and Indexes
-├── data/                      # Offline API caches (NVD/CISA)
-├── ui/                        # Web Interface and Server
-│   ├── server.py              # FastAPI + SSE active streaming backend
-│   └── static/                # HTML/JS/CSS frontend UI
+├── scripts/
+│   └── clean_memory_contamination.py  # Startup memory cleanup (removes ancient CVEs)
 │
-├── project_CONSTITUTION.md    # Development Standards and Guardrails
-└── HARNESS_ENGINEERING.md     # Methodologies and constraint guidelines
+├── docs/                      # Architecture and design documentation
+├── memory/                    # Persistent agent memory (JSON + vector index)
+├── data/                      # Offline API caches (NVD / CISA KEV)
+├── tests/                     # pytest test suite (180+ tests)
+├── ui/
+│   ├── server.py              # FastAPI + SSE real-time streaming backend
+│   └── static/
+│       ├── index.html         # Main scan UI
+│       ├── app.js             # SSE client, report rendering (CWE badge + snippet diff)
+│       ├── style.css          # UI theme + action card styles
+│       ├── checkpoint.html    # Pipeline checkpoint viewer
+│       ├── checkpoint.js      # Checkpoint data handler
+│       └── checkpoint.css     # Checkpoint viewer styles
+│
+├── project_CONSTITUTION.md    # Project development constitution (rules & guardrails)
+├── HARNESS_ENGINEERING.md     # Harness methodology spec
+├── AGENTS.md                  # AI assistant task routing guide
+└── walkthrough.md             # Full architecture walkthrough (v5.3)
 ```
 
 ### Quick Start
@@ -432,60 +457,85 @@ ThreatHunter：
 ThreatHunter/
 ├── main.py                    # Pipeline 主程式（Orchestrator 驅動）
 ├── config.py                  # LLM 設定 + API Key + 降級瀑布
-├── checkpoint.py              # JSONL 事件持久化 + Checkpoint API
-├── input_sanitizer.py         # L0 輸入淨化（Python 版 + Rust 橋接）
+├── checkpoint.py              # JSONL 事件持久化 + Checkpoint 記錄 API
+├── input_sanitizer.py         # L0 輸入淨化（Python 和 Rust 橋接）
+├── build_nvd_cache.py         # NVD 離線快取建置工具
 │
 ├── agents/                    # Agent 定義（7 個）
-│   ├── orchestrator.py        # 動態路由（Path A/B/C/D）
-│   ├── security_guard.py      # 程式碼靜態分析（AST + 正則）
-│   ├── intel_fusion.py        # 六維情報整合（並行 API 查詢）
-│   ├── scout.py               # CVE 情報偵察
+│   ├── orchestrator.py        # 動態路由（Path A: 套件 / B: 原始碼 / C: 配置 / D: 補充）
+│   ├── security_guard.py      # 確定性程式碼靜態分析（AST + 正則，20+ 格式）
+│   ├── intel_fusion.py        # 六維情報整合（NVD/OTX/KEV/EPSS/GHSA/Exploit）
+│   ├── scout.py               # CVE 情報偵察（ReAct + 記憶感知）
 │   ├── analyst.py             # 漏洞鏈推理
-│   ├── critic.py              # 對抗式質疑辯論
+│   ├── critic.py              # 對抗式辯論 + 真實性審查
 │   └── advisor.py             # 最終行動報告
+│                              #   Harness Layer 4.5：憲法 CI-1/CI-2 守衛
+│                              #   （CODE-pattern 不進 URGENT，移入 code_patterns_summary）
 │
-├── tools/                     # CrewAI @tool 函式（8 個）
+├── tools/                     # CrewAI @tool 函式（10 個）
 │   ├── nvd_tool.py            # NVD API（主要 CVE 資料庫 / CPE 搜尋）
 │   ├── otx_tool.py            # AlienVault OTX（威脅情報）
 │   ├── kev_tool.py            # CISA KEV（已知被利用漏洞）
 │   ├── epss_tool.py           # EPSS（漏洞利用預測）
 │   ├── exploit_tool.py        # Exploit-DB / PoC 查詢
 │   ├── ghsa_tool.py           # GitHub Security Advisory
+│   ├── osv_tool.py            # OSV（開源漏洞資料庫，ecosystem-aware）
+│   ├── attck_tool.py          # MITRE ATT&CK TTP 映射
 │   ├── memory_tool.py         # 雙層記憶持久化（JSON + LlamaIndex）
 │   └── package_extractor.py   # 從 import 提取第三方套件名稱
 │
-├── sandbox/                   # 多層安全防護（ Phase 1, Phase 3 ）
-│   ├── ast_guard.py           # L1 AST Bomb 防護
-│   ├── memory_sanitizer.py    # L3 記憶毒素掃描
-│   ├── docker_sandbox.py      # L2 Docker Python API
-│   ├── Dockerfile             # 最小化隔離容器 Dockerfile
+├── sandbox/                   # 多層安全防護（Phase 1、3）
+│   ├── ast_guard.py           # L1 AST Bomb DoS 防護（50k 節點上限、3s 還時）
+│   ├── memory_sanitizer.py    # L3 記憶毒素掃描 + 幻覺 CVE 過濾
+│   ├── docker_sandbox.py      # L2 Docker 隔離容器 Python API
+│   ├── sandbox_runner.py      # 容器內執行入口
+│   ├── Dockerfile             # 最小化隔離容器（non-root、read-only）
 │   └── seccomp-profile.json   # Linux syscall 白名單
 │
-├── rust/                      # Rust 高效能安全層（ Phase 2, Phase 4 ）
-│   ├── sanitizer/             # L0 輸入淨化（regex O(n)·SHA256）
+├── rust/                      # Rust 高效能安全層（Phase 2）
+│   ├── sanitizer/             # L0 輸入淨化（regex O(n)、SHA-256、防 ReDoS）
 │   ├── json_validator/        # JSON Bomb 防護（depth≤32）
-│   ├── memory_validator/      # 記憶毒素掃描（高效能版）
-│   ├── url_builder/           # URL 安全建構（SSRF·白名單）
-│   ├── prompt_sandbox/        # Host PyO3 供 Python 呼叫 WASM
-│   └── prompt_sandbox_guest/  # WASM Guest 用於隔離惡意負載
+│   ├── memory_validator/      # 記憶幻覺掃描（Rust 速度）
+│   ├── url_builder/           # 安全 URL 建構（防 SSRF、白名單）
+│   └── prompt_sandbox/        # PyO3 Host 供 Python 呼叫 WASM
 │
-├── skills/                    # Agent SOP 文件（20 餘個 .md 各路徑配置）
-│   ├── threat_intel.md...     # Path-aware instructions (Pkg/Code/AI/Config)
+├── skills/                    # Agent SOP 指令文件（路徑感知 .md）
+│   ├── threat_intel.md        # Scout：威脅情報收集 SOP
+│   ├── source_code_audit.md   # Security Guard：程式碼審計 SOP
+│   ├── chain_analysis.md      # Analyst：漏洞鏈分析 SOP
+│   ├── debate_sop.md          # Critic：對抗辯論 SOP
+│   ├── code_action_report.md  # Advisor：程式碼發現行動報告（v5.1 防捏造）
+│   ├── intel_fusion.md        # Intel Fusion：六維加權 SOP
+│   ├── orchestrator.md        # Orchestrator：路由決策 SOP
+│   ├── security_guard.md      # Security Guard：格式匹配 SOP
 │   └── skill_loader.py        # 動態載入 SOP 系統
 │
 ├── harness/                   # Harness Engineering 三柱架構
-│   ├── context/               # 第 1 層：專案上下文 Context
-│   ├── constraints/           # 第 2 層：架構邊界規則 + linter
-│   └── entropy/               # 第 3 層：熵掃描 + UNTIL CLEAN 迴圈
+│   ├── context/               # 第 1 層：系統 Context 規則
+│   ├── constraints/           # 第 2 層：架構邊界規則 + arch_linter.py
+│   └── entropy/               # 第 3 層：熵掃描 + UNTIL CLEAN 迭代
 │
+├── scripts/
+│   └── clean_memory_contamination.py  # 啟動時記憶清理（移除古老 CVE）
+│
+├── docs/                      # 架構與設計文件
 ├── memory/                    # 雙層記憶持久化與向量快取
 ├── data/                      # NVD/KEV 等離線快取
-├── ui/                        # 前端介面與 API Server
+├── tests/                     # pytest 測試套件（180+ 個測試）
+├── ui/
 │   ├── server.py              # FastAPI + SSE 即時串流後端
-│   └── static/                # HTML/CSS/JS 前端檔案
+│   └── static/
+│       ├── index.html         # 主掃描 UI
+│       ├── app.js             # SSE 用戶端、報告渲染（CWE badge + snippet diff）
+│       ├── style.css          # UI 主題 + 行動卡樣式
+│       ├── checkpoint.html    # Pipeline Checkpoint 檢視器
+│       ├── checkpoint.js      # Checkpoint 資料處理
+│       └── checkpoint.css     # Checkpoint 檢視器樣式
 │
-├── project_CONSTITUTION.md    # 開發規範與憲法指引
-└── HARNESS_ENGINEERING.md     # 方法論規範
+├── project_CONSTITUTION.md    # 憲法指引（開發規範與保護標準）
+├── HARNESS_ENGINEERING.md     # Harness 方法論規範
+├── AGENTS.md                  # AI 工程夥伴任務路由指南
+└── walkthrough.md             # 完整架構走查記錄（v5.3）
 ```
 
 ### 快速開始

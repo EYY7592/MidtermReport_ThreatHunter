@@ -1,5 +1,5 @@
 # ThreatHunter — 完整架構與程式碼總結 Walkthrough
-# 版本：v4.1（2026-04-18）Phase 5 CVE 精確度修復
+# 版本：v5.3（2026-04-20）Phase 7.17 Constitution Guard + Intel Fusion Hardening
 # 維護作者：Antigravity AI 工程夥伴
 
 > ⚠️ **三條強制守則（閱讀前必看）**
@@ -1026,4 +1026,526 @@ uv run python scripts/clean_memory_contamination.py
 ---
 
 *版本 v4.3 — Phase 6 修復 — 2026-04-18*
+*遵守：project_CONSTITUTION.md + HARNESS_ENGINEERING.md + AGENTS.md*
+
+---
+
+## Phase 6.1 — CVE 年份過濾 + Memory 啟動清潔（2026-04-18）
+
+### 學術佐證
+
+| 主張 | 來源 | 可驗性 |
+|------|------|-------|
+| pre-2005 CVE 的 EPSS < 0.01 | Jacobs et al. (2023) WEIS, arxiv.org/abs/2302.14172 | ✅ |
+| CVSS 需加入 Temporal Metrics | NIST CVSS v3.1 §7.3, first.org/cvss/v3.1/user-guide | ✅ |
+| 2005 前目標軟體基本已退場 | NVD CPE 歷史分析（Node.js 2009, npm 2010，PHP5 2004） | ✅ 可驗 |
+
+### 開源佐證
+
+| 項目 | 機制 | Stars |
+|------|------|-------|
+| Trivy (aquasecurity) | `--ignore-unfixed` 預設過濾 15 年無修復 CVE | 23k+ |
+| Grype (anchore) | `grype.yaml` suppress `CVE-1999-*` | 8k+ |
+| OWASP Dependency-Check | `suppressionFile` 移除已知誤報 CVE | 6k+ |
+
+### 修復內容
+
+#### Fix 1：`agents/analyst.py` — Harness Layer 3.5
+- 新增 `_harness_filter_ancient_cves(output)` 函式
+- 對 `year < 2005` 的 CVE 設 `confidence = "NEEDS_VERIFICATION"` + `_ancient_cve_warning`
+- 不刪除（保留審計軌跡）
+- 呼叫點：`_harness_validate_chain_risk` 之後，`risk_score` 驗證之前
+
+**測試驗證**：
+```
+CVE-1999-0967: NEEDS_VERIFICATION [FLAGGED]   ← 正確
+CVE-2024-1234: HIGH               [OK]        ← 不應被動
+CVE-2003-0442: NEEDS_VERIFICATION [FLAGGED]   ← 正確
+CVE-2005-0001: MEDIUM             [OK]        ← 邊界值正確
+```
+
+#### Fix 2：`ui/server.py` — FastAPI Lifespan 啟動清潔
+- 加 `_lifespan()` asynccontextmanager
+- Server 每次啟動自動執行 `clean_memory_contamination.py`
+- 移除 `memory/scout_memory.json` / `memory/advisor_memory.json` 中的遠古 CVE
+- 失敗時 warning 但不影響 server 正常啟動（graceful degradation）
+
+### 防禦深度（至此共五層）
+
+```
+層 1  PackageExtractor  Node.js builtin 黑名單過濾（確定性）
+層 2  NVD Tool          CPE 優先搜尋（減少源頭誤報）
+層 3  Scout task_desc   LLM 禁止詞約束（機率性）
+層 4  Analyst L3.5      CVE 年份過濾（確定性 + 有審計軌跡）
+層 5  Memory Lifespan   啟動時清潔汙染（定期維護）
+```
+
+### 修改檔案清單（Phase 6.1）
+
+| 檔案 | 變更 |
+|------|------|
+| `agents/analyst.py` | 新增 `_harness_filter_ancient_cves()` + Layer 3.5 呼叫 |
+| `ui/server.py` | 加 FastAPI `lifespan=_lifespan` 啟動清潔 |
+
+---
+
+*版本 v4.4 — Phase 6.1 CVE 年份過濾 + Memory 啟動清潔 — 2026-04-18*
+*遵守：project_CONSTITUTION.md + HARNESS_ENGINEERING.md + AGENTS.md*
+
+---
+
+## Phase 7 — OSV.dev + EPSS Tool 整合（2026-04-18）
+
+### 背景
+
+截圖顯示系統持續回傳 CVE-2000 ~ CVE-2005 的無關漏洞。根本原因是 NVD `keywordSearch` 的架構設計問題，補丁無法根治：
+
+- 業界工具（Trivy、Grype、Dependabot）都不用 NVD keywordSearch
+- `search_nvd("eval")` → 返回 1999 年 ColdFusion 的 CVE，因為描述文字中有 "eval"
+- 真正專業做法：`package + ecosystem` 精確查詢
+
+### 新增工具
+
+#### `tools/osv_tool.py` — OSV.dev 精確查詢
+- **API**：`POST https://api.osv.dev/v1/query` + `{"package": {"name": "foo", "ecosystem": "npm"}}`
+- **效果**：只返回該套件的真實漏洞，express → 5 個 CVE（無 1999 年廢棄軟體）
+- **功能**：`ECOSYSTEM_MAP`（80+ 套件自動識別）+ `CANONICAL_NAME_MAP`（log4j → log4j-core）
+- **快取**：24 小時本地快取（`data/osv_cache_*.json`）
+
+#### `tools/epss_tool.py` — FIRST.org EPSS 真實分數
+- **API**：`GET https://api.first.org/data/v1/epss?cve=CVE-2021-44228`
+- **效果**：Log4Shell EPSS = 0.9436（94.36% 機率在 30 天內被野外利用）
+- **整合**：`intel_fusion.py _verify_and_recalculate` 現在優先用真實 EPSS，不靠 LLM 猜
+
+### 六維分析真實資料覆蓋（修復前 vs 後）
+
+| 維度 | 之前 | 之後 |
+|------|------|------|
+| CVSS (20%) | NVD API ✅ | NVD API ✅ |
+| **EPSS (30%)** | **LLM 猜測 ❌** | **FIRST.org API ✅** |
+| KEV (25%) | CISA API ✅ | CISA API ✅ |
+| GHSA (10%) | LLM 猜測 ❌ | **OSV 提供 GHSA severity ✅** |
+| ATT&CK (10%) | LLM 猜測 ❌ | LLM（暫，待整合 ATT&CK API）|
+| OTX (5%) | AlienVault API ✅ | AlienVault API ✅ |
+
+### 測試結果（40/40 通過）
+
+```
+OSV Tool 匯入 + ecosystem 偵測:        7/7 PASS
+EPSS Tool 匯入 + 解讀函式:              6/6 PASS
+OSV.dev API 真實呼叫（express/npm）:    9/9 PASS  → 5 vulns, 無1999年CVE
+EPSS API 真實呼叫（Log4Shell）:         5/5 PASS  → EPSS 0.9436
+tools/__init__.py 匯出驗證:             5/5 PASS
+快取機制驗證:                            3/3 PASS  → EPSS cache < 0.5s
+系統健康檢查（graceful degrade）:       6/6 PASS
+
+TOTAL: 40/40 ALL PASSED
+```
+
+### 修改檔案（Phase 7）
+
+| 檔案 | 變更 |
+|------|------|
+| `tools/osv_tool.py` | [NEW] OSV.dev ecosystem-aware 漏洞查詢 |
+| `tools/epss_tool.py` | [NEW] FIRST.org EPSS 真實機率查詢 |
+| `tools/__init__.py` | 加入 `search_osv` + `fetch_epss_score` 匯出 |
+| `agents/intel_fusion.py` | `_verify_and_recalculate` EPSS 從 API 取得 |
+
+---
+
+*版本 v4.5 — Phase 7 OSV+EPSS 整合 — 2026-04-18*
+*遵守：project_CONSTITUTION.md + HARNESS_ENGINEERING.md + AGENTS.md*
+
+---
+
+## Phase 7.5 — Scout OSV優先 + ATT&CK映射 + OSV Batch（2026-04-18）
+
+### 新增功能
+
+#### 1. `tools/attck_tool.py` — CWE→CAPEC→ATT&CK 確定性映射
+- 涵蓋 25+ 最常見 CWE（XSS→T1059.007、SQLi→T1190、Log4Shell→T1059 等）
+- 來源：MITRE CTID Mappings Explorer + CAPEC 3.9 官方對應
+- 路徑：CWE ID 或描述關鍵字 → CAPEC → ATT&CK Technique + Tactic
+- 用於：Intel Fusion `_verify_and_recalculate` 補全 ATT&CK 10% 維度
+
+#### 2. `tools/osv_tool.py` — OSV Batch API
+- `search_osv_batch(["express", "lodash"])` 單次 API 呼叫查詢多套件
+- 快取優先：先命中快取的不重複呼叫 API
+- Fallback：Batch 失敗時自動降回逐一查詢
+
+#### 3. `agents/scout.py` — OSV 優先 + EPSS 步驟
+- 工具清單更新：`search_osv`（主力）+ `fetch_epss_score` 加入
+- Task description 改為 search_osv 優先，NVD 作 fallback
+- 新增 Step 3：高 CVSS CVE 自動查詢 EPSS 真實機率
+
+### 六維分析資料覆蓋（最終狀態）
+
+| 維度 | 權重 | 資料來源 | 類型 |
+|------|------|---------|------|
+| CVSS | 20% | NVD API | API ✅ |
+| EPSS | 30% | FIRST.org API | API ✅ |
+| KEV | 25% | CISA API | API ✅ |
+| GHSA | 10% | OSV.dev API | API ✅ |
+| ATT&CK | 10% | CWE→CAPEC→ATT&CK 靜態映射 | 確定性 ✅ |
+| OTX | 5% | AlienVault API | API ✅ |
+
+**六維全部資料驅動，0% LLM 猜測。**
+
+### 測試結果（50/50）
+
+```
+ATT&CK CWE Mapping Tool:          10/10 PASS
+OSV Batch API:                      7/7  PASS
+Scout Agent Tool Registration:      7/7  PASS
+Intel Fusion ATT&CK Integration:    5/5  PASS
+tools/__init__.py Full Export:     14/14 PASS
+Six-Dimension Coverage:             6/6  PASS  → 6/6 = 100% API-driven
+
+TOTAL: 50/50 ALL TESTS PASSED
+```
+
+### 修改檔案（Phase 7.5）
+
+| 檔案 | 變更 |
+|------|------|
+| `tools/attck_tool.py` | [NEW] CWE→CAPEC→ATT&CK 靜態映射，25+ CWE |
+| `tools/osv_tool.py` | 加入 `search_osv_batch()` Batch API |
+| `tools/__init__.py` | 加入所有新工具匯出 |
+| `agents/scout.py` | OSV 優先 / NVD fallback / EPSS 步驟 |
+| `agents/intel_fusion.py` | ATT&CK 從 CWE→ATT&CK 確定性映射取代 LLM |
+
+---
+
+*版本 v5.0 — Phase 7.5 六維全資料驅動完成 — 2026-04-18*
+*遵守：project_CONSTITUTION.md + HARNESS_ENGINEERING.md + AGENTS.md*
+
+---
+
+## Phase 7.5 最終驗證記錄（2026-04-19）
+
+### 本次新增功能
+
+#### 1. OSV Batch 整合到 Harness 層（Code-level Prefetch）
+
+**問題**：Scout Agent 是一個一個套件呼叫 `search_osv()`，延遲 = N × API RTT。
+
+**解法**：在 `run_scout_pipeline()` 的 **Harness 0** 層，LLM 啟動前就執行 OSV Batch 預熱：
+
+```python
+# Harness 0：OSV Batch 預熱（LLM 之前）
+_osv_batch_cache = search_osv_batch(_pkg_list)  # 1次 API請求，結果全存快取
+```
+
+- 當 Agent 呼叫 `search_osv("express")` → 直接命中快取（`[OK] OSV cache hit: npm_express`）
+- 延遲優化：N × 300ms → 1 × 300ms（express + 其他套件同時批量）
+
+#### 2. GHSA Severity 從 OSV database_specific 解析
+
+**問題**：GHSA 維度之前由 LLM 猜測，不可靠。
+
+**解法**：OSV API 回傳的 `database_specific.severity` 直接是 GitHub Advisory 官方等級：
+
+```python
+# tools/osv_tool.py _parse_osv_vuln()
+ghsa_severity = db_spec.get("severity", "").upper()  # → "HIGH", "MODERATE", "LOW"
+```
+
+Intel Fusion `_verify_and_recalculate()` 的 GHSA 維度優先使用此值：
+- 優先級：`fusion["ghsa_severity"]`（OSV解析）→ `dims["ghsa_severity"]`（LLM）→ `"UNKNOWN"`
+
+#### 3. Harness 2.5 改用 OSV Batch 快取資料
+
+**問題**：LLM 輸出 0 CVE 時，舊 fallback 從 NVD cache 注入，NVD 可能包含 CVE-1999 廢棄資料。
+
+**解法**：Harness 2.5 優先從 `_osv_batch_cache` 注入（更精確），NVD 只作二次 fallback：
+
+```
+OSV Batch cache（精確） → NVD cache（寬鬆 fallback） → 不注入
+```
+
+### 實測驗證 — XSS Express 範例掃描
+
+**輸入**：Express.js XSS 程式碼（`res.send('<h1>Results for: ' + query + '</h1>')`）
+
+**Log 確認**：
+```
+[HARNESS 0] OSV Batch warmup: ['express']
+[OK] OSV cache hit: npm_express       ← Scout 呼叫 search_osv 命中快取
+Tool: search_osv                      ← Scout Agent 使用 search_osv（非 search_nvd）
+Tool: fetch_epss_score                ← FIRST.org EPSS API 真實查詢
+```
+
+**掃描結果**（scan_id: 5c9cfda4）：
+
+| CVE | 描述 | 來源 |
+|-----|------|------|
+| CVE-2024-10491 | Express resource injection | OSV (GHSA-cm5g-3pgc-8rg4) |
+| CVE-2024-43796 | **XSS via response.redirect()** | OSV (GHSA-qw6h-vgh9-j6wx) |
+| CVE-2024-29041 | Open Redirect in malformed URLs (XSS chain) | OSV (GHSA-rv95-896h-c2vc) |
+| CVE-2024-9266 | Open Redirect vulnerability | OSV (GHSA-jj78-5fmv-mv28) |
+| CVE-2014-6393 | No Charset in Content-Type Header | OSV (GHSA-gpvr-g6gh-9mc2) |
+
+✅ **0 個 CVE-1999 廢棄漏洞**（OSV ecosystem-aware 精確過濾）
+✅ **5/5 CVE 全為 express 相關漏洞**（無誤報）
+✅ **pipeline_meta.scout.vuln_count = 5**
+
+### 修改文件清單
+
+| 檔案 | 異動 |
+|------|------|
+| `tools/osv_tool.py` | `_parse_osv_vuln()` 加入 `ghsa_severity` 欄位 |
+| `agents/scout.py` | Harness 0 OSV Batch 預熱 + `_extract_ghsa_severity_from_osv()` + Harness 2.5 改用 OSV cache |
+| `agents/intel_fusion.py` | GHSA 維度優先使用 OSV 解析的 `ghsa_severity` |
+| `docs/architecture_diagrams.html` | 更新為 v5.0，加入 OSV/EPSS/ATT\&CK 工具卡、六維覆蓋列 |
+| `docs/first_principles_analysis.html` | 更新為 v5.0，加入 §1.3 六維覆蓋比較表、OSV-first SOP 流程圖 |
+
+---
+
+*版本 v5.0 — Phase 7.5 完整驗證 — 2026-04-19*
+*遵守：project_CONSTITUTION.md + HARNESS_ENGINEERING.md + AGENTS.md*
+
+---
+
+## Phase 7.15 — Go Pipeline Hardening + Null Safety 全修 + UI 程式碼片段比較（2026-04-20）
+
+### 背景
+
+測試 Go Command Injection、Java SQL Injection / Deserialization、Python eval/hardcoded secret 時發現三類問題：
+
+1. **Go 標準庫被當成第三方套件查 NVD**：`fmt`、`net/http`、`os/exec` 通過 `package_extractor.py` 過濾器 → 查到 OpenSSL、ncurses、VLC 等完全無關的 CVE
+2. **Analyst / Advisor 持續 DEGRADED**：LLM 回傳 `cve_id: null`（合法——CODE-pattern 沒有 CVE），但 Harness 驗證層用 `re.match(pattern, None)` / `None.startswith()` 崩潰
+3. **UI 顯示 "UNKNOWN"**：Advisor 正確產出 `vulnerable_snippet` + `fixed_snippet`，但前端沒有渲染此資料、`cve_id=null` 顯示為 "UNKNOWN"
+
+---
+
+### 根本原因分析
+
+| # | 問題 | 檔案:行 | 根因 |
+|---|------|---------|------|
+| 1 | Go stdlib 當第三方套件 | `package_extractor.py` | 只有 Python/Node.js 黑名單，無 Go 黑名單 |
+| 2 | Intel Fusion `re` 未定義 | `intel_fusion.py:514` | 使用 `re.search()` 但缺少 `import re` |
+| 3 | Analyst 崩潰 (DEGRADED) | `analyst.py:716` | `item.get("cve_id", "")` 回傳 `None` → `re.match(pattern, None)` 拋 TypeError |
+| 4 | Advisor 崩潰 (DEGRADED) | `advisor.py:498` | 同上 → `None.startswith("CVE-")` 拋 AttributeError |
+| 5 | Analyst 降級丟棄 code_patterns | `main.py:240-276` | 降級 fallback 只處理 CVE，忽略 Security Guard 的確定性偵測 |
+| 6 | Advisor 降級回空 actions | `main.py:384-394` | 降級 fallback 回傳 `{"urgent": [], "important": []}` |
+| 7 | UI 顯示 UNKNOWN | `app.js:583` | `cve_id || 'UNKNOWN'`，CODE-pattern 無 CVE ID |
+
+> **Null Safety 系統性問題**：Python `dict.get("key", "")` 當 key 存在但值為 `None` 時，回傳 `None` 而非預設值 `""`。這是所有 5 個 Null crash 的共同根因。
+
+---
+
+### 修復內容
+
+#### Fix 1：Go 標準庫黑名單（`tools/package_extractor.py`）
+
+新增 `GO_STDLIB_BLACKLIST`（47 個模組）：
+
+```python
+GO_STDLIB_BLACKLIST = {
+    "fmt", "os", "io", "net", "log", "math", "sync", "time",
+    "sort", "flag", "path", "hash", "mime", "errors", "bytes",
+    "bufio", "context", "embed", "image", "regexp", "strconv",
+    "strings", "unicode", "testing", "runtime", "reflect",
+    "unsafe", "syscall", "archive", "compress", "container",
+    "crypto", "debug", "encoding", "go", "html", "index",
+    "internal", "plugin", "text",
+    # 複合路徑
+    "net/http", "os/exec", "io/ioutil", "path/filepath",
+    "encoding/json", "encoding/xml", "crypto/tls",
+    "database/sql", "html/template", "text/template",
+}
+```
+
+整合到 `extract_third_party_packages()` 的過濾邏輯，Go 程式碼的 `fmt`、`net`、`os` 全部被過濾，不再傳給 NVD。
+
+---
+
+#### Fix 2：Intel Fusion 缺少 `import re`（`agents/intel_fusion.py`）
+
+```diff
+ import json
+ import logging
++import re
+ import time
+```
+
+修復 L514 `re.search(r'\{[\s\S]*\}', result_str)` 的 `NameError: name 're' is not defined`。
+
+---
+
+#### Fix 3：Null Safety 全修（4 個檔案 5 處）
+
+**模式**：`item.get("cve_id", "")` → `item.get("cve_id") or ""`
+
+| 檔案 | 行 | 修復前 | 修復後 |
+|------|-----|--------|--------|
+| `analyst.py` | L715 | `item.get("cve_id", "")` | `item.get("cve_id") or ""` |
+| `analyst.py` | L957 | `item.get("cve_id", "")` | `item.get("cve_id") or ""` |
+| `advisor.py` | L351 | `item.get("cve_id", "")` | `item.get("cve_id") or ""` |
+| `advisor.py` | L497 | `item.get("cve_id", "")` | `item.get("cve_id") or ""` |
+| `advisor.py` | L498 | 無 null guard | `if not cve_id or ...` |
+
+**技術原因**：Python `dict.get(key, default)` 只有在 key **不存在**時才回傳 default。當 LLM 回傳 `{"cve_id": null}` 時，key 存在、值為 `None`，`get()` 回傳 `None`，而 `or ""` 會正確兜底。
+
+---
+
+#### Fix 4：Analyst 降級 Fallback 保留 code_patterns（`main.py:240-276`）
+
+**修復前**：Analyst 降級只處理 `scout_output.vulnerabilities`（CVE），Security Guard 的 `code_patterns`（CMD_INJECTION / EVAL_EXEC / SQL_INJECTION 等）全部遺失。
+
+**修復後**：遍歷 `scout_output.code_patterns`，為每個 pattern 生成帶 CWE / severity / snippet 的 analysis entry：
+
+```python
+_PATTERN_CWE = {
+    "CMD_INJECTION": ("CWE-78", "CRITICAL"),
+    "SQL_INJECTION": ("CWE-89", "CRITICAL"),
+    "EVAL_EXEC":     ("CWE-95", "CRITICAL"),
+    "UNSAFE_DESER":  ("CWE-502", "CRITICAL"),
+    "HARDCODED_SECRET": ("CWE-798", "HIGH"),
+    # ...更多
+}
+```
+
+---
+
+#### Fix 5：Advisor 降級 Fallback 從 analyst_output 生成 actions（`main.py:384-460`）
+
+**修復前**：Advisor 降級回傳 `{"urgent": [], "important": []}`——用戶什麼都看不到。
+
+**修復後**：遍歷 `advisor_input.analysis`，提取 CODE-patterns 和 CVE findings，分配到 urgent/important buckets：
+
+```python
+_SEVERITY_MAP = {"CRITICAL": "urgent", "HIGH": "important"}
+for entry in advisor_input.get("analysis", []):
+    if finding_id.startswith("CODE-") or entry.get("pattern_type"):
+        # 生成 CWE-based action entry
+    elif cve_id:
+        # 生成 CVE-based action entry
+```
+
+---
+
+#### Fix 6：UI 支援 CWE Badge + 程式碼片段比較（`app.js` + `style.css`）
+
+**app.js `renderActionList()`**：
+- CODE-pattern 用 **CWE-XX**（紫色 badge）而非 "UNKNOWN"
+- 新增 `vulnerable_snippet` + `fixed_snippet` **對比顯示面板**
+- 新增 `why_this_works` 說明欄
+
+**style.css 新增**：
+- `.action-cwe` — 紫色 CWE badge（與藍色 CVE badge 區分）
+- `.snippet-compare` — 程式碼對比容器
+- `.snippet-vuln` — 紅色標題 ❌ Vulnerable
+- `.snippet-fix` — 綠色標題 ✅ Fixed
+- `.snippet-code` — monospace 程式碼區塊
+- `.snippet-why` — teal 色 Why 說明
+
+---
+
+### 防禦深度更新（至此共十層）
+
+```
+層 1  PackageExtractor   Python/Node.js/Go 內建模組黑名單過濾（確定性）
+層 2  NVD Tool           CPE 優先搜尋（減少源頭誤報）
+層 3  Scout task_desc    LLM 禁止詞約束（機率性）
+層 4  Analyst L3.5       CVE 年份過濾（確定性 + 審計軌跡）
+層 5  Memory Lifespan    啟動時清潔汙染（定期維護）
+層 6  Analyst Fallback   降級時保留 code_patterns（確定性偵測永不丟失）
+層 7  Advisor Fallback   降級時從 analysis 生成 actions（保底輸出）
+層 8  Harness L4.5       憲法 CI-1/CI-2 守衛：CODE-pattern 不進 URGENT/IMPORTANT  ← NEW v5.3
+層 9  Intel Fusion L3    超長輸出保護（>50k chars 自動從尾部提取 JSON）           ← NEW v5.3
+層 10 Advisor Layer 5    REPEATED 機制修正：CODE-pattern 永遠 is_repeated=false    ← NEW v5.2
+```
+
+---
+
+### 修改檔案清單（Phase 7.15）
+
+| 檔案 | 變更類型 | 說明 |
+|------|---------|------|
+| `tools/package_extractor.py` | +47 個 Go 黑名單 | Go stdlib 模組過濾，防止 `fmt`/`net` 查 NVD |
+| `agents/intel_fusion.py` | +1 行 | 加 `import re`，修復 `NameError` |
+| `agents/analyst.py` | 2 行修正 | Null safety：`cve_id` 從 `.get(k, "")` 改為 `.get(k) or ""` |
+| `agents/advisor.py` | 3 行修正 | 同上 + `startswith` null guard |
+| `main.py` | +36 行（L240-276） | Analyst 降級 fallback 保留 code_patterns |
+| `main.py` | +67 行（L384-460） | Advisor 降級 fallback 從 analysis 生成 actions |
+| `ui/static/app.js` | 重寫 `renderActionList()` | CWE badge + snippet 對比 + why_this_works |
+| `ui/static/style.css` | +13 行 | `.action-cwe` / `.snippet-*` 系列樣式 |
+
+---
+
+### Phase 7.16 修復紀錄（2026-04-20）
+
+#### 問題 1：CODE-001 被誤標 REPEATED + 捏造 eval() 輸出
+
+| 根因 | 修復 |
+|------|------|
+| `_harness_check_repeated` 把 `cve_id=null` 空字串加進 `prev_vulns set`，導致所有 CODE-pattern 都命中 | `advisor.py`：CODE-pattern（`cve_id` 非 `CVE-`/`GHSA-` 開頭）絕對不進 `prev_vulns` |
+| LLM 讀到 `read_memory` 前次 CODE-001 歷史 → 自行加 `is_repeated=true` | Task prompt 加入 ANTI-FABRICATION RULES：CODE-pattern `is_repeated` 永遠 false |
+| `code_action_report.md` 包含 `eval()` 範例 → LLM 直接套用 | SOP 重寫：移除所有具體程式碼範例，改為抽象規則 + 嵌入 ANTI-FABRICATION |
+
+#### 問題 2：PHP SQL Injection 漏報
+
+| 根因 | 修復 |
+|------|------|
+| Universal `SQL_INJECTION` regex 只匹配 `+` 拼接，PHP 使用 `.` 拼接 | `security_guard.py`：新增 `SQL_CONCAT_PHP` pattern 兩段匹配 `"..." . $var . "..."` |
+
+---
+
+### Phase 7.17 修復紀錄（2026-04-20）
+
+#### 問題 1：Intel Fusion LLM 輸出 139,613 chars 非 JSON
+
+**影響**：Scout Agent 遭 Graceful Degradation
+
+| 根因 | 修復 |
+|------|------|
+| CrewAI forceRun 觸發後 LLM 輸出大量解說文字夾著 JSON | `intel_fusion.py`：50,000 chars 閾值保護，超長時從末尾 10k chars 提取 JSON |
+| `re.search(r'\{[\s\S]*\}')` 貪婪匹配對 13 萬字耗盡記憶體 | 改用 `re.findall(r'\{[\s\S]+?\}')` 非貪婪 + `reversed()` 從最後一個候選嘗試 |
+
+#### 問題 2：CODE-001/002/003 出現在 URGENT — 憲法 CI-1/CI-2 違規
+
+**憲法條文**：`規則 CI-1：所有 CVE 編號必須來自 Tool 回傳的真實 API 資料` / `規則 CI-2：禁止 LLM 自行編造任何 CVE 編號或漏洞細節`
+
+| 位置 | 修復 |
+|------|------|
+| Advisor Harness 都沒有機制阻止 LLM 把 CODE-pattern 放進 URGENT | 新增 **Harness Layer 4.5 `_harness_constitution_guard()`**：`cve_id=null` 或 `finding_id=CODE-xxx` 的項目強制移出，轉存至 `code_patterns_summary` |
+| `main.py` Advisor 降級 fallback 把 CODE-001 直接進入 `urgent_actions` | CODE-pattern 改存 `code_patterns_fallback`，只有真實 `CVE-`/`GHSA-` ID 才進入 urgent/important |
+| Layer 4 對 CODE-pattern 補 `pip install --upgrade` | 改為 `Manual code fix required (see fixed_snippet)` |
+
+---
+
+### 修改檔案清單（Phase 7.16~7.17）
+
+| 檔案 | 變更類型 | 說明 |
+|------|---------|------|
+| `agents/security_guard.py` | +SQL_CONCAT_PHP | PHP `.` 拼接式 SQL Injection 偵測 |
+| `agents/advisor.py` | Harness Layer 4 修正 | CODE-pattern command 改為 `Manual code fix` |
+| `agents/advisor.py` | +Harness Layer 4.5 | `_harness_constitution_guard()` 憲法 CI-1/CI-2 |
+| `agents/advisor.py` | Harness Layer 5 修正 | REPEATED 機制只套用真實 CVE-/GHSA- |
+| `agents/advisor.py` | Task prompt v5.1 | ANTI-FABRICATION RULES 嵌入 + CODE is_repeated=false |
+| `agents/intel_fusion.py` | JSON 解析共 3 層 | 50k chars 閾值保護 + 非貪婪 findall |
+| `main.py` | Advisor fallback v5.1 | CODE-pattern 不進 URGENT，移至 code_patterns_fallback |
+| `skills/code_action_report.md` | SOP v5.1 重寫 | ANTI-FABRICATION RULES，移除易誤導 LLM 的範例 |
+| `tests/test_sg_to_advisor_flow.py` | 測試更新 | `TestCodeActionReportSkill` 為新 SOP v5.1 對法，新增 2 個防捏造區塊 |
+
+---
+
+### 測試驗證
+
+```
+uv run pytest tests/test_sg_to_advisor_flow.py tests/test_security_guard.py \
+            tests/test_attack_multidim.py tests/test_input_sanitizer.py \
+            tests/test_advisor_agent.py -v
+# → 180/180 ALL PASSED ✅
+
+# Constitution Guard 單元驗證：
+# URGENT 後：1 項（CVE-2023-44981 ✅）
+# IMPORTANT 後：1 項（CVE-2024-1234 ✅）
+# code_patterns_summary：3 項（CODE-001/002/003 完全隔離出 URGENT ✅）
+```
+
+---
+
+*版本 v5.3 — Phase 7.17 Constitution Guard + Intel Fusion Hardening — 2026-04-20*
 *遵守：project_CONSTITUTION.md + HARNESS_ENGINEERING.md + AGENTS.md*

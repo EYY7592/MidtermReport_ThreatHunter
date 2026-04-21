@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ThreatHunter v3.0 — 第一性原理完整分析報告</title>
+<title>ThreatHunter v5.0 — 第一性原理完整分析報告</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
   :root {
@@ -86,8 +86,8 @@
 </nav>
 
 <main>
-<h1>🧪 ThreatHunter v3.0 — 第一性原理完整分析報告</h1>
-<p class="subtitle">建立：2026-04-09 ｜ 回答：六維資料可靠性、防駭攻擊、LLM Discussion 詳解、多智能協作、<strong>Agent Skills SOP 深解</strong>、防幻覺機制、競爭佐證</p>
+<h1>🧪 ThreatHunter v5.0 — 第一性原理完整分析報告</h1>
+<p class="subtitle">建立：2026-04-09 ｜ 更新：2026-04-19 ｜ 回答：六維資料可靠性、防駭攻擊、LLM Discussion 詳解、多智能協作、<strong>Agent Skills SOP 深解</strong>、防幻覺機制、競爭佐證 ｜ <strong style="color:var(--ok)">Phase 7.5: 六維 100% API驅動</strong></p>
 
 <!-- ════════════════════════════════════════ -->
 <h2 id="sec1">§1 · 六維情報融合：資料可靠性第一性原理</h2>
@@ -105,7 +105,7 @@
 </div>
 
 <div class="diagram-wrap">
-  <div class="title">流程圖 1：六維情報資料來源與可信度</div>
+  <div class="title">流程圖 1：六維情報資料來源與可信度（Phase 7.5：全部 API 驅動）</div>
   <div class="mermaid">
 flowchart LR
     subgraph WHITE["🤍 白帽生態（可信）"]
@@ -120,23 +120,25 @@ flowchart LR
     end
 
     WH1 & WH2 & WH3 --> CVE["📋 CVE Program\n(MITRE 管理)"]
-    CVE --> NVD["🏛️ NVD\n(NIST 加上 CVSS)"]
+    CVE --> NVD["🏛️ NVD\n(NIST 加上 CVSS)\n20% 權重"]
 
-    NVD --> EPSS["📊 EPSS\n(FIRST.org)\n真實利用概率\n⚠️全球統計"]
-    NVD --> KEV["🚨 CISA KEV\n確認在野利用\n最高可信度"]
-    NVD --> GHSA["🐙 GitHub Advisory\n生態系專屬漏洞"]
-    
-    REAL["真實攻擊事件分析\n(CrowdStrike/FireEye)"] --> ATTCK["🎯 MITRE ATT&CK\n攻擊戰術映射"]
-    
-    COMMUNITY["社群提交\n(品質參差)"] --> OTX["📡 OTX AlienVault\n⚠️需過濾"]
+    NVD --> EPSS["📊 EPSS\n(FIRST.org API)\n真實利用機率\n30% 權重"]
+    NVD --> KEV["🚨 CISA KEV\n確認在野利用\n最高可信度\n25% 權重"]
+    NVD --> OSV["🎯 OSV.dev API\n(Google 開源)\nPkg+Ecosystem 精確查詢\nGHSA 10% 權重"]
 
-    NVD & EPSS & KEV & GHSA & ATTCK & OTX --> FUSION["🧮 六維融合評分\nComposite Risk Score"]
+    REAL["真實攻擊事件分析\n(CrowdStrike/FireEye)"] --> ATTCK["🎯 MITRE ATT&CK\nCWE→CAPEC→Technique\n確定性映射\n10% 權重"]
+
+    COMMUNITY["社群提交\n(品質參差)"] --> OTX["📡 OTX AlienVault\n⚠️需過濾\n5% 權重"]
+
+    NVD & EPSS & KEV & OSV & ATTCK & OTX --> FUSION["🧮 六維融合評分\nComposite Risk Score\n✅ 100% API 驅動"]
 
     style WHITE fill:#1a2a1a,stroke:#3fb950
     style BLACK fill:#2a1a1a,stroke:#f85149
     style FUSION fill:#1a1a2a,stroke:#58a6ff
     style KEV fill:#3a1a1a,stroke:#f85149,color:#f85149
     style EPSS fill:#1a2a1a,stroke:#3fb950,color:#3fb950
+    style OSV fill:#1a2a2a,stroke:#34d399,color:#34d399
+    style ATTCK fill:#2a2a1a,stroke:#f59e0b,color:#f59e0b
   </div>
 </div>
 
@@ -164,10 +166,65 @@ flowchart LR
 </div>
 
 <div class="warn-box">
-  <strong>⚠️ NVD 的已知限制（2024年問題）</strong><br>
+  <strong>⚠️ NVD 的已知限制（2024-2026年問題）</strong><br>
   NIST 承認 NVD 有嚴重積壓：每年新增 CVE 數量增加約 20%，NVD 處理速度跟不上。
   部分 CVE 發布數週後仍無 CVSS 分數（「enrichment 積壓」問題）。
-  <br>→ ThreatHunter 因此並行查 GitHub Advisory，補足 NVD 的空缺。
+  <br>→ 更嚴重問題：<strong>NVD keywordSearch 是全文搜尋</strong>，
+  <code>search_nvd("eval")</code> 會返回 CVE-1999 ColdFusion（因為描述中有 "eval" 字串），
+  完全無關的軟體污染結果。
+  <br>→ <strong>Phase 7.5 解法</strong>：改用 OSV.dev <code>package + ecosystem</code> 精確查詢，
+  Trivy、Grype、Dependabot 等業界工具都採用相同方案。
+</div>
+
+<h3>1.3 六維分析資料覆蓋演進（Phase 7.5 前 vs 後）</h3>
+<div class="card">
+<table>
+  <tr>
+    <th>維度</th><th>權重</th><th>Phase 7.5 前</th><th>Phase 7.5 後</th><th>資料來源</th>
+  </tr>
+  <tr>
+    <td><strong>CVSS</strong></td><td>20%</td>
+    <td><span class="tag tag-g">✅ NVD API</span></td>
+    <td><span class="tag tag-g">✅ NVD API</span></td>
+    <td>services.nvd.nist.gov</td>
+  </tr>
+  <tr>
+    <td><strong>EPSS</strong></td><td>30%</td>
+    <td><span class="tag tag-r">❌ LLM 猜測</span></td>
+    <td><span class="tag tag-g">✅ FIRST.org API</span></td>
+    <td>api.first.org/epss (Log4Shell = 0.9436)</td>
+  </tr>
+  <tr>
+    <td><strong>KEV</strong></td><td>25%</td>
+    <td><span class="tag tag-g">✅ CISA API</span></td>
+    <td><span class="tag tag-g">✅ CISA API</span></td>
+    <td>cisa.gov/known-exploited-vulnerabilities</td>
+  </tr>
+  <tr>
+    <td><strong>GHSA</strong></td><td>10%</td>
+    <td><span class="tag tag-r">❌ LLM 猜測</span></td>
+    <td><span class="tag tag-g">✅ OSV.dev API</span></td>
+    <td>api.osv.dev (Batch 支援)</td>
+  </tr>
+  <tr>
+    <td><strong>ATT&CK</strong></td><td>10%</td>
+    <td><span class="tag tag-r">❌ LLM 猜測</span></td>
+    <td><span class="tag tag-g">✅ CWE→CAPEC→T-ID 映射</span></td>
+    <td>MITRE CTID + CAPEC 3.9（25+ CWE）</td>
+  </tr>
+  <tr>
+    <td><strong>OTX</strong></td><td>5%</td>
+    <td><span class="tag tag-g">✅ AlienVault API</span></td>
+    <td><span class="tag tag-g">✅ AlienVault API</span></td>
+    <td>otx.alienvault.com</td>
+  </tr>
+  <tr style="background:rgba(63,185,80,0.04)">
+    <td colspan="2"><strong>API 驅動覆蓋率</strong></td>
+    <td><span class="tag tag-r">3/6 = 50%</span></td>
+    <td><span class="tag tag-g">6/6 = 100% ✅</span></td>
+    <td>Phase 7 (EPSS) + Phase 7.5 (OSV+ATT&CK)</td>
+  </tr>
+</table>
 </div>
 
 <!-- ════════════════════════════════════════ -->
@@ -533,27 +590,34 @@ flowchart LR
   <p><strong>SOP 核心設計</strong>：七步驟嚴格順序執行，每步都有明確的條件邏輯</p>
 
   <div class="diagram-wrap" style="margin-top:1rem">
-    <div class="title">Scout Skill 七步驟 SOP（完整實作）</div>
+    <div class="title">Scout Skill 八步驟 SOP（Phase 7.5：OSV 優先）</div>
     <div class="mermaid">
 flowchart TD
     S0(["Scout Agent 啟動"])
     S1["Step 1: read_memory\n必須第一步執行\n取得歷史 CVE 清單"]
     S2["Step 2: history_search（可選）\n語義搜尋更多歷史上下文"]
-    S3A["Step 3a: search_nvd\n對每個套件查詢漏洞"]
-    S3B{"CVSS >= 7.0?"}
-    S3C["Step 3b: search_otx\n條件觸發，查威脅等級"]
-    S3D["標記 otx_threat_level: unknown\n直接跳過"]
+    S3A["Step 3a: search_osv（主力）\nEcosystem-aware 精確查詢\n不會返回 1999 年廢棄 CVE"]
+    S3FB{"OSV count=0?"}
+    S3BFB["Step 3b: search_nvd（Fallback）\nNVD CPE 查詢"]
+    S3C{"CVSS >= 7.0?"}
+    S3D["Step 3c: fetch_epss_score\n查詢真實利用機率\nFIRST.org API"]
+    S3E["Step 3d: search_otx\n可3選觸發查威脅等級"]
+    S3F["標記 otx_threat_level: unknown\n直接跳過"]
     S4["Step 4: 比對歷史\nis_new 標記差異"]
     S5["Step 5: 組裝 JSON\n按嚴重度排序\nCRITICAL > HIGH > MEDIUM > LOW"]
     S6["Step 6: write_memory\n強制執行\nSentinel Monitor 監控\n跳過 = DEGRADED 降級"]
     S7["Step 7: Final Answer\n純 JSON 輸出\n無任何附加文字"]
 
     S0 --> S1 --> S2 --> S3A
-    S3A --> S3B
-    S3B -->|Yes| S3C --> S4
-    S3B -->|No| S3D --> S4
+    S3A --> S3FB
+    S3FB -->|No| S3C
+    S3FB -->|Yes| S3BFB --> S3C
+    S3C -->|Yes| S3D --> S3E --> S4
+    S3C -->|No| S3F --> S4
     S4 --> S5 --> S6 --> S7
 
+    style S3A fill:#1a3a2a,stroke:#34d399
+    style S3D fill:#2a1a3a,stroke:#a78bfa
     style S6 fill:#3a1a1a,stroke:#f85149
     style S1 fill:#1a1a3a,stroke:#58a6ff
     </div>
@@ -563,8 +627,9 @@ flowchart TD
     <div class="ok-box">
       <strong>品質紅線（Quality Gates）</strong>
       <ul style="margin:.5rem 0 0 1.2rem;font-size:.88rem">
-        <li>CVE 編號必須來自 search_nvd 回傳，禁止自行編造</li>
-        <li>CVSS 分數必須來自 NVD API，不可估算</li>
+        <li>CVE 編號必須來自 <code>search_osv</code> 或 <code>search_nvd</code> 回傳，禁止自行編造</li>
+        <li>CVSS 分數必須來自 API，不可估算</li>
+        <li>EPSS 分數必須來自 <code>fetch_epss_score</code>（CVSS &ge; 7.0）</li>
         <li>每個 CVE 都必須標記 is_new（比對 read_memory）</li>
         <li>最後必須呼叫 write_memory（Sentinel 監控）</li>
         <li>Final Answer 只有純 JSON，無附加文字</li>
@@ -573,7 +638,8 @@ flowchart TD
     <div class="warn-box">
       <strong>Agent 的自主決策（非工具包裝）</strong>
       <ul style="margin:.5rem 0 0 1.2rem;font-size:.88rem">
-        <li>CVSS < 7.0 → Agent 自主跳過 OTX 查詢（節省資源）</li>
+        <li><strong>「osv 優先」</strong>：search_osv 回 count=0 才 fallback search_nvd</li>
+        <li>CVSS &lt; 7.0 → Agent 自主跳過 EPSS+OTX 查詢（節省資源）</li>
         <li>套件名稱別名映射（nodejs → node.js）→ Agent 自動嘗試</li>
         <li>count=0 → Agent 誠實回報，不補造漏洞</li>
         <li>API 失敗 → Agent 記錄錯誤，繼續處理其他套件</li>

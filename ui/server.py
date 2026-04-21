@@ -160,6 +160,31 @@ def _enrich_result(result: dict[str, Any]) -> dict[str, Any]:
                         "is_new":      False,
                     })
 
+    # ── UI 最後防線：CVE 年份過濾（year < 2005 不顯示在 UI）──────────
+    # 無論哪個 Agent 產生了舊 CVE，在呈現給前端前一律過濾
+    CVE_YEAR_MIN_UI = 2005
+    ancient_in_ui = []
+    fresh_ui_vulns = []
+    for v in vulns:
+        cve_id = v.get("cve_id", "")
+        if cve_id.startswith("GHSA-") or not cve_id.startswith("CVE-"):
+            fresh_ui_vulns.append(v)
+            continue
+        try:
+            yr = int(cve_id.split("-")[1])
+            if yr < CVE_YEAR_MIN_UI:
+                ancient_in_ui.append(cve_id)
+                logger.warning("[UI FILTER] Ancient CVE hidden from UI (year=%d): %s", yr, cve_id)
+            else:
+                fresh_ui_vulns.append(v)
+        except (IndexError, ValueError):
+            fresh_ui_vulns.append(v)
+
+    if ancient_in_ui:
+        logger.warning("[UI FILTER] Total ancient CVEs removed from UI: %d — %s", len(ancient_in_ui), ancient_in_ui)
+        vulns = fresh_ui_vulns
+    # ────────────────────────────────────────────────────────────────
+
     # 計算 vulnerability_summary
     summary = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "new": 0}
     for v in vulns:

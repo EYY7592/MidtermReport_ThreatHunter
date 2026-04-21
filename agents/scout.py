@@ -22,7 +22,9 @@ from config import get_llm
 
 # LLM 延遲初始化：在 create_scout_agent() 中才呼叫 get_llm()
 from tools.nvd_tool import search_nvd
+from tools.osv_tool import search_osv       # OSV.dev — ecosystem-aware 精確查詢（主力）
 from tools.otx_tool import search_otx
+from tools.epss_tool import fetch_epss_score  # FIRST.org EPSS — 漏洞利用機率
 from tools.memory_tool import read_memory, write_memory, history_search
 
 logger = logging.getLogger("ThreatHunter")
@@ -56,6 +58,37 @@ except ImportError:
     _skill_loader = None
     _SKILL_LOADER_AVAILABLE = False
     logger.warning("[Scout] Phase 4D: SkillLoader 不可用，使用內建 _load_skill")
+
+
+# ── GHSA Severity 解析輔助（Phase 7.5）──────────────────────
+# OSV vuln_dict 中的 database_specific.severity 存有 GitHub Advisory 嚴重度
+# 直接解析此欄位填補 Intel Fusion 的 GHSA 維度（10% 權重）
+# 來源：https://docs.github.com/en/graphql/reference/enums#securityadvisoryidentifiertype
+
+def _extract_ghsa_severity_from_osv(vuln_dict: dict) -> str:
+    """
+    從 OSV vuln_dict 解析 GHSA severity。
+
+    OSV 的 database_specific 欄位：
+      {
+        "severity": "HIGH",    ← GitHub Advisory severity
+        "cvss": {...}
+      }
+    また、vuln["osv_id"].startswith("GHSA-") 也是 GHSA 直接來源。
+
+    Returns:
+        "CRITICAL" | "HIGH" | "MODERATE" | "MEDIUM" | "LOW" | "UNKNOWN"
+    """
+    # 優先從已解析的欄位取（如果 _parse_osv_vuln 已填入）
+    if vuln_dict.get("ghsa_severity"):
+        return vuln_dict["ghsa_severity"]
+    # 從原始 severity 欄位取
+    sev = vuln_dict.get("severity", "")
+    if sev in ("CRITICAL", "HIGH", "MODERATE", "MEDIUM", "LOW"):
+        return sev
+    return "UNKNOWN"
+# ─────────────────────────────────────────────────────────────
+
 
 
 def _load_skill(skill_filename: str = "threat_intel.md") -> str:
@@ -201,7 +234,13 @@ You MUST follow this Standard Operating Procedure for the current scan path ({in
         role="Threat Intelligence Scout",
         goal=agent_goal,
         backstory=backstory,
-        tools=[search_nvd, search_otx, read_memory, write_memory, history_search],
+        tools=[
+            search_osv,   # 主力：OSV.dev ecosystem-aware 精確查詢（不會返回無關 1999 CVE）
+            search_nvd,   # 備用：NVD CPE 查詢（OSV 無結果時使用）
+            search_otx,
+            fetch_epss_score,  # EPSS：CVSS >= 7.0 的 CVE 查詢真實利用機率
+            read_memory, write_memory, history_search,
+        ],
         llm=llm,
         verbose=True,
         max_iter=15,   # SOP: 最多 15 輪 ReAct（包含 6 步驟程：read_memory+search_nvd+OTX+write_memory）
@@ -248,11 +287,15 @@ def create_scout_task(agent, tech_stack: str):
             f"Step 1: Call read_memory\n"
             f"   Action: read_memory\n"
             f"   Action Input: scout\n\n"
-            f"Step 2: For EACH package, call search_nvd separately:\n"
-            f"{nvd_calls}\n\n"
-            f"Step 3: For CVEs with CVSS >= 7.0, call search_otx for that package\n\n"
+            f"Step 2: For EACH package, call search_osv first (more precise), search_nvd as fallback:\n"
+            f"{chr(10).join(f'   - search_osv(\'{ pkg }\')' for pkg in packages[:8])}\n"
+            f"   If search_osv returns count=0, then try: search_nvd('<package>')\n\n"
+            f"Step 3: For CVEs with CVSS >= 7.0:\n"
+            f"   - Call fetch_epss_score('<CVE-ID1>,<CVE-ID2>') to get exploitation probability\n"
+            f"   - Call search_otx for the package to get threat intelligence\n\n"
             f"Step 4: Assemble JSON report from REAL tool results only\n"
-            f"   - CVE IDs, CVSS scores must come from search_nvd output\n"
+            f"   - CVE IDs MUST come from search_osv or search_nvd output\n"
+            f"   - EPSS scores MUST come from fetch_epss_score output\n"
             f"   - Compare with read_memory history, mark is_new\n\n"
             f"Step 5: Call write_memory to save results\n"
             f"   Action: write_memory\n"
@@ -271,16 +314,19 @@ def create_scout_task(agent, tech_stack: str):
             f"Step 1: Call read_memory\n"
             f"   Action: read_memory\n"
             f"   Action Input: scout\n\n"
-            f"Step 2: Extract PACKAGE NAMES from the code, then call search_nvd for each package.\n"
+            f"Step 2: Extract PACKAGE NAMES from the code, then call search_osv first:\n"
             f"   RULE: Package names come from require() or import statements ONLY.\n"
-            f"   Example: require('express') -> search_nvd('express')\n"
-            f"   Example: require('lodash')  -> search_nvd('lodash')\n"
+            f"   Example: require('express') -> search_osv('express')\n"
+            f"   Example: require('lodash')  -> search_osv('lodash')\n"
+            f"   If search_osv returns count=0 for a package, fallback: search_nvd('<package>')\n"
             f"   FORBIDDEN search terms (these are syntax, NOT packages):\n"
             f"   - eval, exec, Function, innerHTML, script, html, document\n"
             f"   - const, let, var, function, class, async, await\n"
             f"   - req, res, app, user, input (these are variable names)\n"
             f"   If no require()/import found, output empty vulnerabilities list.\n\n"
-            f"Step 3: For CVEs with CVSS >= 7.0, call search_otx\n\n"
+            f"Step 3: For CVEs with CVSS >= 7.0:\n"
+            f"   - Call fetch_epss_score('<CVE-ID1>,<CVE-ID2>') for exploitation probability\n"
+            f"   - Call search_otx for high-risk packages\n\n"
             f"Step 4: Assemble JSON report from REAL tool results only\n\n"
             f"Step 5: Call write_memory\n"
             f"   Action: write_memory\n"
@@ -295,7 +341,7 @@ def create_scout_task(agent, tech_stack: str):
 
     return Task(
         description=task_desc,
-        expected_output="Structured JSON threat intel report with CVEs from search_nvd tool.",
+        expected_output="Structured JSON threat intel report with CVEs from search_osv (primary) or search_nvd (fallback) tool, with EPSS scores from fetch_epss_score.",
         agent=agent,
     )
 
@@ -304,6 +350,12 @@ def create_scout_task(agent, tech_stack: str):
 def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
     """
     Execute full Scout Pipeline with Harness code-level guarantees.
+
+    v5.0 (Phase 7.5) 新增：
+      - OSV Batch 預熱：LLM 啟動前批量查詢所有套件，結果預存快取
+        → LLM 呼叫 search_osv() 時直接命中快取，無需等待 API
+      - Harness 2.5：改用 OSV 資料做 LLM 遺漏補充（取代 NVD cache inject）
+      - GHSA severity 維度：從 OSV database_specific.severity 直接解析
 
     v3.7: input_type selects the correct Skill SOP for path-aware analysis.
 
@@ -318,6 +370,25 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
     from crewai import Crew, Process
     from config import mark_model_failed, get_current_model_name, rate_limiter
     # 新版 memory_tool 無 _write_memory_impl，使用公開 Tool 介面
+
+    # ── Harness 0：OSV Batch 預熱快取（在 LLM 之前執行）───────────
+    # 理由：LLM 呼叫 search_osv() 是一個一個套件查，無法自行批量。
+    # 在 Code-level Harness 層先做 Batch 查詢，結果存入快取，
+    # Agent 呼叫 search_osv() 時直接命中快取，延遲從 N×API_RTT → 1×API_RTT。
+    _osv_batch_cache: dict[str, list] = {}  # pkg → [vuln_dict, ...]
+    if input_type == "pkg":
+        # 從 tech_stack 提取套件名稱（去版本號）
+        _pkg_list = [item.strip().split()[0] for item in tech_stack.split(",") if item.strip()]
+        if _pkg_list:
+            try:
+                from tools.osv_tool import search_osv_batch
+                logger.info("[HARNESS 0] OSV Batch warmup: %s", _pkg_list)
+                _osv_batch_cache = search_osv_batch(_pkg_list)
+                logger.info("[HARNESS 0] OSV Batch warmup done: %d packages cached",
+                            len(_osv_batch_cache))
+            except Exception as _e:
+                logger.warning("[HARNESS 0] OSV Batch warmup failed (non-fatal): %s", _e)
+    # ────────────────────────────────────────────────────────────
 
     # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
     MAX_LLM_RETRIES = 2
@@ -421,43 +492,72 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
                 output["summary"] = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
 
     # ── Harness 保障 2.5：Cache 注入（Anti-LLM-Omission）──────
-    # 當 LLM 輸出 0 vulnerabilities，但 NVD cache 中有資料時，
-    # 直接從 cache 注入——防止 LLM 忽略工具輸出的問題
+    # v5.0：改用 OSV Batch 快取資料（更精確，不會混入 1999 年 CVE）
+    # 當 LLM 輸出 0 vulnerabilities，從 Batch 預熱快取直接注入
     if not output.get("vulnerabilities"):
-        from tools.nvd_tool import _search_nvd_impl
         injected = []
-        for item in (tech_stack or "").split(","):
-            pkg = item.strip().split()[0].lower()
-            if not pkg:
-                continue
-            try:
-                cached_result = json.loads(_search_nvd_impl(pkg))
-                for v in cached_result.get("vulnerabilities", []):
-                    cve_id = v.get("cve_id") or v.get("id", "")
-                    if not cve_id.startswith("CVE-"):
+        # 優先用 OSV Batch 預熱快取（最精確）
+        if _osv_batch_cache:
+            for pkg_name, vuln_list in _osv_batch_cache.items():
+                for v in vuln_list:
+                    cve_id = v.get("cve_id", "")
+                    if not cve_id.startswith(("CVE-", "GHSA-")):
                         continue
+                    ghsa_sev = _extract_ghsa_severity_from_osv(v)
                     injected.append({
                         "cve_id":      cve_id,
-                        "package":     v.get("package", pkg),
+                        "package":     v.get("package", pkg_name),
                         "cvss_score":  v.get("cvss_score", 0.0),
                         "severity":    v.get("severity", "MEDIUM"),
                         "description": v.get("description", "")[:300],
-                        "published":   v.get("published_date", ""),
+                        "published":   v.get("published", ""),
                         "is_new":      True,
-                        "in_cisa_kev": v.get("in_cisa_kev", False),
-                        "has_public_exploit": v.get("has_public_exploit", False),
+                        "in_cisa_kev": False,
+                        "has_public_exploit": False,
+                        "source":      "OSV",
+                        "osv_id":      v.get("osv_id", ""),
+                        # GHSA 維度：從 OSV database_specific.severity 解析
+                        "ghsa_severity": ghsa_sev,
                     })
-            except Exception as e:
-                logger.warning("[WARN] Cache inject failed for %s: %s", pkg, e)
+        else:
+            # Fallback：NVD cache（舊路徑，OSV Batch 失敗時使用）
+            from tools.nvd_tool import _search_nvd_impl
+            for item in (tech_stack or "").split(","):
+                pkg = item.strip().split()[0].lower()
+                if not pkg:
+                    continue
+                try:
+                    cached_result = json.loads(_search_nvd_impl(pkg))
+                    for v in cached_result.get("vulnerabilities", []):
+                        cve_id = v.get("cve_id") or v.get("id", "")
+                        if not cve_id.startswith("CVE-"):
+                            continue
+                        injected.append({
+                            "cve_id":      cve_id,
+                            "package":     v.get("package", pkg),
+                            "cvss_score":  v.get("cvss_score", 0.0),
+                            "severity":    v.get("severity", "MEDIUM"),
+                            "description": v.get("description", "")[:300],
+                            "published":   v.get("published_date", ""),
+                            "is_new":      True,
+                            "in_cisa_kev": v.get("in_cisa_kev", False),
+                            "has_public_exploit": v.get("has_public_exploit", False),
+                        })
+                except Exception as e:
+                    logger.warning("[WARN] NVD cache inject failed for %s: %s", pkg, e)
 
         if injected:
             output["vulnerabilities"] = injected
             logger.warning(
-                "[HARNESS 2.5] LLM output 0 CVEs, injected %d CVEs from NVD cache for tech_stack=%s",
-                len(injected), tech_stack[:60]
+                "[HARNESS 2.5] LLM output 0 CVEs, injected %d CVEs from %s for tech_stack=%s",
+                len(injected),
+                "OSV batch cache" if _osv_batch_cache else "NVD cache",
+                tech_stack[:60]
             )
 
     # 重新查 NVD 建立真實 CVE 清單 + CVE→package 對應表
+    # v5.0：優先用 OSV Batch Cache（已在 Harness 0 預熱），只有 OSV 無資料才查 NVD
+    # NVD 查到的結果也加年份過濾（< 2005 → 不列入 real_cves）
     from tools.nvd_tool import _search_nvd_impl
     real_cves = set()
     cve_to_package = {}  # CVE-XXXX-YYYY → package name
@@ -474,18 +574,36 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
         if pkg_name:
             packages_to_check.add(pkg_name)
 
+    # 優先從 OSV Batch Cache 建 real_cves（最精確，不含 CVE-1999）
+    for pkg_name, vuln_list in _osv_batch_cache.items():
+        for v in vuln_list:
+            cve_id = v.get("cve_id", "")
+            if cve_id.startswith(("CVE-", "GHSA-")):
+                real_cves.add(cve_id)
+                cve_to_package[cve_id] = pkg_name
+
+    # OSV 無資料的套件，嘗試 NVD（但過濾 < 2005 年份）
     for pkg in packages_to_check:
+        if any(cve_to_package.get(c) == pkg for c in real_cves):
+            continue  # OSV 已有該套件資料
         try:
-            # 驗證時用更大的頁數（比 Agent 看到的多），減少誤殺真實 CVE
             import tools.nvd_tool as nvd_mod
             original_page_size = nvd_mod.RESULTS_PER_PAGE
-            nvd_mod.RESULTS_PER_PAGE = 100  # 驗證用 100 筆
+            nvd_mod.RESULTS_PER_PAGE = 100
             try:
                 nvd_result = json.loads(_search_nvd_impl(pkg))
             finally:
-                nvd_mod.RESULTS_PER_PAGE = original_page_size  # 恢復原值
+                nvd_mod.RESULTS_PER_PAGE = original_page_size
             for v in nvd_result.get("vulnerabilities", []):
                 cve_id = v["cve_id"]
+                # 年份過濾：CVE-1999/2000... 遠古 CVE 不計入 real_cves
+                try:
+                    cve_year = int(cve_id.split("-")[1])
+                    if cve_year < 2005:
+                        logger.debug("[FILTER] NVD verification skip ancient CVE: %s", cve_id)
+                        continue
+                except (IndexError, ValueError):
+                    pass
                 real_cves.add(cve_id)
                 cve_to_package[cve_id] = pkg
         except Exception as e:
@@ -620,6 +738,40 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
             logger.info("[OK] Corrected %d CVE is_new flags", corrected)
     except Exception as e:
         logger.warning("[WARN] is_new correction failed: %s", e)
+
+    # ── Harness 保障 3.5：CVE 年份過濾器（最後防線）──────────────
+    # 不管哪個 Agent 或 NVD 返回了遠古 CVE，在 Scout 輸出前一律攔截
+    # 根據：CISA KEV 最早 2002 年，現代套件漏洞幾乎都 >= 2005
+    # 例外：GHSA- 前綴（OSV/GitHub Advisory，不用年份過濾）
+    CVE_YEAR_MIN = 2005
+    ancient_removed = []
+    fresh_vulns = []
+    for vuln in output.get("vulnerabilities", []):
+        cve_id = vuln.get("cve_id", "")
+        if cve_id.startswith("GHSA-") or not cve_id.startswith("CVE-"):
+            fresh_vulns.append(vuln)  # GHSA/非標準 ID 保留
+            continue
+        try:
+            cve_year = int(cve_id.split("-")[1])
+            if cve_year < CVE_YEAR_MIN:
+                ancient_removed.append(cve_id)
+                logger.warning(
+                    "[HARNESS 3.5] Ancient CVE removed (year=%d < %d): %s",
+                    cve_year, CVE_YEAR_MIN, cve_id
+                )
+            else:
+                fresh_vulns.append(vuln)
+        except (IndexError, ValueError):
+            fresh_vulns.append(vuln)  # 解析失敗保留（保守）
+
+    if ancient_removed:
+        output["vulnerabilities"] = fresh_vulns
+        output["ancient_cves_removed"] = ancient_removed  # 審計用
+        logger.warning(
+            "[HARNESS 3.5] Removed %d ancient CVEs (< %d): %s",
+            len(ancient_removed), CVE_YEAR_MIN, ancient_removed
+        )
+    # ────────────────────────────────────────────────────────────
 
     # ── 最終 Summary 校正（確保一致性）──────────────────────────
     vulns = output.get("vulnerabilities", [])

@@ -109,9 +109,9 @@
   },
   "CVE-2005-0852": {
     "epss": 0.00163,
-    "percentile": 0.37228,
-    "date": "2026-04-12",
-    "_cached_at": 1776002025.4655294,
+    "percentile": 0.3723,
+    "date": "2026-04-18",
+    "_cached_at": 1776527393.1378522,
     "_source": "FIRST.org EPSS API (online)"
   },
   "CVE-2005-0089": {
@@ -130,16 +130,16 @@
   },
   "CVE-2002-1119": {
     "epss": 0.00144,
-    "percentile": 0.34696,
-    "date": "2026-04-12",
-    "_cached_at": 1776002025.4655294,
+    "percentile": 0.34694,
+    "date": "2026-04-18",
+    "_cached_at": 1776527393.1378522,
     "_source": "FIRST.org EPSS API (online)"
   },
   "CVE-2002-0131": {
     "epss": 0.03038,
-    "percentile": 0.86678,
-    "date": "2026-04-12",
-    "_cached_at": 1776002025.4655294,
+    "percentile": 0.86691,
+    "date": "2026-04-18",
+    "_cached_at": 1776527393.1378522,
     "_source": "FIRST.org EPSS API (online)"
   },
   "CVE-2016-8339": {

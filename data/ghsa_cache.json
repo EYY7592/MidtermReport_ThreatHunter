@@ -7,7 +7,7 @@
     "ghsa_ids": [],
     "published_since": "",
     "_source": "GHSA REST API (no results for python)",
-    "_cached_at": 1776508090.0954473
+    "_cached_at": 1776747803.4925976
   },
   "django:pip": {
     "hits": 10,
@@ -39,7 +39,7 @@
     ],
     "published_since": "2026-04-07T15:30:52Z",
     "_source": "GHSA REST API (online)",
-    "_cached_at": 1776509161.0719974
+    "_cached_at": 1776747002.3632715
   },
   "flask:pip": {
     "hits": 5,
@@ -61,7 +61,7 @@
     ],
     "published_since": "2026-02-19T20:45:41Z",
     "_source": "GHSA REST API (online)",
-    "_cached_at": 1776507322.8238337
+    "_cached_at": 1776747622.7939382
   },
   "requests:pip": {
     "hits": 8,
@@ -107,7 +107,7 @@
     ],
     "published_since": "2023-03-26T21:30:23Z",
     "_source": "GHSA REST API (online)",
-    "_cached_at": 1776506880.2363749
+    "_cached_at": 1776748845.3712895
   },
   "django:python": {
     "hits": 10,
@@ -139,7 +139,7 @@
     ],
     "published_since": "2026-04-07T15:30:52Z",
     "_source": "GHSA REST API (online)",
-    "_cached_at": 1776506861.0688956
+    "_cached_at": 1776749754.4708538
   },
   "any:pip": {
     "hits": 0,
@@ -149,7 +149,7 @@
     "ghsa_ids": [],
     "published_since": "",
     "_source": "GHSA REST API (no results for any)",
-    "_cached_at": 1776510823.844147
+    "_cached_at": 1776750095.4166067
   },
   "postgresql:pip": {
     "hits": 0,
@@ -159,7 +159,7 @@
     "ghsa_ids": [],
     "published_since": "",
     "_source": "GHSA REST API (no results for postgresql)",
-    "_cached_at": 1776511214.95342
+    "_cached_at": 1776750293.6949704
   },
   "nginx:go": {
     "hits": 0,
@@ -201,7 +201,7 @@
     ],
     "published_since": "2023-06-26T21:30:58Z",
     "_source": "GHSA REST API (online)",
-    "_cached_at": 1776512665.1018481
+    "_cached_at": 1776750840.4092908
   },
   "redis:maven": {
     "hits": 3,
@@ -334,7 +334,7 @@
     ],
     "published_since": "2023-03-13T20:00:52Z",
     "_source": "GHSA REST API (online)",
-    "_cached_at": 1776154459.1380115
+    "_cached_at": 1776756535.9990337
   },
   "redis:npm": {
     "hits": 3,
@@ -415,5 +415,144 @@
     "published_since": "2025-12-01T18:59:17Z",
     "_source": "GHSA REST API (online)",
     "_cached_at": 1776493579.6322148
+  },
+  "any:npm": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for any)",
+    "_cached_at": 1776599601.5475209
+  },
+  "django:pypi": {
+    "hits": 10,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2026-4277",
+      "CVE-2026-3902",
+      "CVE-2026-4292",
+      "CVE-2026-33034",
+      "CVE-2026-33033",
+      "CVE-2026-25673",
+      "CVE-2026-25674",
+      "CVE-2026-1312",
+      "CVE-2026-1287",
+      "CVE-2026-1207"
+    ],
+    "ghsa_ids": [
+      "GHSA-pwjp-ccjc-ghwg",
+      "GHSA-mvfq-ggxm-9mc5",
+      "GHSA-mmwr-2jhp-mc7j",
+      "GHSA-933h-hp56-hf7m",
+      "GHSA-5mf9-h53q-7mhq",
+      "GHSA-8p8v-wh79-9r56",
+      "GHSA-mjgh-79qc-68w3",
+      "GHSA-6426-9fv3-65x8",
+      "GHSA-gvg8-93h5-g6qq",
+      "GHSA-mwm9-4648-f68q"
+    ],
+    "published_since": "2026-04-07T15:30:52Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776601787.3440409
+  },
+  "java:maven": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for java)",
+    "_cached_at": 1776674450.9494836
+  },
+  "flask:python": {
+    "hits": 5,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2026-27205",
+      "CVE-2025-47278",
+      "CVE-2023-30861",
+      "CVE-2019-1010083",
+      "CVE-2018-1000656"
+    ],
+    "ghsa_ids": [
+      "GHSA-68rp-wp8r-4726",
+      "GHSA-4grg-w6v8-c28g",
+      "GHSA-m2qf-hxjv-5gpq",
+      "GHSA-5wv5-4vpf-pj6m",
+      "GHSA-562c-5r94-xh97"
+    ],
+    "published_since": "2026-02-19T20:45:41Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776747916.0315278
+  },
+  "fmt:pip": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for fmt)",
+    "_cached_at": 1776635395.6257591
+  },
+  "go:go": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for go)",
+    "_cached_at": 1776643504.1665351
+  },
+  "redis:generic": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2023-28859",
+      "CVE-2023-28858",
+      "CVE-2021-29469"
+    ],
+    "ghsa_ids": [
+      "GHSA-8fww-64cx-x8p5",
+      "GHSA-24wv-mv5m-xv4h",
+      "GHSA-35q2-47q7-3pc3"
+    ],
+    "published_since": "2023-03-26T21:30:23Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776677741.375958
+  },
+  "org.springframework.boot:spring-boot:maven": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for org.springframework.boot)",
+    "_cached_at": 1776752046.8283234
+  },
+  "sqlite3:pip": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2022-43441",
+      "CVE-2022-21227"
+    ],
+    "ghsa_ids": [
+      "GHSA-jqv5-7xpx-qj74",
+      "GHSA-mgvv-5mxp-xq67",
+      "GHSA-9qrh-qjmc-5w2p"
+    ],
+    "published_since": "2023-03-13T20:00:52Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776763903.7584355
   }
 }

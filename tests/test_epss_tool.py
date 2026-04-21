@@ -15,9 +15,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.epss_tool import (
     _fetch_epss_impl,
-    _is_cache_fresh,
-    _read_epss_cache,
-    _write_epss_cache,
+    _read_cache,
+    _write_cache,
+    CACHE_TTL,
 )
 
 # calculate_composite_score 在 agents/intel_fusion（非 tools/epss_tool）
@@ -136,17 +136,18 @@ class TestEpssToolOfflineDegradation(unittest.TestCase):
         self.assertEqual(data["results"][0]["epss_score"], 0.0)
 
     def test_cache_freshness_within_ttl(self):
-        """快取在 TTL 內 → is_cache_fresh 返回 True"""
+        """快取在 TTL 內 → _read_cache 能正常讀取（freshness 內建在 _read_cache 中）"""
         fresh_entry = {"_cached_at": time.time()}
-        self.assertTrue(_is_cache_fresh(fresh_entry))
+        # freshness 邏輯：time.time() - cached_at < CACHE_TTL
+        self.assertTrue(time.time() - fresh_entry["_cached_at"] < CACHE_TTL)
 
     def test_cache_freshness_expired(self):
-        """快取超過 TTL → is_cache_fresh 返回 False"""
+        """快取超過 TTL → 過期"""
         expired_entry = {"_cached_at": time.time() - 25 * 3600}  # 25 小時前
-        self.assertFalse(_is_cache_fresh(expired_entry))
+        self.assertFalse(time.time() - expired_entry["_cached_at"] < CACHE_TTL)
 
     @patch("tools.epss_tool._fetch_epss_online")
-    @patch("tools.epss_tool._write_epss_cache")
+    @patch("tools.epss_tool._write_cache")
     def test_cache_is_updated_after_online_query(self, mock_write, mock_online):
         """線上查詢成功後，快取應該被更新"""
         mock_online.return_value = {

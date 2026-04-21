@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="ThreatHunter — 多 Agent 資安威脅情報平台，即時漏洞掃描與行動報告" />
   <title>ThreatHunter — Security Intelligence Platform</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=5.1" />
 </head>
 <body>
 <div id="app">
@@ -369,6 +369,22 @@
         </div>
       </div>
 
+      <!-- Security Guard: Code Pattern CWE Evidence -->
+      <div id="codePatternsCWESection" style="display:none;margin-top:1.5rem;">
+        <div class="report-card" style="border:1px solid rgba(248,81,73,0.3);background:rgba(248,81,73,0.04);">
+          <div class="report-card-header" style="background:rgba(248,81,73,0.12);color:#f85149;display:flex;align-items:center;gap:0.5rem;">
+            <span>🛡️ SECURITY GUARD</span>
+            <span style="font-size:0.75rem;font-weight:400;color:#8b949e;">— Source Code Vulnerability Analysis with</span>
+            <span style="font-size:0.75rem;font-weight:600;color:#58a6ff;">MITRE CWE v4.14 Evidence</span>
+            <span id="codePatternsCWEBadge" style="margin-left:auto;background:rgba(248,81,73,0.15);border:1px solid rgba(248,81,73,0.4);color:#f85149;border-radius:4px;padding:1px 8px;font-size:0.72rem;"></span>
+          </div>
+          <div class="report-card-body" id="codePatternsCWEList">
+            <div style="color:var(--text-dim);font-size:0.8rem;padding:0.5rem;">Scanning...</div>
+          </div>
+        </div>
+      </div>
+
+
     </div><!-- /reportSection -->
 
   </main>
@@ -404,6 +420,6 @@
   </div>
 </aside>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=5.1"></script>
 </body>
 </html>
