@@ -1,4 +1,0 @@
-{"seq": 1, "ts": "2026-04-12T08:20:18.657115+00:00", "scan_id": "pipe_1775982018", "event": "SCAN_START", "agent": "pipeline", "data": {"scan_id": "pipe_1775982018"}}
-{"seq": 2, "ts": "2026-04-12T08:20:18.657675+00:00", "scan_id": "pipe_1775982018", "event": "STAGE_EXIT", "agent": "input_sanitizer", "data": {"status": "SUCCESS", "duration_ms": 0, "output_keys": "['input_type', 'l0_warning_count']"}}
-{"seq": 3, "ts": "2026-04-12T08:20:18.657675+00:00", "scan_id": "pipe_1775982018", "event": "STAGE_ENTER", "agent": "orchestrator", "data": {"input_keys": "['tech_stack']", "tech_stack_preview": "Django 4.2", "input_hash": "c16b5dd9815b"}}
-{"seq": 4, "ts": "2026-04-12T08:20:18.657675+00:00", "scan_id": "pipe_1775982018", "event": "STAGE_EXIT", "agent": "orchestrator", "data": {"status": "SUCCESS", "duration_ms": 10, "output_keys": "['scan_path', 'agents_to_run']", "scan_path": "B"}}
