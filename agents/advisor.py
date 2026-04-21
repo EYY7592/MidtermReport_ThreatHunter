@@ -29,7 +29,7 @@ from typing import Any
 
 from crewai import Agent, Task
 
-from config import get_llm
+from core.config import get_llm
 from tools.memory_tool import history_search, read_memory, write_memory
 
 # LLM 延遲初始化：在 create_advisor_agent() 中才呼叫 get_llm()
@@ -602,7 +602,7 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
     logger.info("[START] Advisor Pipeline")
 
     # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
-    from config import mark_model_failed, get_current_model_name
+    from core.config import mark_model_failed, get_current_model_name
     MAX_LLM_RETRIES = 2
     excluded_models: list[str] = []
 
@@ -625,7 +625,7 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
             )
             logger.info("[START] Advisor Crew kickoff (attempt %d/%d)", attempt + 1, MAX_LLM_RETRIES + 1)
             try:
-                from checkpoint import recorder as _cp
+                from core.checkpoint import recorder as _cp
                 _adv_model = get_current_model_name(agent.llm)
                 _cp.llm_call("advisor", _adv_model, "openrouter", f"attempt={attempt+1}")
             except Exception:
@@ -658,7 +658,7 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                from config import rate_limiter as _rl
+                from core.config import rate_limiter as _rl
                 _rl.on_429(retry_after=retry_after, caller="advisor")  # 最少 30s
                 continue
 

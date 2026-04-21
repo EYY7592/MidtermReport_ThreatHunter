@@ -20,7 +20,7 @@ from typing import Any
 
 from crewai import Agent, Task
 
-from config import get_llm, LLM_RPM
+from core.config import get_llm, LLM_RPM
 from tools.kev_tool import check_cisa_kev
 from tools.exploit_tool import search_exploits
 from tools.memory_tool import read_memory, write_memory, history_search
@@ -828,7 +828,7 @@ def run_analyst_pipeline(scout_output: str | dict, input_type: str = "pkg") -> d
     pre_mtime = os.path.getmtime(memory_path_check) if os.path.exists(memory_path_check) else 0
 
     # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
-    from config import mark_model_failed, get_current_model_name
+    from core.config import mark_model_failed, get_current_model_name
     MAX_LLM_RETRIES = 2
     excluded_models: list[str] = []
 
@@ -857,7 +857,7 @@ def run_analyst_pipeline(scout_output: str | dict, input_type: str = "pkg") -> d
             )
             logger.info("[START] Analyst Crew kickoff (attempt %d/%d)", attempt + 1, MAX_LLM_RETRIES + 1)
             try:
-                from checkpoint import recorder as _cp
+                from core.checkpoint import recorder as _cp
                 _a_model = get_current_model_name(collector.llm)
                 _cp.llm_call("analyst", _a_model, "openrouter", f"3-task-split attempt={attempt+1}")
             except Exception:
@@ -892,7 +892,7 @@ def run_analyst_pipeline(scout_output: str | dict, input_type: str = "pkg") -> d
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                from config import rate_limiter as _rl
+                from core.config import rate_limiter as _rl
                 _rl.on_429(retry_after=retry_after, caller="analyst")  # 最少 30s
                 continue
 

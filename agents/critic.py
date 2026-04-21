@@ -11,7 +11,7 @@ import json, logging, os, re, time
 from datetime import datetime, timezone
 from typing import Any
 from crewai import Agent, Task
-from config import ENABLE_CRITIC, MAX_DEBATE_ROUNDS, get_llm
+from core.config import ENABLE_CRITIC, MAX_DEBATE_ROUNDS, get_llm
 from tools.kev_tool import check_cisa_kev
 from tools.exploit_tool import search_exploits
 from tools.memory_tool import read_memory
@@ -299,7 +299,7 @@ def run_critic_pipeline(analyst_output: str | dict[str, Any], input_type: str = 
     logger.info("Critic Pipeline started (max rounds: %d)", MAX_DEBATE_ROUNDS)
 
     # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
-    from config import mark_model_failed, get_current_model_name
+    from core.config import mark_model_failed, get_current_model_name
     MAX_LLM_RETRIES = 2
     excluded_models: list[str] = []
 
@@ -314,7 +314,7 @@ def run_critic_pipeline(analyst_output: str | dict[str, Any], input_type: str = 
             crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=True)
             logger.info("Critic Crew kickoff (attempt %d/%d)", attempt + 1, MAX_LLM_RETRIES + 1)
             try:
-                from checkpoint import recorder as _cp
+                from core.checkpoint import recorder as _cp
                 _c_model = get_current_model_name(agent.llm)
                 _cp.llm_call("critic", _c_model, "openrouter", f"attempt={attempt+1}")
             except Exception:
@@ -347,7 +347,7 @@ def run_critic_pipeline(analyst_output: str | dict[str, Any], input_type: str = 
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                from config import rate_limiter as _rl
+                from core.config import rate_limiter as _rl
                 _rl.on_429(retry_after=retry_after, caller="critic")  # 最少 30s
                 continue
             logger.error("Critic CrewAI failed: %s", e)

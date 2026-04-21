@@ -47,7 +47,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any
 
-from config import (
+from core.config import (
     ENABLE_CRITIC,
     degradation_status,
     rate_limiter,
@@ -887,7 +887,7 @@ def run_pipeline_with_callback(
     logger.info("=" * 60)
 
     # (comment encoding corrupted)
-    from checkpoint import recorder
+    from core.checkpoint import recorder
     recorder.start_scan(f"pipe_{int(pipeline_start)}")
 
     # (comment encoding corrupted)
@@ -895,7 +895,7 @@ def run_pipeline_with_callback(
     l0_report: dict[str, Any] = {}
     sanitized_stack: str = tech_stack
     try:
-        from input_sanitizer import sanitize_input, format_l0_report
+        from core.input_sanitizer import sanitize_input, format_l0_report
         san_result = sanitize_input(tech_stack)
         l0_report = format_l0_report(san_result)
 

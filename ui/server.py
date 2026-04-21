@@ -271,7 +271,7 @@ def _pipeline_worker(scan_id: str, tech_stack: str, input_type: str = "pkg") -> 
     finally:
         # v3.6: 存儲 checkpoint 檔名，供 Thinking Path API 查詢
         try:
-            from checkpoint import recorder
+            from core.checkpoint import recorder
             if recorder.current_filename:
                 store["checkpoint_file"] = recorder.current_filename
                 logger.info("[SCAN:%s] Checkpoint file: %s", scan_id, recorder.current_filename)

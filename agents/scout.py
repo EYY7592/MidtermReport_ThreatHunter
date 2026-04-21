@@ -18,7 +18,7 @@ import requests
 
 from crewai import Agent
 
-from config import get_llm
+from core.config import get_llm
 
 # LLM 延遲初始化：在 create_scout_agent() 中才呼叫 get_llm()
 from tools.nvd_tool import search_nvd
@@ -368,7 +368,7 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
     """
     import json
     from crewai import Crew, Process
-    from config import mark_model_failed, get_current_model_name, rate_limiter
+    from core.config import mark_model_failed, get_current_model_name, rate_limiter
     # 新版 memory_tool 無 _write_memory_impl，使用公開 Tool 介面
 
     # ── Harness 0：OSV Batch 預熱快取（在 LLM 之前執行）───────────
@@ -403,7 +403,7 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
         # 執行 Agent
         logger.info("[START] Scout Pipeline: %s (attempt %d/%d)", tech_stack, attempt + 1, MAX_LLM_RETRIES + 1)
         try:
-            from checkpoint import recorder as _cp
+            from core.checkpoint import recorder as _cp
             _current_model = get_current_model_name(agent.llm)
             _cp.llm_call("scout", _current_model, "openrouter", f"attempt={attempt+1}")
         except Exception:

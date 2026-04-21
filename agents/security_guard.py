@@ -33,7 +33,7 @@ from typing import Any, Callable
 
 from crewai import Agent, Task
 
-from config import SKILLS_DIR, SYSTEM_CONSTITUTION, get_llm
+from core.config import SKILLS_DIR, SYSTEM_CONSTITUTION, get_llm
 
 logger = logging.getLogger("ThreatHunter.security_guard")
 
@@ -833,8 +833,8 @@ def run_security_guard(
         )
         from crewai import Crew, Process
         try:
-            from checkpoint import recorder as _cp
-            from config import get_current_model_name as _gcmn_sg
+            from core.checkpoint import recorder as _cp
+            from core.config import get_current_model_name as _gcmn_sg
             _sg_model = _gcmn_sg(agent.llm)
             _cp.llm_call("security_guard", _sg_model, "openrouter", "L2_confirmation")
         except Exception:

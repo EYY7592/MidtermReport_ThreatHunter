@@ -24,7 +24,7 @@ from typing import Any
 
 from crewai import Agent, Task
 
-from config import (
+from core.config import (
     SKILLS_DIR,
     SYSTEM_CONSTITUTION,
     degradation_status,

@@ -22,7 +22,7 @@ from typing import Any
 
 from crewai import Agent, Task, Crew, Process
 
-from config import SYSTEM_CONSTITUTION, get_llm, degradation_status
+from core.config import SYSTEM_CONSTITUTION, get_llm, degradation_status
 
 logger = logging.getLogger("ThreatHunter.debate_engine")
 

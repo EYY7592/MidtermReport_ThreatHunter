@@ -18,7 +18,7 @@ from typing import Any
 
 from crewai.tools import tool
 
-from config import MEMORY_DIR, ENABLE_MEMORY_RAG, SIMILARITY_THRESHOLD
+from core.config import MEMORY_DIR, ENABLE_MEMORY_RAG, SIMILARITY_THRESHOLD
 
 logger = logging.getLogger("threathunter.memory")
 
