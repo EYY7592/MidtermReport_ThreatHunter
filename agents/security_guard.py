@@ -33,7 +33,7 @@ from typing import Any, Callable
 
 from crewai import Agent, Task
 
-from core.config import SKILLS_DIR, SYSTEM_CONSTITUTION, get_llm
+from config import SKILLS_DIR, SYSTEM_CONSTITUTION, get_llm
 
 logger = logging.getLogger("ThreatHunter.security_guard")
 
@@ -92,6 +92,13 @@ _LANG_SIGNATURES: list[tuple[str, list[re.Pattern], int]] = [
         re.compile(r"(?:int\s+main\s*\(|void\s+\w+\s*\(|printf\s*\(|malloc\s*\()", re.MULTILINE),
         re.compile(r"(?:cout\s*<<|std::|namespace\s+\w+|template\s*<)", re.MULTILINE),
     ], 1),
+    # C# / .NET 特徵
+    ("csharp", [
+        re.compile(r"using\s+System(?:\.\w+)?\s*;", re.MULTILINE),
+        re.compile(r"(?:public|private|protected|internal)\s+(?:static\s+)?(?:class|void|string|int|bool|async)", re.MULTILINE),
+        re.compile(r"(?:namespace\s+\w+|new\s+\w+\s*\(|Console\.Write|\[\w+Attribute\])", re.MULTILINE),
+        re.compile(r"(?:get;|set;|\.ToString\(\)|await\s+|Task<|List<|Dictionary<)", re.MULTILINE),
+    ], 2),
 ]
 
 
@@ -107,7 +114,7 @@ def detect_language(code: str) -> str:
 
     Returns:
         語言名（"python" | "javascript" | "java" | "go" | "php" | "ruby" |
-                "rust" | "c_cpp" | "typescript" | "unknown"）
+                "rust" | "c_cpp" | "typescript" | "csharp" | "unknown"）
     """
     if not code or not code.strip():
         return "unknown"
@@ -174,6 +181,13 @@ _DANGER_UNIVERSAL: list[tuple[str, re.Pattern]] = [
         re.IGNORECASE | re.DOTALL,
     )),
     ("CMD_INJECTION", re.compile(
+        # (?<!\w) 防止 substring FP：
+        #   ecosystem( → system 是 ecosystem 的後綴，\w 前置 → 不匹配（fixes FP）
+        #   db.execute( → exec 後接 ute 不是 \s*\( → 不匹配
+        #   hmac.new(   → new 不在清單中   → 不匹配
+        #   os.system(  → system 前是 .(非 \w) → 匹配（正確）
+        #   popen(      → popen 前無 \w       → 匹配（正確）
+        r"(?<!\w)"
         r"(?:exec|eval|system|popen|shell_exec|child_process\.exec|"
         r"os\.system|subprocess\.(?:Popen|run|call|check_output)|"
         r"Runtime\.getRuntime\(\)\.exec|exec\.Command)\s*\(",
@@ -254,6 +268,51 @@ _DANGER_LANG: dict[str, list[tuple[str, re.Pattern]]] = {
         ("FORMAT_STRING", re.compile(r"printf\s*\(\s*\w+", re.IGNORECASE)),
         ("MALLOC_NOFREE", re.compile(r"malloc\s*\(", re.IGNORECASE)),
         ("USE_AFTER_FREE", re.compile(r"free\s*\(\s*\w+\s*\)", re.IGNORECASE)),
+    ],
+    # ── C# / .NET ────────────────────────────────────────────────────────────
+    "csharp": [
+        # CWE-78: Process.Start / Process().Start() + user-controlled arguments
+        ("CMD_INJECTION_CS", re.compile(
+            r"(?:"
+            r"Process\s*\(\s*\)\.Start"
+            r"|new\s+Process\s*\("
+            r"|ProcessStartInfo\s*\("
+            r"|StartInfo\.(?:FileName|Arguments)\s*="
+            r"|Process\.Start\s*\("
+            r")",
+            re.IGNORECASE,
+        )),
+        # CWE-89: string concatenation in SQL queries
+        ("SQL_INJECT_CS", re.compile(
+            r"(?:SqlCommand|OleDbCommand|OdbcCommand|NpgsqlCommand)"
+            r"\s*\(.*?\+",
+            re.IGNORECASE | re.DOTALL,
+        )),
+        # CWE-502: BinaryFormatter / NetDataContractSerializer (insecure deserialization)
+        ("DESERIALIZE_UNSAFE_CS", re.compile(
+            r"(?:BinaryFormatter|NetDataContractSerializer|SoapFormatter|LosFormatter)"
+            r"\s*(?:\(|\.)(?:Deserialize|UnsafeDeserialize)?",
+            re.IGNORECASE,
+        )),
+        # CWE-611: XmlDocument / XmlReader without secure settings (XXE risk)
+        ("XXE_CS", re.compile(
+            r"new\s+XmlDocument\s*\("
+            r"|XmlReader\.Create\s*\("
+            r"|XmlTextReader\s*\(",
+            re.IGNORECASE,
+        )),
+        # CWE-90: LDAP injection
+        ("LDAP_INJECT_CS", re.compile(
+            r"DirectorySearcher\s*\("
+            r"|Filter\s*=.*?\+",
+            re.IGNORECASE | re.DOTALL,
+        )),
+        # CWE-79: Response.Write without encoding
+        ("XSS_CS", re.compile(
+            r"Response\.Write\s*\("
+            r"|HtmlRaw\s*\(",
+            re.IGNORECASE,
+        )),
     ],
 }
 
@@ -833,8 +892,8 @@ def run_security_guard(
         )
         from crewai import Crew, Process
         try:
-            from core.checkpoint import recorder as _cp
-            from core.config import get_current_model_name as _gcmn_sg
+            from checkpoint import recorder as _cp
+            from config import get_current_model_name as _gcmn_sg
             _sg_model = _gcmn_sg(agent.llm)
             _cp.llm_call("security_guard", _sg_model, "openrouter", "L2_confirmation")
         except Exception:
