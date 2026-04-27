@@ -1,0 +1,558 @@
+{
+  "python:pip": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for python)",
+    "_cached_at": 1776747803.4925976
+  },
+  "django:pip": {
+    "hits": 10,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2026-4277",
+      "CVE-2026-3902",
+      "CVE-2026-4292",
+      "CVE-2026-33034",
+      "CVE-2026-33033",
+      "CVE-2026-25673",
+      "CVE-2026-25674",
+      "CVE-2026-1312",
+      "CVE-2026-1287",
+      "CVE-2026-1207"
+    ],
+    "ghsa_ids": [
+      "GHSA-pwjp-ccjc-ghwg",
+      "GHSA-mvfq-ggxm-9mc5",
+      "GHSA-mmwr-2jhp-mc7j",
+      "GHSA-933h-hp56-hf7m",
+      "GHSA-5mf9-h53q-7mhq",
+      "GHSA-8p8v-wh79-9r56",
+      "GHSA-mjgh-79qc-68w3",
+      "GHSA-6426-9fv3-65x8",
+      "GHSA-gvg8-93h5-g6qq",
+      "GHSA-mwm9-4648-f68q"
+    ],
+    "published_since": "2026-04-07T15:30:52Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776747002.3632715
+  },
+  "flask:pip": {
+    "hits": 5,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2026-27205",
+      "CVE-2025-47278",
+      "CVE-2023-30861",
+      "CVE-2019-1010083",
+      "CVE-2018-1000656"
+    ],
+    "ghsa_ids": [
+      "GHSA-68rp-wp8r-4726",
+      "GHSA-4grg-w6v8-c28g",
+      "GHSA-m2qf-hxjv-5gpq",
+      "GHSA-5wv5-4vpf-pj6m",
+      "GHSA-562c-5r94-xh97"
+    ],
+    "published_since": "2026-02-19T20:45:41Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776747622.7939382
+  },
+  "requests:pip": {
+    "hits": 8,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2026-25645",
+      "CVE-2024-47081",
+      "CVE-2024-35195",
+      "CVE-2023-32681",
+      "CVE-2014-1829",
+      "CVE-2014-1830",
+      "CVE-2015-2296",
+      "CVE-2018-18074"
+    ],
+    "ghsa_ids": [
+      "GHSA-gc5v-m9x4-r6x2",
+      "GHSA-9hjg-9r4m-mvj7",
+      "GHSA-9wx4-h78v-vm56",
+      "GHSA-j8r2-6x86-q33q",
+      "GHSA-cfj3-7x9c-4p3h",
+      "GHSA-652x-xj99-gmcc",
+      "GHSA-pg2w-x9wp-vw92",
+      "GHSA-x84v-xcm2-53pg"
+    ],
+    "published_since": "2026-03-25T16:56:28Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776508582.5898533
+  },
+  "redis:pip": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2023-28859",
+      "CVE-2023-28858",
+      "CVE-2021-29469"
+    ],
+    "ghsa_ids": [
+      "GHSA-8fww-64cx-x8p5",
+      "GHSA-24wv-mv5m-xv4h",
+      "GHSA-35q2-47q7-3pc3"
+    ],
+    "published_since": "2023-03-26T21:30:23Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776748845.3712895
+  },
+  "django:python": {
+    "hits": 10,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2026-4277",
+      "CVE-2026-3902",
+      "CVE-2026-4292",
+      "CVE-2026-33034",
+      "CVE-2026-33033",
+      "CVE-2026-25673",
+      "CVE-2026-25674",
+      "CVE-2026-1312",
+      "CVE-2026-1287",
+      "CVE-2026-1207"
+    ],
+    "ghsa_ids": [
+      "GHSA-pwjp-ccjc-ghwg",
+      "GHSA-mvfq-ggxm-9mc5",
+      "GHSA-mmwr-2jhp-mc7j",
+      "GHSA-933h-hp56-hf7m",
+      "GHSA-5mf9-h53q-7mhq",
+      "GHSA-8p8v-wh79-9r56",
+      "GHSA-mjgh-79qc-68w3",
+      "GHSA-6426-9fv3-65x8",
+      "GHSA-gvg8-93h5-g6qq",
+      "GHSA-mwm9-4648-f68q"
+    ],
+    "published_since": "2026-04-07T15:30:52Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776749754.4708538
+  },
+  "any:pip": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for any)",
+    "_cached_at": 1776750095.4166067
+  },
+  "postgresql:pip": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for postgresql)",
+    "_cached_at": 1776750293.6949704
+  },
+  "nginx:go": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for nginx)",
+    "_cached_at": 1776068638.150414
+  },
+  "jquery:npm": {
+    "hits": 10,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2020-23064",
+      "CVE-2011-4969",
+      "CVE-2012-6708",
+      "CVE-2020-7656",
+      "CVE-2020-11023",
+      "CVE-2020-11022",
+      "CVE-2019-11358",
+      "CVE-2019-5428",
+      "CVE-2016-10707",
+      "CVE-2015-9251"
+    ],
+    "ghsa_ids": [
+      "GHSA-257q-pv89-v3xv",
+      "GHSA-579v-mp3v-rrw5",
+      "GHSA-2pqj-h3vj-pqgw",
+      "GHSA-q4m3-2j7h-f7xw",
+      "GHSA-jpcq-cgw6-v4j6",
+      "GHSA-gxr4-xjj5-5px2",
+      "GHSA-6c3j-c64m-qhgq",
+      "GHSA-wv67-q8rr-grjp",
+      "GHSA-mhpp-875w-9cpv",
+      "GHSA-rmxg-73gg-4p98"
+    ],
+    "published_since": "2023-06-26T21:30:58Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776750840.4092908
+  },
+  "redis:maven": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2023-28859",
+      "CVE-2023-28858",
+      "CVE-2021-29469"
+    ],
+    "ghsa_ids": [
+      "GHSA-8fww-64cx-x8p5",
+      "GHSA-24wv-mv5m-xv4h",
+      "GHSA-35q2-47q7-3pc3"
+    ],
+    "published_since": "2023-03-26T21:30:23Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776513906.9598222
+  },
+  "spring-boot:maven": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for spring-boot)",
+    "_cached_at": 1776514860.6126833
+  },
+  "nginx:pip": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for nginx)",
+    "_cached_at": 1776511787.3574357
+  },
+  "redis:rubygems": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2023-28859",
+      "CVE-2023-28858",
+      "CVE-2021-29469"
+    ],
+    "ghsa_ids": [
+      "GHSA-8fww-64cx-x8p5",
+      "GHSA-24wv-mv5m-xv4h",
+      "GHSA-35q2-47q7-3pc3"
+    ],
+    "published_since": "2023-03-26T21:30:23Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776091167.5145366
+  },
+  "postgresql:maven": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for postgresql)",
+    "_cached_at": 1776434394.4905007
+  },
+  "bootstrap:npm": {
+    "hits": 10,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [
+      "CVE-2025-1647",
+      "CVE-2024-6531",
+      "CVE-2024-6485",
+      "CVE-2024-6484",
+      "CVE-2018-14040",
+      "CVE-2019-8331",
+      "CVE-2018-20677",
+      "CVE-2018-20676",
+      "CVE-2016-10735",
+      "CVE-2018-14042"
+    ],
+    "ghsa_ids": [
+      "GHSA-q58r-hwc8-rm9j",
+      "GHSA-vc8w-jr9v-vj7f",
+      "GHSA-vxmc-5x29-h64v",
+      "GHSA-9mvj-f7w8-pvh2",
+      "GHSA-3wqf-4x89-9g79",
+      "GHSA-9v3m-8fp8-mj99",
+      "GHSA-ph58-4vrj-w6hr",
+      "GHSA-3mgp-fx93-9xv5",
+      "GHSA-4p24-vmcr-4gqj",
+      "GHSA-7mvr-5x2g-wfc8"
+    ],
+    "published_since": "2025-05-15T18:31:47Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776158459.9345434
+  },
+  "redis:other": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2023-28859",
+      "CVE-2023-28858",
+      "CVE-2021-29469"
+    ],
+    "ghsa_ids": [
+      "GHSA-8fww-64cx-x8p5",
+      "GHSA-24wv-mv5m-xv4h",
+      "GHSA-35q2-47q7-3pc3"
+    ],
+    "published_since": "2023-03-26T21:30:23Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776095590.8783493
+  },
+  "sqlite3:python": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2022-43441",
+      "CVE-2022-21227"
+    ],
+    "ghsa_ids": [
+      "GHSA-jqv5-7xpx-qj74",
+      "GHSA-mgvv-5mxp-xq67",
+      "GHSA-9qrh-qjmc-5w2p"
+    ],
+    "published_since": "2023-03-13T20:00:52Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776756535.9990337
+  },
+  "redis:npm": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2023-28859",
+      "CVE-2023-28858",
+      "CVE-2021-29469"
+    ],
+    "ghsa_ids": [
+      "GHSA-8fww-64cx-x8p5",
+      "GHSA-24wv-mv5m-xv4h",
+      "GHSA-35q2-47q7-3pc3"
+    ],
+    "published_since": "2023-03-26T21:30:23Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776155555.2455852
+  },
+  "numpy:pip": {
+    "hits": 8,
+    "max_severity": "CRITICAL",
+    "severity_score": 1.0,
+    "cve_ids": [
+      "CVE-2019-6446",
+      "CVE-2014-1858",
+      "CVE-2014-1859",
+      "CVE-2017-12852",
+      "CVE-2021-41495",
+      "CVE-2021-41496",
+      "CVE-2021-33430",
+      "CVE-2021-34141"
+    ],
+    "ghsa_ids": [
+      "GHSA-9fq2-x9r6-wfmf",
+      "GHSA-cw6w-4rcx-xphc",
+      "GHSA-2fc2-6r4j-p65h",
+      "GHSA-frgw-fgh6-9g52",
+      "GHSA-5545-2q6w-2gh6",
+      "GHSA-f7c7-j99h-c22f",
+      "GHSA-6p56-wp2h-9hxr",
+      "GHSA-fpfv-jqm9-f5jm"
+    ],
+    "published_since": "2022-05-24T22:00:57Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776454396.0968893
+  },
+  "python:python": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for python)",
+    "_cached_at": 1776461201.0883799
+  },
+  "express:npm": {
+    "hits": 6,
+    "max_severity": "LOW",
+    "severity_score": 0.25,
+    "cve_ids": [
+      "CVE-2024-51999",
+      "CVE-2024-10491",
+      "CVE-2024-9266",
+      "CVE-2024-43796",
+      "CVE-2024-29041",
+      "CVE-2014-6393"
+    ],
+    "ghsa_ids": [
+      "GHSA-pj86-cfqh-vqx6",
+      "GHSA-cm5g-3pgc-8rg4",
+      "GHSA-jj78-5fmv-mv28",
+      "GHSA-qw6h-vgh9-j6wx",
+      "GHSA-rv95-896h-c2vc",
+      "GHSA-gpvr-g6gh-9mc2"
+    ],
+    "published_since": "2025-12-01T18:59:17Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776493579.6322148
+  },
+  "any:npm": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for any)",
+    "_cached_at": 1776599601.5475209
+  },
+  "django:pypi": {
+    "hits": 10,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2026-4277",
+      "CVE-2026-3902",
+      "CVE-2026-4292",
+      "CVE-2026-33034",
+      "CVE-2026-33033",
+      "CVE-2026-25673",
+      "CVE-2026-25674",
+      "CVE-2026-1312",
+      "CVE-2026-1287",
+      "CVE-2026-1207"
+    ],
+    "ghsa_ids": [
+      "GHSA-pwjp-ccjc-ghwg",
+      "GHSA-mvfq-ggxm-9mc5",
+      "GHSA-mmwr-2jhp-mc7j",
+      "GHSA-933h-hp56-hf7m",
+      "GHSA-5mf9-h53q-7mhq",
+      "GHSA-8p8v-wh79-9r56",
+      "GHSA-mjgh-79qc-68w3",
+      "GHSA-6426-9fv3-65x8",
+      "GHSA-gvg8-93h5-g6qq",
+      "GHSA-mwm9-4648-f68q"
+    ],
+    "published_since": "2026-04-07T15:30:52Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776601787.3440409
+  },
+  "java:maven": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for java)",
+    "_cached_at": 1776674450.9494836
+  },
+  "flask:python": {
+    "hits": 5,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2026-27205",
+      "CVE-2025-47278",
+      "CVE-2023-30861",
+      "CVE-2019-1010083",
+      "CVE-2018-1000656"
+    ],
+    "ghsa_ids": [
+      "GHSA-68rp-wp8r-4726",
+      "GHSA-4grg-w6v8-c28g",
+      "GHSA-m2qf-hxjv-5gpq",
+      "GHSA-5wv5-4vpf-pj6m",
+      "GHSA-562c-5r94-xh97"
+    ],
+    "published_since": "2026-02-19T20:45:41Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776747916.0315278
+  },
+  "fmt:pip": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for fmt)",
+    "_cached_at": 1776635395.6257591
+  },
+  "go:go": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for go)",
+    "_cached_at": 1776643504.1665351
+  },
+  "redis:generic": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2023-28859",
+      "CVE-2023-28858",
+      "CVE-2021-29469"
+    ],
+    "ghsa_ids": [
+      "GHSA-8fww-64cx-x8p5",
+      "GHSA-24wv-mv5m-xv4h",
+      "GHSA-35q2-47q7-3pc3"
+    ],
+    "published_since": "2023-03-26T21:30:23Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776677741.375958
+  },
+  "org.springframework.boot:spring-boot:maven": {
+    "hits": 0,
+    "max_severity": "UNKNOWN",
+    "severity_score": 0.0,
+    "cve_ids": [],
+    "ghsa_ids": [],
+    "published_since": "",
+    "_source": "GHSA REST API (no results for org.springframework.boot)",
+    "_cached_at": 1776752046.8283234
+  },
+  "sqlite3:pip": {
+    "hits": 3,
+    "max_severity": "HIGH",
+    "severity_score": 0.75,
+    "cve_ids": [
+      "CVE-2022-43441",
+      "CVE-2022-21227"
+    ],
+    "ghsa_ids": [
+      "GHSA-jqv5-7xpx-qj74",
+      "GHSA-mgvv-5mxp-xq67",
+      "GHSA-9qrh-qjmc-5w2p"
+    ],
+    "published_since": "2023-03-13T20:00:52Z",
+    "_source": "GHSA REST API (online)",
+    "_cached_at": 1776763903.7584355
+  }
+}

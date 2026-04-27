@@ -1,0 +1,133 @@
+{
+  "package": "spring boot 3.1",
+  "source": "NVD",
+  "count": 10,
+  "vulnerabilities": [
+    {
+      "cve_id": "CVE-2010-1454",
+      "cvss_score": 6.8,
+      "severity": "MEDIUM",
+      "description": "com.springsource.tcserver.serviceability.rmi.JmxSocketListener in VMware SpringSource tc Server Runtime 6.0.19 and 6.0.20 before 6.0.20.D, and 6.0.25.A before 6.0.25.A-SR01, does not properly enforce the requirement for an encrypted (aka s2enc) password, which allows remote attackers to obtain JMX interface access via a blank password.",
+      "published": "2010-05-19T18:30:03.553",
+      "affected_versions": "6.0.19, 6.0.19.a, 6.0.20",
+      "cpe_vendors": [
+        "vmware:tc_server"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-1622",
+      "cvss_score": 6.0,
+      "severity": "MEDIUM",
+      "description": "SpringSource Spring Framework 2.5.x before 2.5.6.SEC02, 2.5.7 before 2.5.7.SR01, and 3.0.x before 3.0.3 allows remote attackers to execute arbitrary code via an HTTP request containing class.classLoader.URLs[0]=jar: followed by a URL of a crafted .jar file.",
+      "published": "2010-06-21T16:30:01.180",
+      "affected_versions": "7.6.2, 11.1.1.6.1, 11.1.1.8.0",
+      "cpe_vendors": [
+        "oracle:fusion_middleware",
+        "springsource:spring_framework"
+      ]
+    },
+    {
+      "cve_id": "CVE-2001-1438",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Handspring Visor 1.0 and 1.0.1 with the VisorPhone Springboard module installed allows remote attackers to cause a denial of service (PalmOS crash and VisorPhone database corruption) by sending a large or crafted SMS image.",
+      "published": "2001-10-22T04:00:00.000",
+      "affected_versions": "1.0, 1.0.1",
+      "cpe_vendors": [
+        "palm:palm_os",
+        "handspring:visor"
+      ]
+    },
+    {
+      "cve_id": "CVE-2004-0278",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Ratbag game engine, as used in products such as Dirt Track Racing, Leadfoot, and World of Outlaws Spring Cars, allows remote attackers to cause a denial of service (CPU consumption) via a TCP packet that specifies the length of data to read and then sends a second TCP packet that contains less data than specified, which causes Ratbag to repeatedly check the socket for more data.",
+      "published": "2004-11-23T05:00:00.000",
+      "affected_versions": "1.0.3, 2.0",
+      "cpe_vendors": [
+        "ratbag:dirt_track_racing",
+        "ratbag:dirt_track_racing_australia",
+        "ratbag:dirt_track_racing_sprint_cars",
+        "ratbag:leadfoot",
+        "ratbag:world_of_outlaws_sprint_cars"
+      ]
+    },
+    {
+      "cve_id": "CVE-2009-1190",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Algorithmic complexity vulnerability in the java.util.regex.Pattern.compile method in Sun Java Development Kit (JDK) before 1.6, when used with spring.jar in SpringSource Spring Framework 1.1.0 through 2.5.6 and 3.0.0.M1 through 3.0.0.M2 and dm Server 1.0.0 through 1.0.2, allows remote attackers to cause a denial of service (CPU consumption) via serializable data with a long regex string containing multiple optional groups, a related issue to CVE-2004-2540.",
+      "published": "2009-04-27T22:30:00.267",
+      "affected_versions": "<= 1.5.0, 1.1.0, 1.1.6",
+      "cpe_vendors": [
+        "sun:jdk"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-1226",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "The HTTP client functionality in Apple iPhone OS 3.1 on the iPhone 2G and 3.1.3 on the iPhone 3GS allows remote attackers to cause a denial of service (Safari, Mail, or Springboard crash) via a crafted innerHTML property of a DIV element, related to a \"malformed character\" issue.",
+      "published": "2010-04-01T22:30:00.360",
+      "affected_versions": "3.1, 3.1.3",
+      "cpe_vendors": [
+        "apple:iphone_os"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3700",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "VMware SpringSource Spring Security 2.x before 2.0.6 and 3.x before 3.0.4, and Acegi Security 1.0.0 through 1.0.7, as used in IBM WebSphere Application Server (WAS) 6.1 and 7.0, allows remote attackers to bypass security constraints via a path parameter.",
+      "published": "2010-10-29T19:00:02.247",
+      "affected_versions": "1.0.0, 1.0.1, 1.0.2",
+      "cpe_vendors": [
+        "acegisecurity:acegi-security",
+        "vmware:springsource_spring_security",
+        "ibm:websphere_application_server"
+      ]
+    },
+    {
+      "cve_id": "CVE-2009-2897",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "Multiple cross-site scripting (XSS) vulnerabilities in hq/web/common/GenericError.jsp in the generic exception handler in the web interface in SpringSource Hyperic HQ 3.2.x before 3.2.6.1, 4.0.x before 4.0.3.1, 4.1.x before 4.1.2.1, and 4.2-beta1; Application Management Suite (AMS) 2.0.0.SR3; and tc Server 6.0.20.B allow remote attackers to inject arbitrary web script or HTML via invalid values for numerical parameters, as demonstrated by an uncaught java.lang.NumberFormatException exception res",
+      "published": "2009-10-13T10:30:00.500",
+      "affected_versions": "2.0.0, 3.2, 3.2.0",
+      "cpe_vendors": [
+        "springsource:application_management_suite",
+        "springsource:hyperic_hq",
+        "springsource:tc_server"
+      ]
+    },
+    {
+      "cve_id": "CVE-2009-2907",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "Multiple cross-site scripting (XSS) vulnerabilities in SpringSource tc Server 6.0.20.B and earlier, Application Management Suite (AMS) before 2.0.0.SR4, Hyperic HQ Open Source before 4.2.x, Hyperic HQ 4.0 Enterprise before 4.0.3.2, and Hyperic HQ 4.1 Enterprise before 4.1.2.1 allow remote attackers to inject arbitrary web script or HTML via the description field and unspecified \"input fields.\"",
+      "published": "2010-03-24T22:45:15.903",
+      "affected_versions": "<= 2.0.0, <= 4.0.0, <= 4.1.0",
+      "cpe_vendors": [
+        "springsource:application_management_suite",
+        "springsource:hyperic_hq",
+        "springsource:tc_server"
+      ]
+    },
+    {
+      "cve_id": "CVE-2009-2898",
+      "cvss_score": 3.5,
+      "severity": "LOW",
+      "description": "Cross-site scripting (XSS) vulnerability in the Alerts list feature in the web interface in SpringSource Hyperic HQ 3.2.x before 3.2.6.1, 4.0.x before 4.0.3.1, 4.1.x before 4.1.2.1, and 4.2-beta1; Application Management Suite (AMS) 2.0.0.SR3; and tc Server 6.0.20.B allows remote authenticated users to inject arbitrary web script or HTML via the Description field.  NOTE: some of these details are obtained from third party information.",
+      "published": "2009-10-13T10:30:00.530",
+      "affected_versions": "2.0.0, 3.2, 3.2.0",
+      "cpe_vendors": [
+        "springsource:application_management_suite",
+        "springsource:hyperic_hq",
+        "springsource:tc_server"
+      ]
+    }
+  ],
+  "search_mode": "keyword",
+  "_cached_at": 1776602863.4152148
+}

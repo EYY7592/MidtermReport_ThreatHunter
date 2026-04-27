@@ -1,0 +1,117 @@
+{
+  "package": "python",
+  "source": "NVD",
+  "count": 10,
+  "vulnerabilities": [
+    {
+      "cve_id": "CVE-2004-0150",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Buffer overflow in the getaddrinfo function in Python 2.2 before 2.2.2, when IPv6 support is disabled, allows remote attackers to execute arbitrary code via an IPv6 address that is obtained using DNS.",
+      "published": "2004-04-15T04:00:00.000",
+      "affected_versions": "< 2.2.2",
+      "cpe_vendors": [
+        "python:python"
+      ]
+    },
+    {
+      "cve_id": "CVE-2005-0089",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "The SimpleXMLRPCServer library module in Python 2.2, 2.3 before 2.3.5, and 2.4, when used by XML-RPC servers that use the register_instance method to register an object without a _dispatch method, allows remote attackers to read or modify globals of the associated module, and possibly execute arbitrary code, via dotted attributes.",
+      "published": "2005-05-02T04:00:00.000",
+      "affected_versions": "< 2.3.5, 2.4.0",
+      "cpe_vendors": [
+        "python:python"
+      ]
+    },
+    {
+      "cve_id": "CVE-2005-2483",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Eval injection vulnerability in Karrigell before 2.1.8 allows remote attackers to execute arbitrary Python code via modified arguments to a Karrigell services (.ks) script, which can reference functions from libraries that are used by that script.",
+      "published": "2005-08-07T04:00:00.000",
+      "affected_versions": "2.0, 2.0.1, 2.0.2",
+      "cpe_vendors": [
+        "karrigell:karrigell"
+      ]
+    },
+    {
+      "cve_id": "CVE-2005-2491",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Integer overflow in pcre_compile.c in Perl Compatible Regular Expressions (PCRE) before 6.2, as used in multiple products such as Python, Ethereal, and PHP, allows attackers to execute arbitrary code via quantifier values in regular expressions, which leads to a heap-based buffer overflow.",
+      "published": "2005-08-23T04:00:00.000",
+      "affected_versions": "5.0, 6.0, 6.1",
+      "cpe_vendors": [
+        "pcre:pcre"
+      ]
+    },
+    {
+      "cve_id": "CVE-2005-2875",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Py2Play allows remote attackers to execute arbitrary Python code via pickled objects, which Py2Play unpickles and executes.",
+      "published": "2005-09-13T23:03:00.000",
+      "affected_versions": "",
+      "cpe_vendors": [
+        "py2play:py2play"
+      ]
+    },
+    {
+      "cve_id": "CVE-2005-3008",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Tofu 0.2 allows remote attackers to execute arbitrary Python code via crafted pickled objects, which Tofu unpickles and executes.",
+      "published": "2005-09-21T20:03:00.000",
+      "affected_versions": "0.2",
+      "cpe_vendors": [
+        "amar_sagoo:tofu"
+      ]
+    },
+    {
+      "cve_id": "CVE-2005-1632",
+      "cvss_score": 7.2,
+      "severity": "HIGH",
+      "description": "Cheetah 0.9.15 and 0.9.16 searches the /tmp directory for modules before using the paths in the PYTHONPATH variable, which allows local users to execute arbitrary code via a malicious module in /tmp/.",
+      "published": "2005-05-17T04:00:00.000",
+      "affected_versions": "0.9.15, 0.9.16",
+      "cpe_vendors": [
+        "tavis_rudd:cheetah"
+      ]
+    },
+    {
+      "cve_id": "CVE-2002-0131",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "ActivePython ActiveX control for Python in the AXScript package, when used in Internet Explorer, does not prevent a script from reading files from the client's filesystem, which allows remote attackers to read arbitrary files via a malicious web page containing Python script.",
+      "published": "2002-03-25T05:00:00.000",
+      "affected_versions": "2.1",
+      "cpe_vendors": [
+        "activestate:activepython"
+      ]
+    },
+    {
+      "cve_id": "CVE-2002-1119",
+      "cvss_score": 4.6,
+      "severity": "MEDIUM",
+      "description": "os._execvpe from os.py in Python 2.2.1 and earlier creates temporary files with predictable names, which could allow local users to execute arbitrary code via a symlink attack.",
+      "published": "2002-10-04T04:00:00.000",
+      "affected_versions": "< 2.2.2",
+      "cpe_vendors": [
+        "python:python"
+      ]
+    },
+    {
+      "cve_id": "CVE-2005-0852",
+      "cvss_score": 2.1,
+      "severity": "LOW",
+      "description": "Microsoft Windows XP SP1 allows local users to cause a denial of service (system crash) via an empty datagram to a raw IP over IP socket (IP protocol 4), as originally demonstrated using code in Python 2.3.",
+      "published": "2005-05-02T04:00:00.000",
+      "affected_versions": "",
+      "cpe_vendors": []
+    }
+  ],
+  "search_mode": "keyword",
+  "_cached_at": 1776679328.1452107
+}

@@ -1,0 +1,25 @@
+{
+  "_cached_at": 1775635734.9986906,
+  "vulnerabilities": [
+    {
+      "cve_id": "CVE-2022-3294",
+      "package": "Kubernetes",
+      "cvss_score": 8.8,
+      "severity": "HIGH",
+      "description": "K8s node address not validated enabling MITM",
+      "in_cisa_kev": false,
+      "has_public_exploit": false
+    },
+    {
+      "cve_id": "CVE-2021-25741",
+      "package": "Kubernetes",
+      "cvss_score": 8.1,
+      "severity": "HIGH",
+      "description": "K8s symlink exchange host filesystem access",
+      "in_cisa_kev": false,
+      "has_public_exploit": false
+    }
+  ],
+  "total": 2,
+  "package": "kubernetes"
+}

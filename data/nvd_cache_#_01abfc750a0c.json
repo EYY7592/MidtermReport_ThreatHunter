@@ -1,0 +1,1161 @@
+{
+  "package": "#",
+  "source": "NVD",
+  "count": 100,
+  "vulnerabilities": [
+    {
+      "cve_id": "CVE-1999-0561",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "IIS has the #exec function enabled for Server Side Include (SSI) files.",
+      "published": "1999-01-01T05:00:00.000",
+      "affected_versions": "",
+      "cpe_vendors": []
+    },
+    {
+      "cve_id": "CVE-2001-1220",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "D-Link DWL-1000AP Firmware 3.2.28 #483 Wireless LAN Access Point stores the administrative password in plaintext in the default Management Information Base (MIB), which allows remote attackers to gain administrative privileges.",
+      "published": "2001-12-21T05:00:00.000",
+      "affected_versions": "3.2.28_483",
+      "cpe_vendors": [
+        "d-link:dwl-1000ap"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-3722",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "Unspecified vulnerability in PeopleSoft Enterprise Portal for Oracle PeopleSoft Enterprise Portal 8.4 Bundle #16, 8.8 Bundle #10, and 8.9 Bundle #3 has unknown impact and attack vectors, aka Oracle Vuln# PSE01.",
+      "published": "2006-07-21T14:03:00.000",
+      "affected_versions": "8.4, 8.8, 8.9",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-3723",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "Unspecified vulnerability in PeopleSoft Enterprise Portal for Oracle PeopleSoft Enterprise Portal 8.8 with Enforcer Portal Pack Bundle #10 and 8.9 Bundle #3 has unknown impact and attack vectors, aka Oracle Vuln# PSE02.",
+      "published": "2006-07-21T14:03:00.000",
+      "affected_versions": "8.8, 8.9",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-1937",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "Heap-based buffer overflow in httpAdapter.c in httpAdapter in SBLIM SFCB before 1.3.8 might allow remote attackers to execute arbitrary code via a Content-Length HTTP header that specifies a value too small for the amount of POST data, aka bug #3001896.",
+      "published": "2010-06-15T14:30:01.187",
+      "affected_versions": "<= 1.3.7, 1.3.4, 1.3.5",
+      "cpe_vendors": [
+        "standards_based_linux_instrumentation:sblim-sfcb"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-2054",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "Integer overflow in httpAdapter.c in httpAdapter in SBLIM SFCB 1.3.4 through 1.3.7, when the configuration sets httpMaxContentLength to a zero value, allows remote attackers to cause a denial of service (heap memory corruption) or possibly execute arbitrary code via a large integer in the Content-Length HTTP header, aka bug #3001915.  NOTE: some of these details are obtained from third party information.",
+      "published": "2010-06-15T14:30:01.217",
+      "affected_versions": "1.3.4, 1.3.5, 1.3.6",
+      "cpe_vendors": [
+        "standards_based_linux_instrumentation:sblim-sfcb"
+      ]
+    },
+    {
+      "cve_id": "CVE-2012-2750",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "Unspecified vulnerability in MySQL 5.5.x before 5.5.23 has unknown impact and attack vectors related to a \"Security Fix\", aka Bug #59533. NOTE: this might be a duplicate of CVE-2012-1689, but as of 20120816, Oracle has not commented on this possibility.",
+      "published": "2012-08-17T00:55:03.577",
+      "affected_versions": "< 5.5.23, <= 5.5.23, 6.0",
+      "cpe_vendors": [
+        "oracle:mysql",
+        "mariadb:mariadb",
+        "debian:debian_linux"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-7253",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "GE Healthcare Infinia II has a default password of (1) infinia for the infinia user, (2) #bigguy1 for the acqservice user, (3) dont4get2 for the Administrator user, (4) #bigguy1 for the emergency user, and (5) 2Bfamous for the InfiniaAdmin user, which has unspecified impact and attack vectors.",
+      "published": "2015-08-04T14:59:06.237",
+      "affected_versions": "",
+      "cpe_vendors": [
+        "gehealthcare:infinia_ii"
+      ]
+    },
+    {
+      "cve_id": "CVE-2009-5143",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "GE Healthcare Discovery 530C has a password of #bigguy1 for the (1) acqservice user and (2) wsservice user of the Xeleris System, which has unspecified impact and attack vectors.  NOTE: it is not clear whether this password is default, hardcoded, or dependent on another system or product that requires a fixed value.",
+      "published": "2015-08-04T14:59:08.347",
+      "affected_versions": "",
+      "cpe_vendors": [
+        "gehealthcare:discovery_530c_firmware"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-5306",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "GE Healthcare Optima CT680, CT540, CT640, and CT520 has a default password of #bigguy for the root user, which has unspecified impact and attack vectors.",
+      "published": "2015-08-04T14:59:09.503",
+      "affected_versions": "",
+      "cpe_vendors": [
+        "gehealthcare:optima_ct520_firmware",
+        "gehealthcare:optima_ct540_firmware",
+        "gehealthcare:optima_ct680_firmware"
+      ]
+    },
+    {
+      "cve_id": "CVE-2014-7232",
+      "cvss_score": 10.0,
+      "severity": "CRITICAL",
+      "description": "GE Healthcare Discovery XR656 and XR656 G2 has a password of (1) 2getin for the insite user, (2) 4$xray for the xruser user, and (3) #superxr for the root user, which has unspecified impact and attack vectors.  NOTE: it is not clear whether these passwords are default, hardcoded, or dependent on another system or product that requires a fixed value.",
+      "published": "2015-08-04T14:59:24.753",
+      "affected_versions": "",
+      "cpe_vendors": [
+        "gehealthcare:discovery_xr656",
+        "gehealthcare:discovery_xr656_g2"
+      ]
+    },
+    {
+      "cve_id": "CVE-2007-0255",
+      "cvss_score": 9.3,
+      "severity": "CRITICAL",
+      "description": "XINE 0.99.4 allows user-assisted remote attackers to cause a denial of service (application crash) and possibly execute arbitrary code via a certain M3U file that contains a long #EXTINF line and contains format string specifiers in an invalid udp:// URI, possibly a variant of CVE-2007-0017.",
+      "published": "2007-01-16T23:28:00.000",
+      "affected_versions": "0.99.4",
+      "cpe_vendors": [
+        "xine:xine"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-2212",
+      "cvss_score": 9.3,
+      "severity": "CRITICAL",
+      "description": "Buffer overflow in Adobe Reader and Acrobat 9.x before 9.3.3, and 8.x before 8.2.3 on Windows and Mac OS X, allows attackers to execute arbitrary code or cause a denial of service (memory corruption) via a PDF file containing Flash content with a crafted #1023 (3FFh) tag, a different vulnerability than CVE-2010-1295, CVE-2010-2202, CVE-2010-2207, CVE-2010-2209, CVE-2010-2210, and CVE-2010-2211.",
+      "published": "2010-06-30T18:30:01.833",
+      "affected_versions": "9.0, 9.1, 9.1.1",
+      "cpe_vendors": [
+        "adobe:acrobat",
+        "adobe:acrobat_reader"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-0232",
+      "cvss_score": 7.8,
+      "severity": "HIGH",
+      "description": "The kernel in Microsoft Windows NT 3.1 through Windows 7, including Windows 2000 SP4, Windows XP SP2 and SP3, Windows Server 2003 SP2, Windows Vista Gold, SP1, and SP2, and Windows Server 2008 Gold and SP2, when access to 16-bit applications is enabled on a 32-bit x86 platform, does not properly validate certain BIOS calls, which allows local users to gain privileges by crafting a VDM_TIB data structure in the Thread Environment Block (TEB), and then calling the NtVdmControl function to start th",
+      "published": "2010-01-21T19:30:00.900",
+      "affected_versions": "",
+      "cpe_vendors": [
+        "microsoft:windows_2000",
+        "microsoft:windows_7",
+        "microsoft:windows_xp"
+      ]
+    },
+    {
+      "cve_id": "CVE-2013-1461",
+      "cvss_score": 7.8,
+      "severity": "HIGH",
+      "description": "The ExecuteSoapAction function in the SOAPAction handler in the HTTP service in MiniUPnP MiniUPnPd 1.0 allows remote attackers to cause a denial of service (NULL pointer dereference and service crash) via a SOAPAction header that lacks a # (pound sign) character, a different vulnerability than CVE-2013-0230.",
+      "published": "2013-01-31T21:55:01.567",
+      "affected_versions": "1.0",
+      "cpe_vendors": [
+        "miniupnp_project:miniupnpd"
+      ]
+    },
+    {
+      "cve_id": "CVE-2000-0624",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Buffer overflow in Winamp 2.64 and earlier allows remote attackers to execute arbitrary commands via a long #EXTINF: extension in the M3U playlist.",
+      "published": "2000-07-20T04:00:00.000",
+      "affected_versions": "<= 2.64",
+      "cpe_vendors": [
+        "nullsoft:winamp"
+      ]
+    },
+    {
+      "cve_id": "CVE-2001-0733",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "The #sinclude directive in Embedded Perl (ePerl) 2.2.14 and earlier allows a remote attacker to execute arbitrary code by modifying the 'sinclude' file to point to another file that contains a #include directive that references a file that contains the code.",
+      "published": "2001-10-18T04:00:00.000",
+      "affected_versions": "<= 2.2.14, 2.0, 2.0.1",
+      "cpe_vendors": [
+        "ralf_s._engelschall:eperl"
+      ]
+    },
+    {
+      "cve_id": "CVE-2002-0028",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Buffer overflow in ICQ before 2001B Beta v5.18 Build #3659 allows remote attackers to execute arbitrary code via a Voice Video & Games request.",
+      "published": "2002-02-27T05:00:00.000",
+      "affected_versions": "2000.0a, 2000.0b_build3278, 2001a",
+      "cpe_vendors": [
+        "mirabilis:icq"
+      ]
+    },
+    {
+      "cve_id": "CVE-2003-0131",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "The SSL and TLS components for OpenSSL 0.9.6i and earlier, 0.9.7, and 0.9.7a allow remote attackers to perform an unauthorized RSA private key operation via a modified Bleichenbacher attack that uses a large number of SSL or TLS connections using PKCS #1 v1.5 padding that cause OpenSSL to leak information regarding the relationship between ciphertext and the associated plaintext, aka the \"Klima-Pokorny-Rosa attack.\"",
+      "published": "2003-03-24T05:00:00.000",
+      "affected_versions": "0.9.6, 0.9.6a, 0.9.6b",
+      "cpe_vendors": [
+        "openssl:openssl"
+      ]
+    },
+    {
+      "cve_id": "CVE-2005-0267",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "index.php in FlatNuke 2.5.1 allows remote attackers to create an administrator account via carriage returns and #10 in the url_avatar field, which is interpreted as a sensitive directive.",
+      "published": "2005-05-02T04:00:00.000",
+      "affected_versions": "2.5.1",
+      "cpe_vendors": [
+        "flatnuke:flatnuke"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-2824",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Logicalware MailManager before 2.0.10 does not remove 0xc8 0x27 (0xc8 followed by a single-quote character) from the data stream to the server, which allows remote attackers to modify data and gain administrative access when PostgreSQL is used, aka \"bug #1494281 - Postgres encoding security hole.\"  NOTE: while this issue involves PostgreSQL, it is specific to MailManager's interface to PostgreSQL and is therefore a different vulnerability than CVE-2006-2313 and CVE-2006-2314.",
+      "published": "2006-06-05T17:02:00.000",
+      "affected_versions": "2.0, 2.0.1, 2.0.1_rc2",
+      "cpe_vendors": [
+        "logicalware:mailmanager"
+      ]
+    },
+    {
+      "cve_id": "CVE-2008-6965",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "AJ Square AJ Auction OOPD, Pro Platinum Skin #1, Pro Platinum Skin #2, and Web 2.0 send a redirect but do not exit when certain scripts are called directly, which allows remote attackers to bypass authentication via a direct request to (1) site.php, (2) auction.php, (3) mail.php, (4) fee_setting.php, (5) earnings.php, (6) insertion_fee_settings.php, (7) custom_category.php, (8) subcategory.php, (9) category.php, (10) report.php, (11) store_manager.php, and (12) choose_sell_format.php in admin/, ",
+      "published": "2009-08-13T16:30:01.030",
+      "affected_versions": "1.0, 2.0, web_2.0",
+      "cpe_vendors": [
+        "aj_square:aj_auction"
+      ]
+    },
+    {
+      "cve_id": "CVE-2008-6966",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "AJ Square AJ Auction Pro Platinum Skin #1 sends a redirect but does not exit when it is called directly, which allows remote attackers to bypass authentication via a direct request to admin/user.php.",
+      "published": "2009-08-13T16:30:01.063",
+      "affected_versions": "1.0",
+      "cpe_vendors": [
+        "aj_square:aj_auction"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-4479",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "Unspecified vulnerability in pdf.c in libclamav in ClamAV before 0.96.5 allows remote attackers to cause a denial of service (application crash) or possibly execute arbitrary code via a crafted PDF document, aka \"bb #2380,\" a different vulnerability than CVE-2010-4260.",
+      "published": "2010-12-07T13:53:30.100",
+      "affected_versions": "<= 0.96.4, 0.01, 0.02",
+      "cpe_vendors": [
+        "clamav:clamav"
+      ]
+    },
+    {
+      "cve_id": "CVE-2012-2203",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "IBM Global Security Kit (aka GSKit) before 8.0.14.22, as used in IBM Rational Directory Server, IBM Tivoli Directory Server, and other products, uses the PKCS #12 file format for certificate objects without enforcing file integrity, which makes it easier for remote attackers to spoof SSL servers via vectors involving insertion of an arbitrary root Certification Authority (CA) certificate.",
+      "published": "2012-08-08T10:26:18.813",
+      "affected_versions": "<= 8.0.13, 7.0.4.28, 7.0.4.29",
+      "cpe_vendors": [
+        "ibm:global_security_kit",
+        "ibm:rational_directory_server",
+        "ibm:tivoli_directory_server"
+      ]
+    },
+    {
+      "cve_id": "CVE-2014-9427",
+      "cvss_score": 7.5,
+      "severity": "HIGH",
+      "description": "sapi/cgi/cgi_main.c in the CGI component in PHP through 5.4.36, 5.5.x through 5.5.20, and 5.6.x through 5.6.4, when mmap is used to read a .php file, does not properly consider the mapping's length during processing of an invalid file that begins with a # character and lacks a newline character, which causes an out-of-bounds read and might (1) allow remote attackers to obtain sensitive information from php-cgi process memory by leveraging the ability to upload a .php file or (2) trigger unexpect",
+      "published": "2015-01-03T02:59:00.050",
+      "affected_versions": "1.0, 2.0, 2.0b10",
+      "cpe_vendors": [
+        "php:php"
+      ]
+    },
+    {
+      "cve_id": "CVE-2004-2541",
+      "cvss_score": 6.9,
+      "severity": "MEDIUM",
+      "description": "Buffer overflow in Cscope 15.5, and possibly multiple overflows, allows remote attackers to execute arbitrary code via a C file with a long #include line that is later browsed by the target.",
+      "published": "2004-12-31T05:00:00.000",
+      "affected_versions": "15.5",
+      "cpe_vendors": [
+        "cscope:cscope"
+      ]
+    },
+    {
+      "cve_id": "CVE-2009-2267",
+      "cvss_score": 6.9,
+      "severity": "MEDIUM",
+      "description": "VMware Workstation 6.5.x before 6.5.3 build 185404, VMware Player 2.5.x before 2.5.3 build 185404, VMware ACE 2.5.x before 2.5.3 build 185404, VMware Server 1.x before 1.0.10 build 203137 and 2.x before 2.0.2 build 203138, VMware Fusion 2.x before 2.0.6 build 196839, VMware ESXi 3.5 and 4.0, and VMware ESX 2.5.5, 3.0.3, 3.5, and 4.0, when Virtual-8086 mode is used, do not properly set the exception code upon a page fault (aka #PF) exception, which allows guest OS users to gain privileges on the ",
+      "published": "2009-11-02T15:30:00.420",
+      "affected_versions": "2.5.0, 2.5.1, 2.5.2",
+      "cpe_vendors": [
+        "vmware:ace",
+        "vmware:esx",
+        "vmware:esxi",
+        "vmware:fusion",
+        "vmware:player",
+        "vmware:server",
+        "vmware:workstation"
+      ]
+    },
+    {
+      "cve_id": "CVE-2003-0154",
+      "cvss_score": 6.8,
+      "severity": "MEDIUM",
+      "description": "Cross-site scripting vulnerabilities (XSS) in bonsai Mozilla CVS query tool allow remote attackers to execute arbitrary web script via (1) the file, root, or rev parameters to cvslog.cgi, (2) the file or root parameters to cvsblame.cgi, (3) various parameters to cvsquery.cgi, (4) the person parameter to showcheckins.cgi, (5) the module parameter to cvsqueryform.cgi, and (6) possibly other attack vectors as identified by Mozilla bug #146244.",
+      "published": "2003-04-02T05:00:00.000",
+      "affected_versions": "1.3",
+      "cpe_vendors": [
+        "mozilla:bonsai"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-4706",
+      "cvss_score": 6.8,
+      "severity": "MEDIUM",
+      "description": "Cross-site scripting (XSS) vulnerability in inc/functions_post.php in MyBB (aka MyBulletinBoard) 1.1.7 allows remote attackers to inject arbitrary web script or HTML via a url BBCode tag that contains a javascript URI with an SGML numeric character reference and an embedded space, as demonstrated using \"java& #115;cript,\" a different vulnerability than CVE-2006-3761.",
+      "published": "2006-09-12T16:07:00.000",
+      "affected_versions": "1.1.7",
+      "cpe_vendors": [
+        "mybulletinboard:mybulletinboard"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-7140",
+      "cvss_score": 5.8,
+      "severity": "MEDIUM",
+      "description": "The libike library, as used by in.iked, elfsign, and kcfd in Sun Solaris 9 and 10, when using an RSA key with exponent 3, removes PKCS-1 padding before generating a hash, which allows remote attackers to forge a PKCS #1 v1.5 signature that is signed by that RSA key and prevents libike from correctly verifying X.509 and other certificates that use PKCS #1, a similar issue to CVE-2006-4339.",
+      "published": "2007-03-07T20:19:00.000",
+      "affected_versions": "10.0, 5.9",
+      "cpe_vendors": [
+        "sun:solaris",
+        "sun:sunos"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-2401",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HCM - eProfile Mgr component in Oracle PeopleSoft and JDEdwards Suite HCM 9.0 Bundle #9 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-07-13T22:30:03.170",
+      "affected_versions": "9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_suite_hcm"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3518",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HCM GP - Japan component in Oracle PeopleSoft and JDEdwards Suite 8.81 SP1 Bundle #13, 8.9 GP Update 2010-E, 9.0 GP Update 2010-E, and 9.1 GP Update 2010-E allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T02:00:03.383",
+      "affected_versions": "8.9, 8.81, 9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3520",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HCM - GP France component in Oracle PeopleSoft and JDEdwards Suite 8.81 SP1 Bundle #12, 8.9 GP Update 2010-E, 9.0 GP Update 2010-E, and 9.1 GP Update 2010-E allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T02:00:03.447",
+      "affected_versions": "8.9, 8.81, 9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3524",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise SCM - Strategic Sourcing component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T18:00:16.430",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3526",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise SCM - PO component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T18:00:16.523",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3527",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FMS - AM component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect integrity and availability via unknown vectors.",
+      "published": "2010-10-14T18:00:16.570",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3529",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FMS - Cash Management component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T18:00:16.727",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3530",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HCM - HR component in Oracle PeopleSoft and JDEdwards Suite 9.0 Bundle #13 and 9.1 Bundle #3 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T18:00:16.820",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3531",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FMS ESA - RM component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T18:00:16.883",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3532",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise CRM - Order Capture component in Oracle PeopleSoft and JDEdwards Suite 9.0 Bundle #28 and 9.1 Bundle #4 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T18:00:16.913",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3536",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise SCM component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T18:00:17.150",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3537",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FMS - AM component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T18:00:17.197",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3538",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FMS - GL component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors, a different vulnerability than CVE-2010-3539.",
+      "published": "2010-10-14T18:00:17.227",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3539",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FMS - GL component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors, a different vulnerability than CVE-2010-3538.",
+      "published": "2010-10-14T18:00:17.257",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3547",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft FMS ESA - EX component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #38, 9.0 Bundle #31, and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-10-14T18:00:17.663",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-4419",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise CRM component in Oracle PeopleSoft and JDEdwards Suite 9.0 Bundle #31 and 9.1 Bundle #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Order Capture.",
+      "published": "2011-01-19T16:00:03.280",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-4441",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HRMS component in Oracle PeopleSoft and JDEdwards Suite 9.1 Bundle #4 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Talent Acquisition Manager.",
+      "published": "2011-01-19T17:00:02.357",
+      "affected_versions": "9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-4461",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HRMS component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #23, 9.0 Bundle #14, and 9.1 Bundle #4 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to ePerformance.",
+      "published": "2011-01-19T17:00:02.967",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-0850",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in Oracle PeopleSoft Enterprise CRM 8.9 Bundle #41 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Order Capture.",
+      "published": "2011-04-20T10:55:02.057",
+      "affected_versions": "8.9",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_customer_relationship_management"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-0851",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in Oracle PeopleSoft Enterprise ELS 9.0 Bundle #19 and 9.1 Bundle #5 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Enterprise Learning Mgmt.",
+      "published": "2011-04-20T10:55:02.090",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_els"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-0853",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in Oracle PeopleSoft Enterprise HRMS 9.0 Bundle #15 and 9.1 Bundle #5 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to ePerformance.",
+      "published": "2011-04-20T10:55:02.120",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_hrms"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-0854",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in Oracle PeopleSoft Enterprise HRMS 9.1 Bundle #5 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to ePerformance.",
+      "published": "2011-04-20T10:55:02.153",
+      "affected_versions": "9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_hrms"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-0857",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in Oracle PeopleSoft Enterprise HRMS 9.0 Bundle #15 and 9.1 Bundle #5 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Pension Administration.",
+      "published": "2011-04-20T10:55:02.260",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_hrms"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-0858",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in Oracle PeopleSoft Enterprise HRMS 9.0 Bundle #15 and 9.1 Bundle #5 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Talent Acquisition Manager.",
+      "published": "2011-04-20T10:55:02.293",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_hrms"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-2250",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FIN component in Oracle PeopleSoft Products 9.0 Bundle #36 and 9.1 Bundle #13 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Receivables.",
+      "published": "2011-07-20T23:55:01.490",
+      "affected_versions": "9.0, 9.1, 9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_fin",
+        "oracle:peoplesoft_products"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-2272",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FSCM component in Oracle PeopleSoft Products 9.0, Bundle, #36, 9.1, Bundle, and #13 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to eProcurement.",
+      "published": "2011-07-21T00:55:01.083",
+      "affected_versions": "9.0, 9.1, 9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_fscm",
+        "oracle:peoplesoft_products"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-2277",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise SCM component in Oracle PeopleSoft Products 9.0 Bundle #36 and 9.1 Bundle #13 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Purchasing.",
+      "published": "2011-07-21T00:55:01.567",
+      "affected_versions": "9.0, 9.1, 9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_scm",
+        "oracle:peoplesoft_products"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-2279",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HRMS component in Oracle PeopleSoft Products 9.1, Bundle, and #6 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Talent Acquisition Manager.",
+      "published": "2011-07-21T00:55:01.647",
+      "affected_versions": "9.1, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_hrms",
+        "oracle:peoplesoft_products"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-2283",
+      "cvss_score": 5.5,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FMS component in Oracle PeopleSoft Products 9.0 Bundle #36 and 9.1 Bundle #13 allows remote authenticated users to affect confidentiality and integrity via unknown vectors related to Payables.",
+      "published": "2011-07-21T00:55:01.770",
+      "affected_versions": "9.0, 9.1, 9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_fms",
+        "oracle:peoplesoft_products"
+      ]
+    },
+    {
+      "cve_id": "CVE-1999-0007",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Information from SSL-encrypted sessions via PKCS #1.",
+      "published": "1998-06-26T04:00:00.000",
+      "affected_versions": "2.0.1, 2.2, 2.3",
+      "cpe_vendors": [
+        "c2net:stonghold_web_server",
+        "hp:open_market_secure_webserver",
+        "microsoft:exchange_server",
+        "microsoft:internet_information_server",
+        "microsoft:site_server",
+        "netscape:certificate_server",
+        "netscape:collabra_server",
+        "netscape:directory_server",
+        "netscape:enterprise_server",
+        "netscape:fasttrack_server"
+      ]
+    },
+    {
+      "cve_id": "CVE-2001-0926",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "SSIFilter in Allaire JRun 3.1, 3.0 and 2.3.3 allows remote attackers to obtain source code for Java server pages (.jsp) and other files in the web root via an HTTP request for a non-existent SSI page, in which the request's body has an #include statement.",
+      "published": "2001-11-28T05:00:00.000",
+      "affected_versions": "2.3.3, 3.0, 3.1",
+      "cpe_vendors": [
+        "macromedia:jrun"
+      ]
+    },
+    {
+      "cve_id": "CVE-2001-1221",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "D-Link DWL-1000AP Firmware 3.2.28 #483 Wireless LAN Access Point uses a default SNMP community string of 'public' which allows remote attackers to gain sensitive information.",
+      "published": "2001-12-21T05:00:00.000",
+      "affected_versions": "3.2.28_483",
+      "cpe_vendors": [
+        "d-link:dwl-1000ap"
+      ]
+    },
+    {
+      "cve_id": "CVE-2005-4624",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "The m_join function in channel.c for PTnet ircd 1.5 and 1.6 allows remote attackers to cause a denial of service (memory exhaustion that triggers a daemon restart) via a large number of requests to join a \"charmed channel\" such as PTnet, #PTnoticias and #*.log, which causes ircd to open the channel even though it does not have any valid users.",
+      "published": "2005-12-31T05:00:00.000",
+      "affected_versions": "1.5, 1.6",
+      "cpe_vendors": [
+        "ptnet:ptnet_ircd"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-2054",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "3Com Baseline Switch 2848-SFP Plus Model #3C16486 with firmware before 1.0.2.0 allows remote attackers to cause a denial of service (unstable operation) via long DHCP packets.",
+      "published": "2006-04-26T20:06:00.000",
+      "affected_versions": "<= 1.0.2",
+      "cpe_vendors": [
+        "3com:3c16486"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-4790",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "verify.c in GnuTLS before 1.4.4, when using an RSA key with exponent 3, does not properly handle excess data in the digestAlgorithm.parameters field when generating a hash, which allows remote attackers to forge a PKCS #1 v1.5 signature that is signed by that RSA key and prevents GnuTLS from correctly verifying X.509 and other certificates that use PKCS, a variant of CVE-2006-4339.",
+      "published": "2006-09-14T19:07:00.000",
+      "affected_versions": "1.0.17, 1.0.18, 1.0.19",
+      "cpe_vendors": [
+        "gnu:gnutls"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-5484",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "SSH Tectia Client/Server/Connector 5.1.0 and earlier, Manager 2.2.0 and earlier, and other products, when using an RSA key with exponent 3, removes PKCS-1 padding before generating a hash, which allows remote attackers to forge a PKCS #1 v1.5 signature that is signed by that RSA key and prevents Tectia from correctly verifying X.509 and other certificates that use PKCS #1, a similar issue to CVE-2006-4339.",
+      "published": "2006-10-24T22:07:00.000",
+      "affected_versions": "<= 5.1.0, <= 5.1.0, <= 2.2.0",
+      "cpe_vendors": [
+        "ssh:tectia_client",
+        "ssh:tectia_connector",
+        "ssh:tectia_manager",
+        "ssh:tectia_server"
+      ]
+    },
+    {
+      "cve_id": "CVE-2007-0048",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Adobe Acrobat Reader Plugin before 8.0.0, and possibly the plugin distributed with Adobe Reader 7.x before 7.1.4, 8.x before 8.1.7, and 9.x before 9.2, when used with Internet Explorer, Google Chrome, or Opera, allows remote attackers to cause a denial of service (memory consumption) via a long sequence of # (hash) characters appended to a PDF URL, related to a \"cross-site scripting issue.\"",
+      "published": "2007-01-03T21:28:00.000",
+      "affected_versions": "<= 7.0.8, 7.0, 7.0",
+      "cpe_vendors": [
+        "adobe:acrobat",
+        "adobe:acrobat_3d",
+        "adobe:acrobat_reader"
+      ]
+    },
+    {
+      "cve_id": "CVE-2008-6504",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "ParametersInterceptor in OpenSymphony XWork 2.0.x before 2.0.6 and 2.1.x before 2.1.2, as used in Apache Struts and other products, does not properly restrict # (pound sign) references to context objects, which allows remote attackers to execute Object-Graph Navigation Language (OGNL) statements and modify server-side context objects, as demonstrated by use of a \\u0023 representation for the # character.",
+      "published": "2009-03-23T14:19:12.407",
+      "affected_versions": "2.0.0, 2.0.1, 2.0.2",
+      "cpe_vendors": [
+        "opensymphony:xwork",
+        "apache:struts"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-1870",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "The OGNL extensive expression evaluation capability in XWork in Struts 2.0.0 through 2.1.8.1, as used in Atlassian Fisheye, Crucible, and possibly other products, uses a permissive whitelist, which allows remote attackers to modify server-side context objects and bypass the \"#\" protection mechanism in ParameterInterceptors via the (1) #context, (2) #_memberAccess, (3) #root, (4) #this, (5) #_typeResolver, (6) #_classResolver, (7) #_traceEvaluations, (8) #_lastEvaluation, (9) #_keepLastEvaluation",
+      "published": "2010-08-17T20:00:03.407",
+      "affected_versions": "2.0.0, 2.0.1, 2.0.2",
+      "cpe_vendors": [
+        "apache:struts"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-4260",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "Multiple unspecified vulnerabilities in pdf.c in libclamav in ClamAV before 0.96.5 allow remote attackers to cause a denial of service (application crash) or possibly execute arbitrary code via a crafted PDF document, aka (1) \"bb #2358\" and (2) \"bb #2396.\"",
+      "published": "2010-12-07T13:53:29.677",
+      "affected_versions": "<= 0.96.4, 0.01, 0.02",
+      "cpe_vendors": [
+        "clamav:clamav"
+      ]
+    },
+    {
+      "cve_id": "CVE-2012-0884",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "The implementation of Cryptographic Message Syntax (CMS) and PKCS #7 in OpenSSL before 0.9.8u and 1.x before 1.0.0h does not properly restrict certain oracle behavior, which makes it easier for context-dependent attackers to decrypt data via a Million Message Attack (MMA) adaptive chosen ciphertext attack.",
+      "published": "2012-03-13T03:12:26.243",
+      "affected_versions": "<= 0.9.8t, 0.9.0b, 0.9.1b",
+      "cpe_vendors": [
+        "openssl:openssl"
+      ]
+    },
+    {
+      "cve_id": "CVE-2015-0282",
+      "cvss_score": 5.0,
+      "severity": "MEDIUM",
+      "description": "GnuTLS before 3.1.0 does not verify that the RSA PKCS #1 signature algorithm matches the signature algorithm in the certificate, which allows remote attackers to conduct downgrade attacks via unspecified vectors.",
+      "published": "2015-03-24T17:59:04.007",
+      "affected_versions": "<= 3.0.9",
+      "cpe_vendors": [
+        "gnu:gnutls"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-0080",
+      "cvss_score": 4.9,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HCM - eProfile component in Oracle PeopleSoft Enterprise and JD Edwards EnterpriseOne 8.9 Bundle, #21 and 9.0 Bundle #11 allows remote authenticated users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-01-13T01:30:01.310",
+      "affected_versions": "8.9, 9.0",
+      "cpe_vendors": [
+        "oracle:jd_edwards_enterpriseone",
+        "oracle:peoplesoft_enterprise"
+      ]
+    },
+    {
+      "cve_id": "CVE-2002-0849",
+      "cvss_score": 4.6,
+      "severity": "MEDIUM",
+      "description": "Linux-iSCSI iSCSI implementation installs the iscsi.conf file with world-readable permissions on some operating systems, including Red Hat Linux Limbo Beta #1, which could allow local users to gain privileges by reading the cleartext CHAP password.",
+      "published": "2002-08-12T04:00:00.000",
+      "affected_versions": "",
+      "cpe_vendors": [
+        "cisco:iscsi_driver"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-4339",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "OpenSSL before 0.9.7, 0.9.7 before 0.9.7k, and 0.9.8 before 0.9.8c, when using an RSA key with exponent 3, removes PKCS-1 padding before generating a hash, which allows remote attackers to forge a PKCS #1 v1.5 signature that is signed by that RSA key and prevents OpenSSL from correctly verifying X.509 and other certificates that use PKCS #1.",
+      "published": "2006-09-05T17:04:00.000",
+      "affected_versions": "<= 0.9.7, 0.9.1c, 0.9.2b",
+      "cpe_vendors": [
+        "openssl:openssl"
+      ]
+    },
+    {
+      "cve_id": "CVE-2007-0044",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "Adobe Acrobat Reader Plugin before 8.0.0 for the Firefox, Internet Explorer, and Opera web browsers allows remote attackers to force the browser to make unauthorized requests to other web sites via a URL in the (1) FDF, (2) xml, and (3) xfdf AJAX request parameters, following the # (hash) character, aka \"Universal CSRF and session riding.\"",
+      "published": "2007-01-03T21:28:00.000",
+      "affected_versions": "<= 7.0.8, 7.0, 7.0",
+      "cpe_vendors": [
+        "adobe:acrobat",
+        "adobe:acrobat_3d",
+        "adobe:acrobat_reader"
+      ]
+    },
+    {
+      "cve_id": "CVE-2007-1280",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "Cross-site scripting (XSS) vulnerability in Adobe RoboHelp X5, 6, and Server 6 allows remote attackers to inject arbitrary web script or HTML via a URL after a # (hash) in the URL path, as demonstrated using en/frameset-7.html, and possibly other unspecified vectors involving templates and (1) whstart.js and (2) whcsh_home.htm in WebHelp, (3) wf_startpage.js and (4) wf_startqs.htm in FlashHelp, or (5) WindowManager.dll in RoboHelp Server 6.",
+      "published": "2007-05-10T00:19:00.000",
+      "affected_versions": "6, x5, 6",
+      "cpe_vendors": [
+        "adobe:robohelp",
+        "adobe:robohelp_server"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-2380",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise FSCM component in Oracle PeopleSoft and JDEdwards Suite SCM 8.9 Bundle #37, SCM 9.0 Bundle #30, and SCM 9.1 Bundle #4 allows local users to affect confidentiality, integrity, and availability via unknown vectors.",
+      "published": "2010-07-13T22:30:02.717",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_suite_scm"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-0828",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in Oracle PeopleSoft Enterprise 8.8 Bundle #13 allows remote attackers to affect integrity via unknown vectors related to Application Portal.",
+      "published": "2011-04-20T10:55:01.557",
+      "affected_versions": "8.8",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise"
+      ]
+    },
+    {
+      "cve_id": "CVE-2013-2204",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "moxieplayer.as in Moxiecode moxieplayer, as used in the TinyMCE Media plugin in WordPress before 3.5.2 and other products, does not consider the presence of a # (pound sign) character during extraction of the QUERY_STRING, which allows remote attackers to pass arbitrary parameters to a Flash application, and conduct content-spoofing attacks, via a crafted string after a ? (question mark) character.",
+      "published": "2013-07-08T20:55:01.117",
+      "affected_versions": "<= 3.5.1, 0.71, 1.0",
+      "cpe_vendors": [
+        "tinymce:media",
+        "wordpress:wordpress"
+      ]
+    },
+    {
+      "cve_id": "CVE-2013-5154",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "The Sandbox subsystem in Apple iOS before 7 determines the sandboxing requirement for a #! application on the basis of the script interpreter instead of the script, which allows attackers to bypass intended access restrictions via a crafted application.",
+      "published": "2013-09-19T10:28:01.007",
+      "affected_versions": "<= 6.1.4, 1.0.0, 1.0.1",
+      "cpe_vendors": [
+        "apple:iphone_os"
+      ]
+    },
+    {
+      "cve_id": "CVE-2014-7280",
+      "cvss_score": 4.3,
+      "severity": "MEDIUM",
+      "description": "Cross-site scripting (XSS) vulnerability in the Web UI before 2.3.4 Build #85 for Tenable Nessus 5.x allows remote web servers to inject arbitrary web script or HTML via the server header.",
+      "published": "2014-10-21T15:55:07.673",
+      "affected_versions": "<= 2.3.3",
+      "cpe_vendors": [
+        "tenable:web_ui"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-5201",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Multiple packages on Sun Solaris, including (1) NSS; (2) Java JDK and JRE 5.0 Update 8 and earlier, SDK and JRE 1.4.x up to 1.4.2_12, and SDK and JRE 1.3.x up to 1.3.1_19; (3) JSSE 1.0.3_03 and earlier; (4) IPSec/IKE; (5) Secure Global Desktop; and (6) StarOffice, when using an RSA key with exponent 3, removes PKCS-1 padding before generating a hash, which allows remote attackers to forge a PKCS #1 v1.5 signature that is signed by that RSA key and prevents these products from correctly verifying",
+      "published": "2006-10-10T04:06:00.000",
+      "affected_versions": "9.0, 10.0, 5.8",
+      "cpe_vendors": [
+        "sun:nss",
+        "sun:secure_global_desktop",
+        "sun:staroffice",
+        "sun:solaris",
+        "sun:sunos",
+        "sun:jdk",
+        "sun:jre",
+        "sun:sdk",
+        "sun:jsse"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-2379",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HCM - Time & Labor component in Oracle PeopleSoft and JDEdwards Suite HCM 9.0 Bundle #13 and HCM 9.1 Bundle #2 allows remote authenticated users to affect confidentiality via unknown vectors.",
+      "published": "2010-07-13T22:30:02.670",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_suite_hcm"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-2398",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HCM component in Oracle PeopleSoft and JDEdwards Suite HCM 9.0 Bundle #12 allows remote authenticated users to affect confidentiality via unknown vectors.",
+      "published": "2010-07-13T22:30:03.077",
+      "affected_versions": "9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_suite_hcm"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-3528",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise CRM - Common Components component in Oracle PeopleSoft and JDEdwards Suite 8.9 Bundle #41, 9.0 Bundle #28, and 9.1 Bundle #4 allows remote authenticated users to affect confidentiality via unknown vectors.",
+      "published": "2010-10-14T18:00:16.650",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-4439",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HRMS component in Oracle PeopleSoft and JDEdwards Suite 9.0 Bundle #14 and 9.1 Bundle #4 allows remote authenticated users to affect confidentiality via unknown vectors related to eProfile - Manager Desktop.",
+      "published": "2011-01-19T17:00:02.280",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-4445",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HRMS component in Oracle PeopleSoft and JDEdwards Suite 9.0 Bundle #14 and 9.1 Bundle #4 allows remote authenticated users to affect confidentiality via unknown vectors related to Talent Acquisition Manager.",
+      "published": "2011-01-19T17:00:02.513",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_product_suite"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-2278",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HRMS component in Oracle PeopleSoft Products 8.9, Bundle, #24, 9.0, Bundle, #17, 9.1, Bundle, and #6 allows remote authenticated users to affect confidentiality via unknown vectors related to Talent Acquisition Manager.",
+      "published": "2011-07-21T00:55:01.613",
+      "affected_versions": "8.9, 9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_hrms",
+        "oracle:peoplesoft_products"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-2284",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HRMS component in Oracle PeopleSoft Products 9.0 Bundle #17 allows remote authenticated users to affect confidentiality via unknown vectors related to ePerformance.",
+      "published": "2011-07-21T00:55:01.800",
+      "affected_versions": "9.0, 9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise_hrms",
+        "oracle:peoplesoft_products"
+      ]
+    },
+    {
+      "cve_id": "CVE-2012-0521",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HCM component in Oracle PeopleSoft Products 9.1 Bundle #9 allows remote authenticated users to affect confidentiality via unknown vectors related to Human Resources.",
+      "published": "2012-05-03T17:55:01.843",
+      "affected_versions": "9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_products"
+      ]
+    },
+    {
+      "cve_id": "CVE-2012-0536",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise HRMS component in Oracle PeopleSoft Products 8.9 through Bundle #26 allows remote authenticated users to affect confidentiality via unknown vectors related to eCompensation.",
+      "published": "2012-05-03T18:55:01.043",
+      "affected_versions": "8.9, 8.9, 8.9",
+      "cpe_vendors": [
+        "oracle:peoplesoft_products"
+      ]
+    },
+    {
+      "cve_id": "CVE-2014-9403",
+      "cvss_score": 4.0,
+      "severity": "MEDIUM",
+      "description": "The CWebAdminMod::ChanPage function in modules/webadmin.cpp in ZNC before 1.4 allows remote authenticated users to cause a denial of service (NULL pointer dereference and crash) by adding a channel with the same name as an existing channel but without the leading # character, related to a \"use-after-delete\" error.",
+      "published": "2014-12-19T15:59:32.457",
+      "affected_versions": "<= 1.2",
+      "cpe_vendors": [
+        "znc:znc"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-2008",
+      "cvss_score": 3.5,
+      "severity": "LOW",
+      "description": "MySQL before 5.1.48 allows remote authenticated users with alter database privileges to cause a denial of service (server crash and database loss) via an ALTER DATABASE command with a #mysql50# string followed by a . (dot), .. (dot dot), ../ (dot dot slash) or similar sequence, and an UPGRADE DATA DIRECTORY NAME command, which causes MySQL to move certain directories to the server data directory.",
+      "published": "2010-07-13T20:30:01.593",
+      "affected_versions": "< 5.1.48, 6.06, 8.04",
+      "cpe_vendors": [
+        "oracle:mysql",
+        "canonical:ubuntu_linux",
+        "fedoraproject:fedora"
+      ]
+    },
+    {
+      "cve_id": "CVE-2011-0826",
+      "cvss_score": 3.5,
+      "severity": "LOW",
+      "description": "Unspecified vulnerability in Oracle PeopleSoft Enterprise 8.8 Bundle #13, 8.9 Bundle #7, 9.0 Bundle #7, and 9.1 Bundle #4 allows remote authenticated users to affect integrity via unknown vectors related to Application Portal.",
+      "published": "2011-04-20T10:55:01.497",
+      "affected_versions": "8.8, 8.9, 9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_enterprise"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-2378",
+      "cvss_score": 3.0,
+      "severity": "LOW",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise CRM component in Oracle PeopleSoft and JDEdwards Suite CRM 9.0 Bundle #28 and CRM 9.1 Bundle #4 allows local users to affect confidentiality and integrity via unknown vectors.",
+      "published": "2010-07-13T22:30:02.640",
+      "affected_versions": "9.0, 9.1",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_suite_crm"
+      ]
+    },
+    {
+      "cve_id": "CVE-2006-0584",
+      "cvss_score": 2.1,
+      "severity": "LOW",
+      "description": "The PSCipher function in PeopleSoft People Tools 8.4x uses PKCS #5 with a fixed DES key to store user passwords, which makes it easier for local users to guess passwords using a dictionary attack that compares output strings.",
+      "published": "2006-02-08T01:02:00.000",
+      "affected_versions": "8.4, 8.40, 8.41",
+      "cpe_vendors": [
+        "peoplesoft:peopletools"
+      ]
+    },
+    {
+      "cve_id": "CVE-2010-2403",
+      "cvss_score": 2.1,
+      "severity": "LOW",
+      "description": "Unspecified vulnerability in the PeopleSoft Enterprise Campus Solutions component in Oracle PeopleSoft and JDEdwards Suite Campus Solutions 9.0 Bundle #17 allows remote authenticated users to affect confidentiality via unknown vectors.",
+      "published": "2010-07-13T22:30:03.267",
+      "affected_versions": "9.0",
+      "cpe_vendors": [
+        "oracle:peoplesoft_and_jdedwards_suite_campus_solutions"
+      ]
+    },
+    {
+      "cve_id": "CVE-2013-1917",
+      "cvss_score": 1.9,
+      "severity": "LOW",
+      "description": "Xen 3.1 through 4.x, when running 64-bit hosts on Intel CPUs, does not clear the NT flag when using an IRET after a SYSENTER instruction, which allows PV guest users to cause a denial of service (hypervisor crash) by triggering a #GP fault, which is not properly handled by another IRET instruction.",
+      "published": "2013-05-13T23:55:01.757",
+      "affected_versions": "3.1.3, 3.1.4, 3.2.0",
+      "cpe_vendors": [
+        "xen:xen"
+      ]
+    }
+  ],
+  "search_mode": "keyword",
+  "_cached_at": 1776697065.589568
+}

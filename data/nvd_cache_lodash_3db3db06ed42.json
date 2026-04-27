@@ -1,0 +1,25 @@
+{
+  "_cached_at": 1775635734.994821,
+  "vulnerabilities": [
+    {
+      "cve_id": "CVE-2021-23337",
+      "package": "lodash",
+      "cvss_score": 7.2,
+      "severity": "HIGH",
+      "description": "lodash <4.17.21 command injection via template",
+      "in_cisa_kev": false,
+      "has_public_exploit": true
+    },
+    {
+      "cve_id": "CVE-2020-8203",
+      "package": "lodash",
+      "cvss_score": 7.4,
+      "severity": "HIGH",
+      "description": "lodash <4.17.20 prototype pollution",
+      "in_cisa_kev": false,
+      "has_public_exploit": true
+    }
+  ],
+  "total": 2,
+  "package": "lodash"
+}
