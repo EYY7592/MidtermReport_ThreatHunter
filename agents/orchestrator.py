@@ -20,19 +20,28 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from crewai import Agent, Task
-
-from core.config import (
+from config import (
     SKILLS_DIR,
     SYSTEM_CONSTITUTION,
     degradation_status,
     get_llm,
 )
-from tools.memory_tool import read_memory, write_memory
 
 logger = logging.getLogger("threathunter.orchestrator")
+
+if TYPE_CHECKING:
+    from crewai import Agent
+
+
+def _call_tool(tool_obj: Any, **kwargs: Any) -> Any:
+    """相容 CrewAI Tool 的 run / invoke 呼叫介面。"""
+    if hasattr(tool_obj, "run"):
+        return tool_obj.run(**kwargs)
+    if hasattr(tool_obj, "invoke"):
+        return tool_obj.invoke(kwargs)
+    return tool_obj(**kwargs)
 
 
 # ── 掃描路徑類型（MacNet 動態路由）─────────────────────────────
@@ -198,7 +207,7 @@ def check_shortcuts(ctx: OrchestrationContext, scan_result: dict) -> list[str]:
 
 
 # ── Orchestrator Agent 建構器 ────────────────────────────────────
-def build_orchestrator_agent() -> Agent:
+def build_orchestrator_agent() -> "Agent":
     """
     建立 Orchestrator Agent（CrewAI Manager）。
 
@@ -220,6 +229,9 @@ def build_orchestrator_agent() -> Agent:
 --- Orchestrator SOP ---
 {skill_content}
 """
+
+    # 延遲匯入 CrewAI，避免純路由 / dataclass / 測試路徑在 import 階段觸發本機儲存副作用。
+    from crewai import Agent
 
     llm = get_llm()
 
@@ -257,6 +269,8 @@ def run_orchestration(
     Returns:
         (OrchestrationContext, task_plan_dict)
     """
+    from tools.memory_tool import read_memory
+
     logger.info("[ORCH] Starting orchestration...")
 
     # Step 1：建立執行上下文
@@ -264,7 +278,8 @@ def run_orchestration(
 
     # Step 1a：讀取全局歷史狀態
     try:
-        history = json.loads(read_memory.invoke({"agent_name": "orchestrator"}))
+        history_raw = _call_tool(read_memory, agent_name="orchestrator")
+        history = json.loads(history_raw) if history_raw else {}
         ctx.api_health = history.get("api_health", {})
         logger.info("[ORCH] Historical API health loaded: %s", ctx.api_health)
     except Exception as e:
@@ -490,6 +505,8 @@ def finalize_orchestration(ctx: OrchestrationContext) -> dict:
 
     # 寫入長期記憶（包含 API 健康狀態，供下次 Intel Fusion 讀取）
     try:
+        from tools.memory_tool import write_memory
+
         intel_result = ctx.get_result("intel_fusion") or {}
         api_health = intel_result.get("api_health_summary", {})
 
@@ -499,7 +516,7 @@ def finalize_orchestration(ctx: OrchestrationContext) -> dict:
             "last_shortcuts": summary["shortcuts_taken"],
             "last_elapsed_s": summary["elapsed_seconds"],
         })
-        write_memory.invoke({"agent_name": "orchestrator", "content": memory_payload})
+        _call_tool(write_memory, agent_name="orchestrator", data=memory_payload)
         logger.info("[ORCH] Orchestration summary written to memory")
     except Exception as e:
         logger.warning("[ORCH] Could not write orchestration memory: %s", e)

@@ -52,7 +52,7 @@ ENABLED = os.getenv("CHECKPOINT_ENABLED", "true").lower() != "false"
 
 # ── 敏感資料遮罩模式 ──────────────────────────────────────────
 _SENSITIVE_PATTERNS = [
-    re.compile(r"(sk-[a-zA-Z0-9\-_]{20,})", re.IGNORECASE),       # OpenAI-style (sk-proj-xxx)
+    re.compile(r"(sk(?:-proj)?-[a-zA-Z0-9\-_]{10,})", re.IGNORECASE),  # OpenAI-style keys
     re.compile(r"(ghp_[a-zA-Z0-9]{36,})", re.IGNORECASE),        # GitHub Token
     re.compile(r"(api[_-]?key\s*[:=]\s*['\"]?)([^'\"\s,]{8,})", re.IGNORECASE),
     re.compile(r"(password\s*[:=]\s*['\"]?)([^'\"\s,]{4,})", re.IGNORECASE),
@@ -252,7 +252,14 @@ class CheckpointRecorder:
                     try:
                         _cw.write_line(line)
                         # 高優先級事件（LLM 錯誤 / 掃描邊界）立即 flush
-                        if event in ("SCAN_START", "SCAN_END", "LLM_ERROR", "DEGRADATION"):
+                        if event in (
+                            "SCAN_START",
+                            "SCAN_END",
+                            "STAGE_ENTER",
+                            "STAGE_EXIT",
+                            "LLM_ERROR",
+                            "DEGRADATION",
+                        ):
                             _cw.flush_writer()
                         return
                     except Exception as rust_err:
@@ -544,3 +551,15 @@ class CheckpointRecorder:
 
 _project_root = Path(__file__).parent
 recorder = CheckpointRecorder(logs_dir=_project_root / "logs")
+
+
+def get_checkpoint_writer_status() -> dict[str, Any]:
+    """回傳 checkpoint writer 後端狀態，供 UI diagnostics 使用。"""
+    rust_active = bool(getattr(recorder, "_rust_writer_active", False))
+    return {
+        "available": _RUST_WRITER_AVAILABLE,
+        "active": rust_active,
+        "preferred_backend": "rust_bufwriter",
+        "current_backend": "rust_bufwriter" if rust_active else "python_lock",
+        "fallback_backend": "python_lock",
+    }

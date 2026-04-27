@@ -118,16 +118,81 @@ class ScanResponse(BaseModel):
 # 報告組裝：從 Scout 記憶補充漏洞細節
 # ══════════════════════════════════════════════════════════════
 
+def _summarize_vulnerabilities(vulns: list[dict[str, Any]]) -> dict[str, int]:
+    """把漏洞清單整理成前端摘要指標。"""
+    summary = {
+        "total": 0,
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "new": 0,
+        "new_since_last_scan": 0,
+    }
+
+    for vuln in vulns:
+        summary["total"] += 1
+        severity = str(vuln.get("severity", "LOW")).upper()
+        if severity == "CRITICAL":
+            summary["critical"] += 1
+        elif severity == "HIGH":
+            summary["high"] += 1
+        elif severity == "MEDIUM":
+            summary["medium"] += 1
+        else:
+            summary["low"] += 1
+
+        if vuln.get("is_new"):
+            summary["new"] += 1
+            summary["new_since_last_scan"] += 1
+
+    return summary
+
+
+def _extract_action_vulnerabilities(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """當 pipeline 沒帶漏洞明細時，從 Advisor actions 建立最小備援資料。"""
+    vulns: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    actions = result.get("actions", {})
+
+    for level in ["urgent", "important", "resolved"]:
+        for item in actions.get(level, []):
+            cve_id = item.get("cve_id", "")
+            if cve_id and cve_id not in seen:
+                seen.add(cve_id)
+                vulns.append({
+                    "cve_id": cve_id,
+                    "package": item.get("package") or "Package not provided",
+                    "cvss_score": item.get("cvss_score", 0),
+                    "severity": item.get("severity", "MEDIUM"),
+                    "description": item.get("action", ""),
+                    "is_new": item.get("is_new", False),
+                    "source": "ADVISOR_ACTIONS",
+                    "report_level": level.upper(),
+                })
+
+    return vulns
+
+
 def _enrich_result(result: dict[str, Any]) -> dict[str, Any]:
     """
-    Advisor 輸出只包含 actions，不含漏洞清單。
-    從 memory/scout_memory.json 讀取漏洞資料，
-    補充 vulnerability_detail 和 vulnerability_summary 供前端使用。
+    優先使用本次 scan 的漏洞明細，只有缺資料時才回退到 memory/actions。
     """
-    scout_path = _ROOT / "memory" / "scout_memory.json"
-    vulns: list[dict] = []
+    if "vulnerability_detail" in result:
+        vulns = list(result.get("vulnerability_detail") or [])
+        result["vulnerability_summary"] = _summarize_vulnerabilities(vulns)
+        sources = result.setdefault("report_sources", {})
+        sources.setdefault("vulnerability_detail", "pipeline_result")
+        result["vulnerability_detail"] = vulns
+        return result
 
-    if scout_path.exists():
+    scout_path = _ROOT / "memory" / "scout_memory.json"
+    vulns: list[dict[str, Any]] = []
+    action_vulns = _extract_action_vulnerabilities(result)
+
+    if action_vulns:
+        vulns = action_vulns
+    elif scout_path.exists():
         try:
             with open(scout_path, encoding="utf-8") as f:
                 raw = f.read().strip()
@@ -142,23 +207,8 @@ def _enrich_result(result: dict[str, Any]) -> dict[str, Any]:
         except Exception as exc:
             logger.warning("[ENRICH] Cannot read scout_memory: %s", exc)
 
-    # 從 actions 也可以提取漏洞資訊作為備援
     if not vulns:
-        actions = result.get("actions", {})
-        seen = set()
-        for level in ["urgent", "important", "resolved"]:
-            for item in actions.get(level, []):
-                cve_id = item.get("cve_id", "")
-                if cve_id and cve_id not in seen:
-                    seen.add(cve_id)
-                    vulns.append({
-                        "cve_id":      cve_id,
-                        "package":     item.get("package", "unknown"),
-                        "cvss_score":  item.get("cvss_score", 0),
-                        "severity":    item.get("severity", "MEDIUM"),
-                        "description": item.get("action", ""),
-                        "is_new":      False,
-                    })
+        vulns = action_vulns
 
     # ── UI 最後防線：CVE 年份過濾（year < 2005 不顯示在 UI）──────────
     # 無論哪個 Agent 產生了舊 CVE，在呈現給前端前一律過濾
@@ -185,24 +235,13 @@ def _enrich_result(result: dict[str, Any]) -> dict[str, Any]:
         vulns = fresh_ui_vulns
     # ────────────────────────────────────────────────────────────────
 
-    # 計算 vulnerability_summary
-    summary = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "new": 0}
-    for v in vulns:
-        summary["total"] += 1
-        sev = (v.get("severity") or "LOW").upper()
-        if sev == "CRITICAL":
-            summary["critical"] += 1
-        elif sev == "HIGH":
-            summary["high"] += 1
-        elif sev == "MEDIUM":
-            summary["medium"] += 1
-        else:
-            summary["low"] += 1
-        if v.get("is_new"):
-            summary["new"] += 1
-
-    result["vulnerability_detail"]  = vulns
-    result["vulnerability_summary"] = summary
+    result["vulnerability_detail"] = vulns
+    result["vulnerability_summary"] = _summarize_vulnerabilities(vulns)
+    result["report_sources"] = {
+        "vulnerability_detail": "memory_or_actions_fallback",
+        "fallbacks": ["memory_or_actions"],
+        "layer1_state": "not_reported",
+    }
     return result
 
 
@@ -271,7 +310,7 @@ def _pipeline_worker(scan_id: str, tech_stack: str, input_type: str = "pkg") -> 
     finally:
         # v3.6: 存儲 checkpoint 檔名，供 Thinking Path API 查詢
         try:
-            from core.checkpoint import recorder
+            from checkpoint import recorder
             if recorder.current_filename:
                 store["checkpoint_file"] = recorder.current_filename
                 logger.info("[SCAN:%s] Checkpoint file: %s", scan_id, recorder.current_filename)
@@ -330,6 +369,92 @@ def _sse_fmt(event: str, data: Any) -> str:
     return f"event: {event}\ndata: {payload}\n\n"
 
 
+def _bool_env(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_runtime_capabilities() -> dict[str, Any]:
+    """彙整 Rust / Sandbox 可用狀態，讓主 dashboard 可以直接顯示。"""
+    try:
+        from checkpoint import get_checkpoint_writer_status
+        checkpoint_writer = get_checkpoint_writer_status()
+    except Exception as exc:  # noqa: BLE001
+        checkpoint_writer = {
+            "available": False,
+            "active": False,
+            "preferred_backend": "rust_bufwriter",
+            "current_backend": "python_lock",
+            "fallback_backend": "python_lock",
+            "error": str(exc),
+        }
+
+    try:
+        import input_sanitizer as _input_sanitizer
+        wasm_enabled = bool(getattr(_input_sanitizer, "_WASM_ENABLED", False))
+        wasm_available = bool(getattr(_input_sanitizer, "_WASM_AVAILABLE", False))
+        wasm_error = ""
+    except Exception as exc:  # noqa: BLE001
+        wasm_enabled = _bool_env("WASM_SANDBOX_ENABLED", "true")
+        wasm_available = False
+        wasm_error = str(exc)
+
+    docker_enabled = _bool_env("SANDBOX_ENABLED", "true")
+    docker_available = False
+    docker_image_ready = False
+    docker_error = ""
+    try:
+        from sandbox.docker_sandbox import SANDBOX_IMAGE, is_docker_available, is_sandbox_image_ready
+        docker_available = is_docker_available()
+        docker_image_ready = is_sandbox_image_ready() if docker_available else False
+    except Exception as exc:  # noqa: BLE001
+        SANDBOX_IMAGE = os.getenv("SANDBOX_IMAGE", "threathunter-sandbox:latest")
+        docker_error = str(exc)
+
+    docker_status = "disabled"
+    if docker_enabled and docker_available and docker_image_ready:
+        docker_status = "enabled"
+    elif docker_enabled:
+        docker_status = "not_ready"
+
+    modules = {}
+    for key, module_name in {
+        "memory_sanitizer": "sandbox.memory_sanitizer",
+        "ast_guard": "sandbox.ast_guard",
+    }.items():
+        try:
+            __import__(module_name)
+            modules[key] = {"active": True, "module": module_name}
+        except Exception as exc:  # noqa: BLE001
+            modules[key] = {"active": False, "module": module_name, "error": str(exc)}
+
+    return {
+        "status": "ok",
+        "defaults": {
+            "sandbox_enabled": docker_enabled,
+            "wasm_sandbox_enabled": wasm_enabled,
+        },
+        "checkpoint_writer": checkpoint_writer,
+        "wasm_prompt_sandbox": {
+            "enabled": wasm_enabled,
+            "available": wasm_available,
+            "status": "enabled" if wasm_enabled and wasm_available else ("fallback" if wasm_enabled else "disabled"),
+            "fallback": "python_l0_filter",
+            "error": wasm_error,
+        },
+        "docker_sandbox": {
+            "enabled": docker_enabled,
+            "available": docker_available,
+            "image_ready": docker_image_ready,
+            "image": SANDBOX_IMAGE,
+            "status": docker_status,
+            "fallback": "in_process_pipeline",
+            "error": docker_error,
+        },
+        "memory_sanitizer": modules["memory_sanitizer"],
+        "ast_guard": modules["ast_guard"],
+    }
+
+
 # ══════════════════════════════════════════════════════════════
 # API Endpoints
 # ══════════════════════════════════════════════════════════════
@@ -351,6 +476,12 @@ async def health():
         "pipeline_version": "3.1",
         "active_scans": len(_scan_store),
     })
+
+
+@app.get("/api/runtime-capabilities")
+async def runtime_capabilities():
+    """主 dashboard Runtime Protection panel 使用的能力狀態。"""
+    return JSONResponse(_build_runtime_capabilities())
 
 
 # ══════════════════════════════════════════════════════════════
@@ -485,10 +616,27 @@ def _build_thinking_path(cp_file: Path) -> dict:
                             "tool_calls": 0,
                             "total_duration_ms": 0,
                             "steps": [],
+                            "agent_record": {
+                                "input": None,
+                                "output": None,
+                                "tool_calls": [],
+                                "llm_calls": [],
+                                "status": "RUNNING",
+                                "duration_ms": 0,
+                                "skill_file": None,
+                                "input_type": None,
+                                "degraded": False,
+                                "degradation_reason": "",
+                            },
                         }
 
                     step = {"seq": seq, "event": event_type, "ts": ts, "data": data}
                     agents[agent]["steps"].append(step)
+                    record = agents[agent]["agent_record"]
+                    if event_type in {"LLM_CALL", "LLM_RESULT", "LLM_RETRY", "LLM_ERROR"}:
+                        record["llm_calls"].append({"seq": seq, "event": event_type, "ts": ts, "data": data})
+                    elif event_type == "TOOL_CALL":
+                        record["tool_calls"].append({"seq": seq, "event": event_type, "ts": ts, "data": data})
 
                 # v3.7: extract skill_file + input_type from STAGE_ENTER
                 if event_type == "STAGE_ENTER":
@@ -497,9 +645,12 @@ def _build_thinking_path(cp_file: Path) -> dict:
                         agents[agent]["skill_file"] = sf   # NEW: raw filename for badge
                         agents[agent]["skill_name"] = sf   # legacy compat
                         agents[agent]["skill_applied"] = True
+                        agents[agent]["agent_record"]["skill_file"] = sf
                     it = data.get("input_type", "")
                     if it:
                         agents[agent]["input_type"] = it
+                        agents[agent]["agent_record"]["input_type"] = it
+                    agents[agent]["agent_record"]["input"] = data
 
                 # 深化統計
                 if event_type == "LLM_CALL":
@@ -510,9 +661,24 @@ def _build_thinking_path(cp_file: Path) -> dict:
                     agents[agent]["total_duration_ms"] += data.get("duration_ms", 0)
                 elif event_type == "TOOL_CALL":
                     agents[agent]["tool_calls"] += 1
+                elif event_type == "STAGE_EXIT":
+                    record = agents[agent]["agent_record"]
+                    record["output"] = data
+                    record["status"] = data.get("status", record["status"])
+                    record["duration_ms"] = data.get("duration_ms", record["duration_ms"])
+                    if record["status"] not in {"SUCCESS", "COMPLETE", "COMPLETED"}:
+                        record["degraded"] = True
+                        record["degradation_reason"] = data.get("error") or data.get("reason") or record["status"]
+                elif event_type == "LLM_ERROR":
+                    record = agents[agent]["agent_record"]
+                    record["degraded"] = True
+                    record["degradation_reason"] = data.get("error", "LLM error")
                 elif event_type == "DEGRADATION":
                     # v3.7: DEGRADATION means skill was NOT properly applied
                     agents[agent]["skill_applied"] = False
+                    record = agents[agent]["agent_record"]
+                    record["degraded"] = True
+                    record["degradation_reason"] = data.get("reason") or data.get("error") or "Degraded"
 
     except Exception as e:
         logger.warning("[THINKING] 讀取 checkpoint 失敗: %s", e)

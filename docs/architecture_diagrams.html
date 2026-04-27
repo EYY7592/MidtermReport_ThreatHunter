@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThreatHunter v5.1 — 全域 Pipeline 流程圖</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;600;700;800&display=swap');
+
+  :root {
+    --bg:       #06090f;
+    --surface:  #0d1117;
+    --surface2: #161b22;
+    --surface3: #1c2333;
+    --border:   rgba(255,255,255,0.06);
+    --border2:  rgba(255,255,255,0.10);
+    --text:     #e6edf3;
+    --text2:    #8b949e;
+    --text3:    #484f58;
+    --accent:   #58a6ff;
+    --green:    #3fb950;
+    --red:      #f85149;
+    --orange:   #d29922;
+    --purple:   #bc8cff;
+    --cyan:     #39d2c0;
+    --pink:     #f778ba;
+    --blue:     #58a6ff;
+    --yellow:   #e3b341;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── Header ─── */
+  .header {
+    text-align: center;
+    padding: 40px 24px 20px;
+    position: relative;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 200px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #58a6ff 0%, #bc8cff 40%, #3fb950 70%, #39d2c0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .header .sub {
+    font-size: 12px;
+    color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ─── Stats Row ─── */
+  .stats {
+    display: flex; gap: 12px; justify-content: center;
+    padding: 16px 24px; flex-wrap: wrap;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 20px;
+    text-align: center;
+    min-width: 90px;
+  }
+  .stat-n { font-size: 22px; font-weight: 800; }
+  .stat-l { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 2px; }
+
+  /* ─── Pipeline Container ─── */
+  .pipeline {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 24px 40px;
+    position: relative;
+  }
+
+  /* Vertical spine */
+  .pipeline::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0; bottom: 60px;
+    width: 2px;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(88,166,255,0.15) 0px,
+      rgba(88,166,255,0.15) 8px,
+      transparent 8px,
+      transparent 16px
+    );
+    transform: translateX(-1px);
+    z-index: 0;
+  }
+
+  /* ─── Flow Step ─── */
+  .step {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 0;
+  }
+
+  /* ─── Arrow Connector ─── */
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 0;
+    position: relative;
+    z-index: 1;
+  }
+  .arrow-line {
+    width: 2px; height: 28px;
+    background: linear-gradient(to bottom, rgba(88,166,255,0.3), rgba(88,166,255,0.1));
+    position: relative;
+  }
+  .arrow-line::after {
+    content: '▼';
+    position: absolute;
+    bottom: -8px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
+    color: rgba(88,166,255,0.4);
+  }
+  .arrow-tag {
+    font-size: 9px;
+    color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    white-space: nowrap;
+  }
+
+  /* ─── Layer Box ─── */
+  .layer {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .layer::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .layer-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .layer-icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .layer-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+  }
+  .layer-sub {
+    font-size: 9px;
+    color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+    margin-left: auto;
+  }
+
+  /* ─── Inner Cards ─── */
+  .cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .card {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-width: 130px;
+    flex: 1;
+    position: relative;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255,255,255,0.15);
+  }
+  .card-name {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .card-file {
+    font-size: 9px;
+    color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 4px;
+  }
+  .card-desc {
+    font-size: 9px;
+    color: var(--text3);
+    line-height: 1.4;
+  }
+
+  /* ─── Tags ─── */
+  .tags { display: flex; flex-wrap: wrap; gap: 3px; }
+  .t {
+    font-size: 8px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid;
+    line-height: 1.5;
+  }
+  .t-py  { color: var(--blue);   background: rgba(88,166,255,0.08);  border-color: rgba(88,166,255,0.2); }
+  .t-js  { color: var(--yellow); background: rgba(227,179,65,0.08);  border-color: rgba(227,179,65,0.2); }
+  .t-md  { color: var(--purple); background: rgba(188,140,255,0.08); border-color: rgba(188,140,255,0.2); }
+  .t-json{ color: var(--green);  background: rgba(63,185,80,0.08);   border-color: rgba(63,185,80,0.2); }
+  .t-api { color: var(--text2);  background: rgba(139,148,158,0.06); border-color: rgba(139,148,158,0.15); }
+  .t-new { color: var(--cyan);   background: rgba(57,210,192,0.08);  border-color: rgba(57,210,192,0.2); }
+  .t-red { color: var(--red);    background: rgba(248,81,73,0.08);   border-color: rgba(248,81,73,0.2); }
+  .t-warn{ color: var(--orange); background: rgba(210,153,34,0.08);  border-color: rgba(210,153,34,0.2); }
+  .t-rust{ color: #f97316;       background: rgba(249,115,22,0.08);  border-color: rgba(249,115,22,0.2); }
+
+  /* ─── Rust accent ─── */
+  .l-rust::before { background: linear-gradient(90deg, #f97316, #fb923c); }
+
+  /* ─── Layer Accent Colors ─── */
+  .l-user::before   { background: linear-gradient(90deg, var(--cyan), var(--blue)); }
+  .l-api::before    { background: linear-gradient(90deg, var(--blue), var(--purple)); }
+  .l-l0::before     { background: linear-gradient(90deg, var(--red), var(--orange)); }
+  .l-orch::before   { background: linear-gradient(90deg, var(--blue), var(--cyan)); }
+  .l-par::before    { background: linear-gradient(90deg, var(--orange), var(--purple)); }
+  .l-scout::before  { background: linear-gradient(90deg, var(--green), var(--cyan)); }
+  .l-intel::before  { background: linear-gradient(90deg, var(--purple), var(--blue)); }
+  .l-analyst::before{ background: linear-gradient(90deg, var(--blue), var(--purple)); }
+  .l-critic::before { background: linear-gradient(90deg, var(--red), var(--orange)); }
+  .l-advisor::before{ background: linear-gradient(90deg, var(--green), var(--cyan)); }
+  .l-tools::before  { background: linear-gradient(90deg, var(--cyan), var(--green)); }
+  .l-memory::before { background: linear-gradient(90deg, var(--green), var(--yellow)); }
+  .l-harness::before{ background: linear-gradient(90deg, var(--orange), var(--red)); }
+  .l-ext::before    { background: linear-gradient(90deg, var(--text3), var(--text2)); }
+
+  /* ─── Parallel Split ─── */
+  .parallel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    position: relative;
+  }
+  .parallel::before {
+    content: '⚡ PARALLEL';
+    position: absolute;
+    top: -8px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--orange);
+    background: var(--bg);
+    padding: 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+    z-index: 2;
+  }
+
+  /* ─── Harness Shield Badge ─── */
+  .shield {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 8px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid;
+    margin-top: 4px;
+  }
+  .shield-red  { color: var(--red);   border-color: rgba(248,81,73,0.3);  background: rgba(248,81,73,0.06); }
+  .shield-green{ color: var(--green); border-color: rgba(63,185,80,0.3);  background: rgba(63,185,80,0.06); }
+  .shield-cyan { color: var(--cyan);  border-color: rgba(57,210,192,0.3); background: rgba(57,210,192,0.06); }
+  .shield-purple{color: var(--purple);border-color: rgba(188,140,255,0.3);background: rgba(188,140,255,0.06);}
+
+  /* ─── Path Badges ─── */
+  .path { display: inline-flex; align-items: center; gap: 3px;
+    font-size: 8px; font-weight: 700; padding: 2px 6px;
+    border-radius: 3px; border: 1px solid;
+    font-family: 'JetBrains Mono', monospace; }
+  .path-pkg  { color:#c792ff; border-color:rgba(199,146,255,0.3); background:rgba(199,146,255,0.06); }
+  .path-code { color:#7ecfff; border-color:rgba(126,207,255,0.3); background:rgba(126,207,255,0.06); }
+  .path-ai   { color:#ffd166; border-color:rgba(255,209,102,0.3); background:rgba(255,209,102,0.06); }
+  .path-cfg  { color:#4fd1c5; border-color:rgba(79,209,197,0.3);  background:rgba(79,209,197,0.06); }
+
+  /* ─── Defense-in-Depth Strip ─── */
+  .did-strip {
+    background: linear-gradient(135deg, rgba(248,81,73,0.04), rgba(210,153,34,0.04));
+    border: 1px solid rgba(248,81,73,0.15);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-top: 6px;
+  }
+  .did-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--red);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+  }
+  .did-layers {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .did-item {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-align: center;
+    position: relative;
+  }
+  .did-item::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 6px 6px 0 0;
+    background: var(--red);
+  }
+  .did-num {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--red);
+  }
+  .did-loc {
+    font-size: 8px;
+    color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 2px;
+  }
+  .did-desc {
+    font-size: 8px;
+    color: var(--text3);
+    margin-top: 3px;
+  }
+
+  /* ─── Six-Dimension Panel ─── */
+  .dim-panel {
+    background: linear-gradient(135deg, rgba(63,185,80,0.03), rgba(57,210,192,0.03));
+    border: 1px solid rgba(63,185,80,0.15);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .dim-title {
+    font-size: 10px; font-weight: 700; color: var(--green);
+    text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;
+  }
+  .dims {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+  }
+  .dim {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 6px 8px;
+    text-align: center;
+  }
+  .dim-name { font-size: 9px; font-weight: 700; }
+  .dim-w    { font-size: 11px; font-weight: 800; }
+  .dim-src  { font-size: 7px; color: var(--text2); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+
+  /* ─── Tool Grid ─── */
+  .tool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 6px;
+  }
+  .tool {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-left: 3px solid var(--green);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  .tool-name { font-size: 9px; font-weight: 700; }
+  .tool-file { font-size: 8px; color: var(--text2); font-family: 'JetBrains Mono', monospace; }
+
+  /* ─── External API Grid ─── */
+  .ext-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+    gap: 6px;
+  }
+  .ext {
+    background: rgba(139,148,158,0.04);
+    border: 1px solid rgba(139,148,158,0.12);
+    border-radius: 6px;
+    padding: 6px 8px;
+    text-align: center;
+  }
+  .ext-name { font-size: 9px; font-weight: 600; color: var(--text2); }
+  .ext-url  { font-size: 7.5px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+
+  /* ─── Footer ─── */
+  .footer {
+    text-align: center;
+    padding: 24px;
+    font-size: 10px;
+    color: var(--text3);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .footer a { color: var(--accent); text-decoration: none; }
+
+  /* ─── Animated pulse on key nodes ─── */
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(63,185,80,0.2)} 50%{box-shadow:0 0 0 6px rgba(63,185,80,0)} }
+  .pulse { animation: pulse 3s infinite; }
+
+  /* ─── Side Annotation ─── */
+  .side-note {
+    position: absolute;
+    font-size: 8px;
+    color: var(--text3);
+    font-family: 'JetBrains Mono', monospace;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    letter-spacing: 1px;
+  }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 768px) {
+    .parallel { grid-template-columns: 1fr; }
+    .dims { grid-template-columns: repeat(3, 1fr); }
+    .did-layers { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ HEADER ═══════════ -->
+<div class="header">
+  <h1>ThreatHunter v5.1 — 全域 Pipeline 流程圖</h1>
+  <div class="sub">完整資料流 · Defense-in-Depth · OSV-First Intelligence · 2026-04-19</div>
+</div>
+
+<!-- ═══════════ STATS ═══════════ -->
+<div class="stats">
+  <div class="stat"><div class="stat-n" style="color:var(--blue)">7</div><div class="stat-l">AI Agents</div></div>
+  <div class="stat"><div class="stat-n" style="color:var(--purple)">20</div><div class="stat-l">Skill SOPs</div></div>
+  <div class="stat"><div class="stat-n" style="color:var(--green)">10</div><div class="stat-l">Tools</div></div>
+  <div class="stat"><div class="stat-n" style="color:#f97316">6+1</div><div class="stat-l">Rust Crates</div></div>
+  <div class="stat"><div class="stat-n" style="color:var(--cyan)">4</div><div class="stat-l">Scan Paths</div></div>
+  <div class="stat"><div class="stat-n" style="color:var(--orange)">6/6</div><div class="stat-l">API-Driven</div></div>
+  <div class="stat"><div class="stat-n" style="color:var(--red)">4</div><div class="stat-l">CVE Filters</div></div>
+</div>
+
+<div class="pipeline">
+
+  <!-- ═══════════ STEP 1: USER INPUT ═══════════ -->
+  <div class="step">
+    <div class="layer l-user">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(57,210,192,0.1);color:var(--cyan)">👤</div>
+        <div class="layer-title">使用者輸入</div>
+        <div class="layer-sub">Browser → HTTP</div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-name">🖥 主介面</div>
+          <div class="card-file">ui/static/index.html</div>
+          <div class="tags"><span class="t t-js">HTML5</span><span class="t t-js">CSS3</span><span class="t t-js">JS</span></div>
+        </div>
+        <div class="card">
+          <div class="card-name">⚡ SSE 即時串流</div>
+          <div class="card-file">ui/static/app.js</div>
+          <div class="tags"><span class="t t-js">Vanilla JS</span><span class="t t-api">EventSource</span></div>
+        </div>
+        <div class="card">
+          <div class="card-name">🔬 Checkpoint 儀表板</div>
+          <div class="card-file">ui/static/checkpoint.html</div>
+          <div class="tags"><span class="t t-js">HTML</span><span class="t t-js">JS</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-tag">POST /api/scan { tech_stack, input_type }</div>
+  </div>
+
+  <!-- ═══════════ STEP 2: API SERVER ═══════════ -->
+  <div class="step">
+    <div class="layer l-api">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(88,166,255,0.1);color:var(--blue)">🚀</div>
+        <div class="layer-title">FastAPI Server + UI Filter</div>
+        <div class="layer-sub">ui/server.py</div>
+      </div>
+      <div class="cards">
+        <div class="card" style="flex:2">
+          <div class="card-name">🚀 FastAPI + Uvicorn</div>
+          <div class="card-file">ui/server.py — _pipeline_worker()</div>
+          <div class="tags">
+            <span class="t t-py">Python 3.12</span>
+            <span class="t t-py">FastAPI</span>
+            <span class="t t-py">SSE</span>
+            <span class="t t-py">threading</span>
+          </div>
+          <div class="card-desc" style="margin-top:4px">接收掃描請求 → 分配 scan_id → 開啟 Worker Thread → SSE 推送進度</div>
+        </div>
+        <div class="card pulse">
+          <div class="card-name" style="color:var(--red)">🛡 UI CVE Filter</div>
+          <div class="card-file">_enrich_result() L165</div>
+          <div class="shield shield-red">DEFENSE LAYER 4 · CVE &lt; 2005 → 隱藏</div>
+          <div class="card-desc" style="margin-top:3px">最後防線：從 vulnerability_detail 濾除遠古 CVE</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-tag">Worker Thread → run_pipeline_with_callback()</div>
+  </div>
+
+  <!-- ═══════════ STEP 3: L0 SANITIZER ═══════════ -->
+  <div class="step">
+    <div class="layer l-l0">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(248,81,73,0.1);color:var(--red)">🛡</div>
+        <div class="layer-title">L0 安全閘門 — 確定性（LLM 之前）</div>
+        <div class="layer-sub">OWASP LLM01:2025</div>
+      </div>
+      <div class="cards">
+        <div class="card" style="flex:2">
+          <div class="card-name">🔍 Input Sanitizer</div>
+          <div class="card-file">input_sanitizer.py</div>
+          <div class="tags">
+            <span class="t t-py">Python</span>
+            <span class="t t-py">regex</span>
+            <span class="t t-py">hashlib</span>
+          </div>
+          <div class="card-desc" style="margin-top:4px">
+            Blocklist 掃描 → L0 正則標記 → 輸入類型推斷 → SHA-256 追蹤
+          </div>
+        </div>
+        <div class="card" style="opacity:0.6; border-style:dashed;">
+          <div class="card-name" style="color:var(--orange)">🦀 Rust L0 Core</div>
+          <div class="card-file">rust/sanitizer/</div>
+          <div class="tags"><span class="t t-warn">計劃中</span><span class="t t-warn">PyO3</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-tag">SanitizeResult { safe, input_type, hash }</div>
+  </div>
+
+  <!-- ═══════════ STEP 4: PIPELINE COORDINATOR ═══════════ -->
+  <div class="step">
+    <div class="layer l-orch">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(88,166,255,0.1);color:var(--blue)">⚙️</div>
+        <div class="layer-title">Pipeline v3.1 Coordinator</div>
+        <div class="layer-sub">main.py</div>
+      </div>
+      <div class="cards">
+        <div class="card" style="flex:2">
+          <div class="card-name">🧭 Orchestrator + Path Router</div>
+          <div class="card-file">agents/orchestrator.py + main.py</div>
+          <div class="tags">
+            <span class="t t-py">Python</span>
+            <span class="t t-py">CrewAI</span>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
+            <span class="path path-pkg">📦 Path A: PKG</span>
+            <span class="path path-code">🔍 Path B: CODE</span>
+            <span class="path path-ai">🤖 Path B: INJECTION</span>
+            <span class="path path-cfg">⚙️ Path C: CONFIG</span>
+          </div>
+          <div class="card-desc" style="margin-top:4px">input_type → 動態選擇 Skill SOP → Path-Aware 路由</div>
+        </div>
+        <div class="card">
+          <div class="card-name">📝 Checkpoint Recorder</div>
+          <div class="card-file">checkpoint.py</div>
+          <div class="tags"><span class="t t-py">Python</span><span class="t t-json">JSONL</span></div>
+          <div class="card-desc" style="margin-top:4px">STAGE_ENTER · LLM_CALL · TOOL_CALL · DEGRADATION<br>append-only · threading.Lock</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-tag">OSV Batch Warmup (Harness 0) → PackageExtractor</div>
+  </div>
+
+  <!-- ═══════════ STEP 5: PARALLEL L1 ═══════════ -->
+  <div class="step">
+    <div class="layer l-par">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(210,153,34,0.1);color:var(--orange)">⚡</div>
+        <div class="layer-title">Layer 1 — 並行處理（同時執行）</div>
+        <div class="layer-sub">concurrent.futures</div>
+      </div>
+      <div class="parallel">
+        <!-- Left: Security Guard -->
+        <div class="card">
+          <div class="card-name">🔒 Security Guard</div>
+          <div class="card-file">agents/security_guard.py</div>
+          <div class="tags">
+            <span class="t t-py">CrewAI</span>
+            <span class="t t-py">ast.parse()</span>
+            <span class="t t-py">regex</span>
+          </div>
+          <div class="card-desc" style="margin-top:4px">
+            Dual LLM Pattern · allow_delegation=False<br>
+            <span style="color:var(--text3)">→ skills/security_guard.md</span>
+          </div>
+        </div>
+        <!-- Right: Intel Fusion -->
+        <div class="card pulse" style="border-color:rgba(188,140,255,0.2)">
+          <div class="card-name">🧮 Intel Fusion</div>
+          <div class="card-file">agents/intel_fusion.py</div>
+          <div class="tags">
+            <span class="t t-py">CrewAI</span>
+            <span class="t t-new">OSV-First</span>
+            <span class="t t-py">6D Score</span>
+          </div>
+          <div class="shield shield-red" style="margin-top:4px">DEFENSE LAYER 2 · Harness 2.5 CVE &lt; 2005 → 過濾</div>
+          <div class="card-desc" style="margin-top:3px">
+            search_osv 優先 · NVD fallback · calculate_composite_score()<br>
+            <span style="color:var(--text3)">→ skills/intel_fusion.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-tag">parallel output → merged into pipeline context</div>
+  </div>
+
+  <!-- ═══════════ STEP 6: SCOUT ═══════════ -->
+  <div class="step">
+    <div class="layer l-scout">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(63,185,80,0.1);color:var(--green)">🔭</div>
+        <div class="layer-title">Scout Agent — 情報蒐集</div>
+        <div class="layer-sub">agents/scout.py</div>
+      </div>
+      <div class="cards">
+        <div class="card" style="flex:2">
+          <div class="card-name">🔭 Scout Agent</div>
+          <div class="card-file">agents/scout.py — run_scout_pipeline()</div>
+          <div class="tags">
+            <span class="t t-py">CrewAI</span>
+            <span class="t t-new">OSV-First</span>
+            <span class="t t-py">SKILL_MAP</span>
+          </div>
+          <div class="shield shield-red" style="margin-top:4px">DEFENSE LAYER 1 · Harness 3.5 CVE &lt; 2005 → 過濾</div>
+          <div class="card-desc" style="margin-top:3px">
+            Harness 0: OSV Batch Cache Warmup · Harness 3: NVD 驗證 (OSV cache 優先)<br>
+            Harness 3.5: CVE year filter · 從 output 移除遠古漏洞
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-name" style="color:var(--purple)">📋 Path-Aware SOP</div>
+          <div class="card-file">skills/</div>
+          <div style="display:flex;flex-direction:column;gap:2px;margin-top:4px">
+            <span class="t t-md" style="font-size:7px">pkg → threat_intel.md</span>
+            <span class="t t-md" style="font-size:7px">code → source_code_audit.md</span>
+            <span class="t t-md" style="font-size:7px">injection → ai_security_audit.md</span>
+            <span class="t t-md" style="font-size:7px">config → config_audit.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-tag">Scout JSON { vulnerabilities[], packages[], risk_hints }</div>
+  </div>
+
+  <!-- ═══════════ STEP 7: ANALYST ═══════════ -->
+  <div class="step">
+    <div class="layer l-analyst">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(88,166,255,0.1);color:var(--blue)">🔬</div>
+        <div class="layer-title">Analyst Agent — 攻擊連鎖分析</div>
+        <div class="layer-sub">agents/analyst.py</div>
+      </div>
+      <div class="cards">
+        <div class="card" style="flex:2">
+          <div class="card-name">🔬 Analyst Agent</div>
+          <div class="card-file">agents/analyst.py — run_analyst_pipeline()</div>
+          <div class="tags">
+            <span class="t t-py">CrewAI</span>
+            <span class="t t-py">3-Task Pipeline</span>
+            <span class="t t-py">SKILL_MAP</span>
+          </div>
+          <div class="shield shield-cyan" style="margin-top:4px">Harness: _harness_filter_ancient_cves() · 標記 NEEDS_VERIFICATION</div>
+          <div class="card-desc" style="margin-top:3px">
+            Task 1: Parse Scout → Task 2: KEV + Exploit 查詢 → Task 3: Chain Analysis<br>
+            KillChain · 攻擊連鎖推理 · Adaptive Weight
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-name" style="color:var(--purple)">📋 Path-Aware SOP</div>
+          <div class="card-file">skills/</div>
+          <div style="display:flex;flex-direction:column;gap:2px;margin-top:4px">
+            <span class="t t-md" style="font-size:7px">pkg → chain_analysis.md</span>
+            <span class="t t-md" style="font-size:7px">code → code_chain_analysis.md</span>
+            <span class="t t-md" style="font-size:7px">injection → ai_chain_analysis.md</span>
+            <span class="t t-md" style="font-size:7px">config → config_chain_analysis.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-tag">Analyst JSON { analysis[], chain_risk, adjusted_risk }</div>
+  </div>
+
+  <!-- ═══════════ STEP 8: CRITIC ═══════════ -->
+  <div class="step">
+    <div class="layer l-critic">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(248,81,73,0.1);color:var(--red)">⚔️</div>
+        <div class="layer-title">Critic Agent — 對抗式辯論 (ColMAD)</div>
+        <div class="layer-sub">agents/critic.py · ENABLE_CRITIC=True</div>
+      </div>
+      <div class="cards">
+        <div class="card" style="flex:2">
+          <div class="card-name">⚔️ Critic Agent</div>
+          <div class="card-file">agents/critic.py — run_critic_pipeline()</div>
+          <div class="tags">
+            <span class="t t-py">CrewAI</span>
+            <span class="t t-red">ColMAD Debate</span>
+            <span class="t t-py">5D Scorecard</span>
+          </div>
+          <div class="card-desc" style="margin-top:4px">
+            red_team · blue_team · arbiter 三角色驗證<br>
+            MAINTAIN / DOWNGRADE 判決 · challenge 產生 critic_context
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-name" style="color:var(--purple)">📋 Path-Aware SOP</div>
+          <div class="card-file">skills/</div>
+          <div style="display:flex;flex-direction:column;gap:2px;margin-top:4px">
+            <span class="t t-md" style="font-size:7px">pkg → debate_sop.md</span>
+            <span class="t t-md" style="font-size:7px">code → code_debate_sop.md</span>
+            <span class="t t-md" style="font-size:7px">injection → ai_debate_sop.md</span>
+            <span class="t t-md" style="font-size:7px">config → config_debate_sop.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-tag">Critic JSON { verdict, challenges[], weighted_score }</div>
+  </div>
+
+  <!-- ═══════════ STEP 9: ADVISOR ═══════════ -->
+  <div class="step">
+    <div class="layer l-advisor">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(63,185,80,0.1);color:var(--green)">📋</div>
+        <div class="layer-title">Advisor Agent — 最終裁決者 (Judge)</div>
+        <div class="layer-sub">agents/advisor.py</div>
+      </div>
+      <div class="cards">
+        <div class="card pulse" style="flex:2">
+          <div class="card-name">📋 Advisor Agent</div>
+          <div class="card-file">agents/advisor.py — run_advisor_pipeline()</div>
+          <div class="tags">
+            <span class="t t-py">CrewAI</span>
+            <span class="t t-py">6-Layer Harness</span>
+            <span class="t t-py">Judge + Feedback</span>
+          </div>
+          <div class="shield shield-red" style="margin-top:4px">DEFENSE LAYER 3 · Harness 6 CVE &lt; 2005 → 從 urgent/important 移除</div>
+          <div class="card-desc" style="margin-top:3px">
+            L1: 強制輸出 · L2: Schema · L3: risk_score 0-100 · L4: command · L5: 重複比對 · L6: 年份過濾
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-name" style="color:var(--purple)">📋 Path-Aware SOP</div>
+          <div class="card-file">skills/</div>
+          <div style="display:flex;flex-direction:column;gap:2px;margin-top:4px">
+            <span class="t t-md" style="font-size:7px">pkg → action_report.md</span>
+            <span class="t t-md" style="font-size:7px">code → code_action_report.md</span>
+            <span class="t t-md" style="font-size:7px">injection → ai_action_report.md</span>
+            <span class="t t-md" style="font-size:7px">config → config_action_report.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line"></div>
+    <div class="arrow-tag">Advisor JSON → _enrich_result() → SSE scan_complete → UI</div>
+  </div>
+
+  <!-- ═══════════ DEFENSE-IN-DEPTH STRIP ═══════════ -->
+  <div class="step">
+    <div class="did-strip">
+      <div class="did-title">🛡 Defense-in-Depth — CVE 年份過濾（year &lt; 2005 → 攔截）</div>
+      <div class="did-layers">
+        <div class="did-item">
+          <div class="did-num">L1</div>
+          <div style="font-size:9px;font-weight:700;margin-top:2px">Scout</div>
+          <div class="did-loc">scout.py Harness 3.5</div>
+          <div class="did-desc">Scout output 過濾</div>
+        </div>
+        <div class="did-item">
+          <div class="did-num">L2</div>
+          <div style="font-size:9px;font-weight:700;margin-top:2px">Intel Fusion</div>
+          <div class="did-loc">intel_fusion.py Harness 2.5</div>
+          <div class="did-desc">fusion_results 過濾</div>
+        </div>
+        <div class="did-item">
+          <div class="did-num">L3</div>
+          <div style="font-size:9px;font-weight:700;margin-top:2px">Advisor</div>
+          <div class="did-loc">advisor.py Harness 6</div>
+          <div class="did-desc">urgent/important 過濾</div>
+        </div>
+        <div class="did-item">
+          <div class="did-num">L4</div>
+          <div style="font-size:9px;font-weight:700;margin-top:2px">UI Server</div>
+          <div class="did-loc">server.py _enrich_result</div>
+          <div class="did-desc">vulnerability_detail 最終過濾</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow" style="padding:10px 0">
+    <div style="width:100%;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent)"></div>
+  </div>
+
+  <!-- ═══════════ SIX-DIMENSION PANEL ═══════════ -->
+  <div class="step">
+    <div class="dim-panel">
+      <div class="dim-title">⚡ 六維情報融合分析 — 100% API 驅動 · 0% LLM 猜測</div>
+      <div class="dims">
+        <div class="dim">
+          <div class="dim-name" style="color:var(--green)">CVSS</div>
+          <div class="dim-w" style="color:var(--green)">20%</div>
+          <div class="dim-src">NVD API v2</div>
+        </div>
+        <div class="dim">
+          <div class="dim-name" style="color:var(--purple)">EPSS</div>
+          <div class="dim-w" style="color:var(--purple)">30%</div>
+          <div class="dim-src">FIRST.org</div>
+        </div>
+        <div class="dim">
+          <div class="dim-name" style="color:var(--red)">KEV</div>
+          <div class="dim-w" style="color:var(--red)">25%</div>
+          <div class="dim-src">CISA API</div>
+        </div>
+        <div class="dim">
+          <div class="dim-name" style="color:var(--cyan)">GHSA</div>
+          <div class="dim-w" style="color:var(--cyan)">10%</div>
+          <div class="dim-src">OSV.dev</div>
+        </div>
+        <div class="dim">
+          <div class="dim-name" style="color:var(--orange)">ATT&amp;CK</div>
+          <div class="dim-w" style="color:var(--orange)">10%</div>
+          <div class="dim-src">CWE→CAPEC Map</div>
+        </div>
+        <div class="dim">
+          <div class="dim-name" style="color:var(--text2)">OTX</div>
+          <div class="dim-w" style="color:var(--text2)">5%</div>
+          <div class="dim-src">AlienVault</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow" style="padding:10px 0">
+    <div style="width:100%;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent)"></div>
+  </div>
+
+  <!-- ═══════════ TOOLS LAYER ═══════════ -->
+  <div class="step">
+    <div class="layer l-tools">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(57,210,192,0.1);color:var(--cyan)">🔧</div>
+        <div class="layer-title">工具層 — Agents 呼叫</div>
+        <div class="layer-sub">tools/</div>
+      </div>
+      <div class="tool-grid">
+        <div class="tool" style="border-left-color:var(--cyan);position:relative">
+          <div style="position:absolute;top:3px;right:3px;font-size:6px;padding:1px 4px;background:rgba(57,210,192,0.1);border:1px solid rgba(57,210,192,0.3);border-radius:2px;color:var(--cyan);font-weight:700;font-family:'JetBrains Mono',monospace">PRIMARY</div>
+          <div class="tool-name">🎯 OSV Tool</div>
+          <div class="tool-file">osv_tool.py</div>
+          <div class="tags" style="margin-top:2px"><span class="t t-new" style="font-size:7px">ecosystem-aware</span></div>
+        </div>
+        <div class="tool" style="opacity:0.7;position:relative">
+          <div style="position:absolute;top:3px;right:3px;font-size:6px;padding:1px 4px;background:rgba(139,148,158,0.1);border:1px solid rgba(139,148,158,0.3);border-radius:2px;color:var(--text2);font-weight:700;font-family:'JetBrains Mono',monospace">FALLBACK</div>
+          <div class="tool-name">🔎 NVD Tool</div>
+          <div class="tool-file">nvd_tool.py</div>
+        </div>
+        <div class="tool">
+          <div class="tool-name">⚠️ KEV Tool</div>
+          <div class="tool-file">kev_tool.py</div>
+        </div>
+        <div class="tool">
+          <div class="tool-name">🌐 OTX Tool</div>
+          <div class="tool-file">otx_tool.py</div>
+        </div>
+        <div class="tool">
+          <div class="tool-name">💣 Exploit Tool</div>
+          <div class="tool-file">exploit_tool.py</div>
+        </div>
+        <div class="tool" style="border-left-color:var(--purple)">
+          <div class="tool-name">📊 EPSS Tool</div>
+          <div class="tool-file">epss_tool.py</div>
+        </div>
+        <div class="tool" style="border-left-color:var(--orange)">
+          <div class="tool-name">🎯 ATT&amp;CK Tool</div>
+          <div class="tool-file">attck_tool.py</div>
+        </div>
+        <div class="tool" style="border-left-color:var(--purple)">
+          <div class="tool-name">📦 GHSA Tool</div>
+          <div class="tool-file">ghsa_tool.py</div>
+        </div>
+        <div class="tool">
+          <div class="tool-name">💾 Memory Tool</div>
+          <div class="tool-file">memory_tool.py</div>
+        </div>
+        <div class="tool">
+          <div class="tool-name">📦 Pkg Extractor</div>
+          <div class="tool-file">package_extractor.py</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow" style="padding:8px 0">
+    <div style="width:100%;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent)"></div>
+  </div>
+
+  <!-- ═══════════ MEMORY LAYER ═══════════ -->
+  <div class="step">
+    <div class="layer l-memory">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(63,185,80,0.1);color:var(--green)">🗃</div>
+        <div class="layer-title">持久化記憶 + 快取</div>
+        <div class="layer-sub">memory/ · data/ · logs/</div>
+      </div>
+      <div class="cards" style="gap:6px">
+        <div class="card" style="min-width:100px;flex:unset">
+          <div class="card-name" style="font-size:10px">📂 Scout</div>
+          <div class="card-file">scout_memory.json</div>
+        </div>
+        <div class="card" style="min-width:100px;flex:unset">
+          <div class="card-name" style="font-size:10px">📂 Analyst</div>
+          <div class="card-file">analyst_memory.json</div>
+        </div>
+        <div class="card" style="min-width:100px;flex:unset">
+          <div class="card-name" style="font-size:10px">📂 Advisor</div>
+          <div class="card-file">advisor_memory.json</div>
+        </div>
+        <div class="card" style="min-width:100px;flex:unset">
+          <div class="card-name" style="font-size:10px">📝 Checkpoint</div>
+          <div class="card-file">*.jsonl</div>
+          <div class="tags"><span class="t t-json" style="font-size:7px">append-only</span></div>
+        </div>
+        <div class="card" style="min-width:100px;flex:unset;border-left:2px solid var(--cyan)">
+          <div class="card-name" style="font-size:10px;color:var(--cyan)">🎯 OSV Cache</div>
+          <div class="card-file">osv_cache_*.json</div>
+          <div class="tags"><span class="t t-new" style="font-size:7px">24h TTL</span></div>
+        </div>
+        <div class="card" style="min-width:100px;flex:unset">
+          <div class="card-name" style="font-size:10px">📦 NVD Cache</div>
+          <div class="card-file">nvd_cache.json</div>
+        </div>
+        <div class="card" style="min-width:100px;flex:unset;border-left:2px solid var(--purple)">
+          <div class="card-name" style="font-size:10px;color:var(--purple)">📊 EPSS Cache</div>
+          <div class="card-file">epss_cache_*.json</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow" style="padding:8px 0">
+    <div style="width:100%;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent)"></div>
+  </div>
+
+  <!-- ═══════════ HARNESS INFRA ═══════════ -->
+  <div class="step">
+    <div class="layer l-harness">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(210,153,34,0.1);color:var(--orange)">🏗</div>
+        <div class="layer-title">Harness Engineering 基礎設施</div>
+        <div class="layer-sub">三柱架構</div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-name">Layer 1 — Context</div>
+          <div class="card-file">harness/context/</div>
+          <div class="card-desc">agent_map · doc_indexer</div>
+        </div>
+        <div class="card">
+          <div class="card-name">Layer 2 — Constraints</div>
+          <div class="card-file">harness/constraints/</div>
+          <div class="card-desc">arch_linter · boundary_rules.toml</div>
+        </div>
+        <div class="card">
+          <div class="card-name">Layer 3 — Entropy</div>
+          <div class="card-file">harness/entropy/</div>
+          <div class="card-desc">entropy_scanner · until_clean_loop</div>
+        </div>
+        <div class="card">
+          <div class="card-name">🔧 Config / LLM</div>
+          <div class="card-file">config.py</div>
+          <div class="tags"><span class="t t-api" style="font-size:7px">OpenRouter</span></div>
+          <div class="card-desc" style="margin-top:2px">降級瀑布 · 429 輪替 · rate_limiter</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow" style="padding:8px 0">
+    <div style="width:100%;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent)"></div>
+  </div>
+
+  <!-- ═══════════ RUST + SANDBOX LAYER ═══════════ -->
+  <div class="step">
+    <div class="layer l-rust">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(249,115,22,0.12);color:#f97316">🦀</div>
+        <div class="layer-title">Rust 高效能層 + 安全隔離 Sandbox</div>
+        <div class="layer-sub">rust/ · sandbox/ · PyO3 + maturin</div>
+      </div>
+
+      <!-- Rust Crates -->
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#f97316;font-weight:700;margin-bottom:8px">🦀 Rust PyO3 Crates（6 個 cdylib · Cargo Workspace）</div>
+      <div class="cards" style="gap:6px;margin-bottom:14px">
+        <div class="card" style="border-left:3px solid #f97316;flex:1">
+          <div class="card-name" style="color:#f97316">🛡 sanitizer</div>
+          <div class="card-file">rust/sanitizer/</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-rust" style="font-size:7px">Rust</span>
+            <span class="t t-rust" style="font-size:7px">PyO3</span>
+            <span class="t t-rust" style="font-size:7px">regex</span>
+            <span class="t t-rust" style="font-size:7px">sha2</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">scan_blocklist · infer_input_type · sha256_hex<br>替代 input_sanitizer.py 的效能關鍵路徑</div>
+        </div>
+        <div class="card" style="border-left:3px solid #f97316;flex:1">
+          <div class="card-name" style="color:#f97316">📝 checkpoint_writer</div>
+          <div class="card-file">rust/checkpoint_writer/</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-rust" style="font-size:7px">Rust</span>
+            <span class="t t-rust" style="font-size:7px">tokio</span>
+            <span class="t t-rust" style="font-size:7px">parking_lot</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">open_writer · write_line · flush · write_batch<br>Mutex + BufWriter 高效 JSONL I/O</div>
+        </div>
+        <div class="card" style="border-left:3px solid #f97316;flex:1">
+          <div class="card-name" style="color:#f97316">🔒 prompt_sandbox</div>
+          <div class="card-file">rust/prompt_sandbox/</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-rust" style="font-size:7px">Rust</span>
+            <span class="t t-rust" style="font-size:7px">wasmtime 28</span>
+            <span class="t t-rust" style="font-size:7px">WASM</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">sandbox_eval · L0.5 WASM Runtime<br>wasmtime Host · prompt_guard.wasm</div>
+        </div>
+      </div>
+      <div class="cards" style="gap:6px;margin-bottom:14px">
+        <div class="card" style="border-left:3px solid #f97316">
+          <div class="card-name" style="color:#f97316">📋 json_validator</div>
+          <div class="card-file">rust/json_validator/</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-rust" style="font-size:7px">serde_json</span>
+            <span class="t t-rust" style="font-size:7px">regex</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">safe_parse_json · validate_cve_id · validate_cve_list</div>
+        </div>
+        <div class="card" style="border-left:3px solid #f97316">
+          <div class="card-name" style="color:#f97316">💾 memory_validator</div>
+          <div class="card-file">rust/memory_validator/</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-rust" style="font-size:7px">serde_json</span>
+            <span class="t t-rust" style="font-size:7px">regex</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">validate_memory_write · validate_cve_id</div>
+        </div>
+        <div class="card" style="border-left:3px solid #f97316">
+          <div class="card-name" style="color:#f97316">🔗 url_builder</div>
+          <div class="card-file">rust/url_builder/</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-rust" style="font-size:7px">url crate</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">build_api_url · validate_url · encode_query_value</div>
+        </div>
+        <div class="card" style="border-left:3px dashed #f97316">
+          <div class="card-name" style="color:#f97316">🎯 prompt_sandbox_guest</div>
+          <div class="card-file">rust/prompt_sandbox_guest/</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-rust" style="font-size:7px">wasm32-unknown-unknown</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">WASM Guest → prompt_guard.wasm</div>
+        </div>
+      </div>
+
+      <!-- Sandbox Module -->
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--cyan);font-weight:700;margin-bottom:8px">🐳 Python Sandbox 安全隔離模組（三層防禦 + Graceful Degradation）</div>
+      <div class="cards" style="gap:6px;margin-bottom:10px">
+        <div class="card" style="border-left:3px solid var(--cyan)">
+          <div class="card-name" style="color:var(--cyan)">🔍 AST Guard</div>
+          <div class="card-file">sandbox/ast_guard.py</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-py" style="font-size:7px">Python</span>
+            <span class="t t-py" style="font-size:7px">ast.parse()</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">Layer 1 — AST 遮罩 + timeout</div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--cyan)">
+          <div class="card-name" style="color:var(--cyan)">🐳 Docker Sandbox</div>
+          <div class="card-file">sandbox/docker_sandbox.py</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-py" style="font-size:7px">Python</span>
+            <span class="t t-api" style="font-size:7px">Docker</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">Layer 2 — 容器隔離 · seccomp-profile.json</div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--cyan)">
+          <div class="card-name" style="color:var(--cyan)">🧹 Memory Sanitizer</div>
+          <div class="card-file">sandbox/memory_sanitizer.py</div>
+          <div class="tags" style="margin-top:3px">
+            <span class="t t-py" style="font-size:7px">Python</span>
+            <span class="t t-py" style="font-size:7px">regex</span>
+          </div>
+          <div class="card-desc" style="margin-top:3px">Layer 3 — 記憶快取淨化 · CVE year 正則</div>
+        </div>
+      </div>
+
+      <!-- Build Toolchain -->
+      <div style="display:flex;gap:6px;align-items:center;padding:8px 12px;background:rgba(249,115,22,0.04);border:1px solid rgba(249,115,22,0.12);border-radius:6px;font-size:9px;color:var(--text2)">
+        <span style="font-weight:700;color:#f97316">BUILD</span>
+        <span class="t t-rust" style="font-size:7px">maturin develop</span>
+        <span class="t t-rust" style="font-size:7px">MinGW-w64 GNU</span>
+        <span class="t t-rust" style="font-size:7px">x86_64-pc-windows-gnu</span>
+        <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:8px">build_rust_crates.py</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow" style="padding:8px 0">
+    <div style="width:100%;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent)"></div>
+  </div>
+
+  <!-- ═══════════ EXTERNAL APIS ═══════════ -->
+  <div class="step">
+    <div class="layer l-ext">
+      <div class="layer-head">
+        <div class="layer-icon" style="background:rgba(139,148,158,0.1);color:var(--text2)">☁️</div>
+        <div class="layer-title">外部 API 依賴</div>
+        <div class="layer-sub">REST / JSON Feed</div>
+      </div>
+      <div class="ext-grid">
+        <div class="ext" style="border-color:rgba(57,210,192,0.3);background:rgba(57,210,192,0.03)">
+          <div class="ext-name" style="color:var(--cyan)">🎯 OSV.dev</div>
+          <div class="ext-url">api.osv.dev/v1</div>
+          <div class="tags" style="justify-content:center;margin-top:3px"><span class="t t-new" style="font-size:6px">PRIMARY</span></div>
+        </div>
+        <div class="ext">
+          <div class="ext-name">🔒 NVD v2</div>
+          <div class="ext-url">services.nvd.nist.gov</div>
+        </div>
+        <div class="ext">
+          <div class="ext-name">⚠️ CISA KEV</div>
+          <div class="ext-url">cisa.gov</div>
+        </div>
+        <div class="ext" style="border-color:rgba(188,140,255,0.3);background:rgba(188,140,255,0.03)">
+          <div class="ext-name" style="color:var(--purple)">📊 FIRST EPSS</div>
+          <div class="ext-url">api.first.org/epss</div>
+        </div>
+        <div class="ext">
+          <div class="ext-name">🌐 OTX</div>
+          <div class="ext-url">otx.alienvault.com</div>
+        </div>
+        <div class="ext" style="border-color:rgba(210,153,34,0.3);background:rgba(210,153,34,0.03)">
+          <div class="ext-name" style="color:var(--orange)">🎯 ATT&amp;CK</div>
+          <div class="ext-url">CWE→CAPEC→T-ID</div>
+        </div>
+        <div class="ext">
+          <div class="ext-name">🤖 LLM</div>
+          <div class="ext-url">openrouter.ai</div>
+        </div>
+        <div class="ext">
+          <div class="ext-name">💣 GitHub</div>
+          <div class="ext-url">api.github.com</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /pipeline -->
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<div class="footer">
+  <div style="margin-bottom:6px">
+    <span style="color:var(--blue)">Python</span> — agents/ · tools/ · ui/ · main.py · config.py · checkpoint.py · harness/ &nbsp;|&nbsp;
+    <span style="color:#f97316">Rust</span> — 6 PyO3 crates + WASM Guest（sanitizer · json_validator · memory_validator · url_builder · checkpoint_writer · prompt_sandbox）&nbsp;|&nbsp;
+    <span style="color:var(--yellow)">JS/HTML/CSS</span> — 前端介面 &nbsp;|&nbsp;
+    <span style="color:var(--purple)">Markdown</span> — 20 Skill SOP &nbsp;|&nbsp;
+    <span style="color:var(--green)">JSON/JSONL</span> — 記憶 + 日誌
+  </div>
+  <div style="display:inline-block;padding:6px 14px;background:rgba(57,210,192,0.05);border:1px solid rgba(57,210,192,0.15);border-radius:6px;margin-top:4px">
+    ⚡ <strong style="color:var(--cyan)">v5.1</strong> · OSV-First · 4-Layer CVE Defense · 6D 100% API · 🦀 Rust PyO3 · Harness Engineering
+  </div>
+  <div style="margin-top:8px;color:rgba(255,255,255,0.2)">
+    ThreatHunter v5.1 · 2026-04-19 · AMD Developer Hackathon · Built with Antigravity
+  </div>
+</div>
+
+</body>
+</html>

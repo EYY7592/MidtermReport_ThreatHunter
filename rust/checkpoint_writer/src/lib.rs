@@ -112,6 +112,7 @@ fn write_line(line: &str) -> PyResult<()> {
             w.write_all(b"\n").map_err(|e| {
                 PyRuntimeError::new_err(format!("[CheckpointWriter] 寫入換行失敗: {}", e))
             })?;
+            let _ = w;
             state.lines += 1;
             Ok(())
         }
@@ -180,12 +181,13 @@ fn write_batch(lines: Vec<String>) -> PyResult<u64> {
                     PyRuntimeError::new_err(format!("[CheckpointWriter] 批次換行失敗: {}", e))
                 })?;
                 count += 1;
-                state.lines += 1;
             }
             // 批次寫入後自動 flush
             w.flush().map_err(|e| {
                 PyRuntimeError::new_err(format!("[CheckpointWriter] 批次 flush 失敗: {}", e))
             })?;
+            let _ = w;
+            state.lines += count;
             Ok(count)
         }
     }

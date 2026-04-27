@@ -16,9 +16,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
+from config import MEMORY_DIR, ENABLE_MEMORY_RAG, SIMILARITY_THRESHOLD
 from crewai.tools import tool
-
-from core.config import MEMORY_DIR, ENABLE_MEMORY_RAG, SIMILARITY_THRESHOLD
 
 logger = logging.getLogger("threathunter.memory")
 
@@ -32,7 +31,7 @@ except ImportError:
     _MEM_SANITIZER_OK = False
 
 # ── 常數 ─────────────────────────────────────────────────────
-VALID_AGENT_NAMES = {"scout", "analyst", "advisor", "critic"}
+VALID_AGENT_NAMES = {"scout", "analyst", "advisor", "critic", "orchestrator"}
 
 
 # ── Layer 1: JSON 持久化工具函式 ─────────────────────────────
@@ -298,7 +297,7 @@ def read_memory(agent_name: str) -> str:
     0 份歷史回傳空 JSON，Agent 可據此判斷是否為第一次掃描。
 
     Args:
-        agent_name: Agent 名稱（scout / analyst / advisor / critic）
+        agent_name: Agent 名稱（scout / analyst / advisor / critic / orchestrator）
 
     Returns:
         JSON 字串格式的歷史記憶
@@ -324,7 +323,7 @@ def write_memory(agent_name: str, data: str) -> str:
     寫入 Agent 記憶（雙寫：JSON + LlamaIndex）。自動添加 timestamp。
 
     Args:
-        agent_name: Agent 名稱（scout / analyst / advisor / critic）
+        agent_name: Agent 名稱（scout / analyst / advisor / critic / orchestrator）
         data: JSON 字串格式的記憶資料
 
     Returns:

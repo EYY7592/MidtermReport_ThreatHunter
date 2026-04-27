@@ -1,9 +1,4 @@
-# ──────────────────────────────────────────────────────────────────────────────
-# ThreatHunter .gitignore
-# master：只保留核心功能程式碼，排除 tests、data cache、logs、備份
-# ──────────────────────────────────────────────────────────────────────────────
-
-# Python bytecode
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -12,91 +7,64 @@ __pycache__/
 dist/
 build/
 *.egg
-.eggs/
 
-# Virtual environments
+# 虛擬環境
 .venv/
 venv/
 env/
-.python-version
 
-# Secrets / Environment
+# 環境變數（敏感資訊）
 .env
-.env.*
-!.env.example
 
-# ── Runtime caches (API responses, NVD data) ──────────────────────────────────
-data/
-!data/.gitkeep
-
-# ── Memory state (runtime JSON, not source code) ──────────────────────────────
+# 記憶資料（執行時產生）
 memory/*.json
-memory/*.bak
-memory/*.backup*
 memory/vector_store/*
 !memory/.gitkeep
 !memory/vector_store/.gitkeep
 
-# ── Logs & Checkpoints (runtime artifacts) ────────────────────────────────────
-logs/
-*.log
+# 執行時產出（不應提交）
+tmp_*
 log_*.txt
+advisor_memory.json
+data/model_stats.json
 
-# ── Tests (不進 master) ───────────────────────────────────────────────────────
-tests/
-!tests/.gitkeep
-
-# ── Temporary / patch scripts (工具腳本) ─────────────────────────────────────
-_*.py
-fix_*.py
-patch_*.py
-verify_*.py
-check_*.py
-api_test_*.py
-
-# ── Documentation HTML (太大，保留 .md) ──────────────────────────────────────
-docs/*.html
-
-# ── Memory backup files ───────────────────────────────────────────────────────
-*.backup_*
-*.bak
-
-# ── IDE / OS ──────────────────────────────────────────────────────────────────
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+
+# pytest
+.pytest_cache/
+.ruff_cache/
+
+# OS
 .DS_Store
 Thumbs.db
 
-# ── pytest / ruff cache ───────────────────────────────────────────────────────
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+# Antigravity
+.gemini/
 
-# ── Rust build artifacts ──────────────────────────────────────────────────────
+# OpenCode
+.opencode/
+
+# Rust build artifacts
 rust/target/
 *.whl
+
+# WASM build artifacts
 rust/prompt_sandbox/assets/*.wasm
 
-# ── Docker artifacts ──────────────────────────────────────────────────────────
+# Docker
 *.tar
 
-# ── CI artifacts ──────────────────────────────────────────────────────────────
+# CI artifacts
 bandit_report.json
 arch_linter_output.txt
 
-# ── OSV / exploit data caches (runtime) ──────────────────────────────────────
-data/osv_cache_*
-data/exploit_cache_*
-data/nvd_cache_*
-data/otx_cache_*
-data/epss_cache.json
-data/ghsa_cache.json
-data/kev_cache.json
-
-# ── Tool specific ─────────────────────────────────────────────────────────────
-.gemini/
-.opencode/
-tmp_*
-advisor_memory.json
+# ThreatHunter Runtime caches & logs
+logs/
+data/*cache*.json
+*.txt
+!requirements.txt
+memory/*.bak

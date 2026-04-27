@@ -273,7 +273,53 @@ def _infer_input_type(text: str) -> str:
         return "package_list"
     if code_score >= 1:
         return "source_code"
-    return "package_list"  # 預設：套件掃描（最安全的路徑 A）
+
+    return "package_list"
+
+
+def _wasm_block_finding(reason: str, text: str) -> L0Finding:
+    """將 WASM L0.5 封鎖訊號保留成可稽核 finding。"""
+    normalized = (reason or "wasm_block").lower()
+    if "prompt" in normalized or "instruction" in normalized:
+        pattern_name = "wasm_prompt_injection"
+    elif "jailbreak" in normalized:
+        pattern_name = "wasm_jailbreak"
+    elif "code" in normalized or "command" in normalized:
+        pattern_name = "wasm_code_injection"
+    else:
+        pattern_name = "wasm_l0_block"
+
+    return L0Finding(
+        pattern_name=pattern_name,
+        description=f"WASM L0.5 flagged input before type-aware review: {reason}",
+        line_no=1,
+        matched_text=(text or "")[:100],
+        severity="WARNING",
+    )
+
+
+def _extract_safe_targets_from_blocked_text(text: str) -> str:
+    """從混入 prompt injection 的輸入中只保留可掃描目標。"""
+    target_pattern = re.compile(
+        r"\b(?!CVE\b)([A-Za-z][A-Za-z0-9_.+-]{1,40})\s*"
+        r"(?:==|>=|<=|~=|=|\s+)\s*(v?\d[\w.+-]{0,30})\b"
+    )
+    blocked_words = re.compile(
+        r"(?i)(ignore|forget|instruction|system|rule|constitution|chatbot|"
+        r"hacked|developer\s+mode|jailbreak|dan|say\s+['\"]|output)"
+    )
+    safe_targets: list[str] = []
+    for match in target_pattern.finditer(text):
+        package, version = match.groups()
+        start = max(0, match.start() - 80)
+        end = min(len(text), match.end() + 80)
+        context = text[start:end]
+        if blocked_words.search(context) and not re.search(r"(?i)(django|postgresql|postgres|redis|nginx|flask|express|spring|openssl|apache)", package):
+            continue
+        normalized = f"{package} {version}".strip()
+        if normalized not in safe_targets:
+            safe_targets.append(normalized)
+    return "\n".join(safe_targets)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -312,20 +358,11 @@ def sanitize_input(raw_input: str) -> SanitizeResult:
     wasm_verdict = _wasm_eval(raw_input)
     wasm_code  = wasm_verdict.get("code", 0)
     wasm_reason = wasm_verdict.get("reason", "ok")
+    wasm_block_msg = ""
 
     if wasm_code == 1:  # BLOCK
-        block_msg = f"[WASM-L0.5] BLOCK: {wasm_reason}"
-        logger.warning("[SANITIZE][%s] %s", input_hash, block_msg)
-        return SanitizeResult(
-            safe=False,
-            sanitized_input="",
-            truncated=False,
-            original_length=original_length,
-            blocked_reason=block_msg,
-            input_hash=input_hash,
-            input_type="blocked",
-            wasm_verdict=wasm_verdict,
-        )
+        wasm_block_msg = f"[WASM-L0.5] BLOCK: {wasm_reason}"
+        logger.warning("[SANITIZE][%s] %s", input_hash, wasm_block_msg)
     elif wasm_code == 3:  # TRUNCATE — WASM 建議截斷，繼續處理
         logger.info("[SANITIZE][%s] WASM TRUNCATE 建議", input_hash)
         raw_input = raw_input[:MAX_INPUT_LENGTH]
@@ -393,6 +430,51 @@ def sanitize_input(raw_input: str) -> SanitizeResult:
 
     # ── 步驟 5：推斷輸入類型 ────────────────────────────────────
     input_type = _infer_input_type(text)
+
+    if wasm_block_msg:
+        l0_findings.append(_wasm_block_finding(str(wasm_reason), text))
+        if input_type not in {"source_code", "config_file", "mixed"}:
+            safe_targets = _extract_safe_targets_from_blocked_text(text)
+            if safe_targets:
+                text = safe_targets
+                input_type = _infer_input_type(text)
+                logger.warning(
+                    "[SANITIZE][%s] WASM block sanitized to safe targets: %s",
+                    input_hash, text,
+                )
+            else:
+                logger.warning(
+                    "[SANITIZE][%s] Result: safe=False type=%s reason=%s l0_count=%d",
+                    input_hash, input_type, wasm_block_msg, len(l0_findings),
+                )
+                return SanitizeResult(
+                    safe=False,
+                    sanitized_input="",
+                    truncated=truncated,
+                    original_length=original_length,
+                    l0_findings=l0_findings,
+                    blocked_reason=wasm_block_msg,
+                    input_hash=input_hash,
+                    input_type="blocked",
+                    wasm_verdict=wasm_verdict,
+                )
+
+        if input_type not in {"source_code", "config_file", "mixed", "package_list"}:
+            logger.warning(
+                "[SANITIZE][%s] Result: safe=False type=%s reason=%s l0_count=%d",
+                input_hash, input_type, wasm_block_msg, len(l0_findings),
+            )
+            return SanitizeResult(
+                safe=False,
+                sanitized_input="",
+                truncated=truncated,
+                original_length=original_length,
+                l0_findings=l0_findings,
+                blocked_reason=wasm_block_msg,
+                input_hash=input_hash,
+                input_type="blocked",
+                wasm_verdict=wasm_verdict,
+            )
 
     logger.info(
         "[SANITIZE][%s] Result: safe=True type=%s truncated=%s l0_count=%d",

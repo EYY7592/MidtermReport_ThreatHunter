@@ -29,7 +29,7 @@ from typing import Any
 
 from crewai import Agent, Task
 
-from core.config import get_llm
+from config import get_llm
 from tools.memory_tool import history_search, read_memory, write_memory
 
 # LLM 延遲初始化：在 create_advisor_agent() 中才呼叫 get_llm()
@@ -64,6 +64,19 @@ except FileNotFoundError:
     ADVISOR_SKILL = "## Skill: Action Report\nPrioritize URGENT → IMPORTANT → RESOLVED."
 
 # v3.7: Path-Aware Skill Map（對應 main.py recorder.stage_enter 使用）
+def _load_skill(skill_filename: str = "action_report.md") -> str:
+    skill_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "skills",
+        skill_filename,
+    )
+    try:
+        with open(skill_path, "r", encoding="utf-8") as skill_file:
+            return skill_file.read()
+    except FileNotFoundError:
+        return ADVISOR_SKILL
+
+
 SKILL_MAP: dict[str, str] = {
     "pkg":       "action_report.md",        # Path A: package scan report
     "code":      "code_action_report.md",   # Path B-code: source code report
@@ -75,7 +88,10 @@ SKILL_MAP: dict[str, str] = {
 # 第二部份：Agent 建立函式
 # ══════════════════════════════════════════════════════════════
 
-def create_advisor_agent(excluded_models: list[str] | None = None) -> Agent:
+def create_advisor_agent(
+    excluded_models: list[str] | None = None,
+    input_type: str = "pkg",
+) -> Agent:
     """
     建立 Advisor Agent。
 
@@ -85,6 +101,9 @@ def create_advisor_agent(excluded_models: list[str] | None = None) -> Agent:
     Returns:
         CrewAI Agent 實例，具備記憶讀寫能力。
     """
+    skill_filename = SKILL_MAP.get(input_type, "action_report.md")
+    skill_content = _load_skill(skill_filename)
+
     return Agent(
         role="資安顧問暨最終裁決者（Advisor & Judge）",
         goal=(
@@ -97,8 +116,8 @@ def create_advisor_agent(excluded_models: list[str] | None = None) -> Agent:
 
 {CONSTITUTION}
 
-## 行動報告 SOP（來自 skills/action_report.md）
-{ADVISOR_SKILL}
+## 行動報告 SOP（來自 skills/{skill_filename}）
+{skill_content}
 
 ## 輸出規格（Advisor → UI 資料契約）
 
@@ -575,7 +594,10 @@ def _harness_check_repeated(output: dict[str, Any]) -> None:
 # 第四部份：完整 Pipeline 執行函式
 # ══════════════════════════════════════════════════════════════
 
-def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]:
+def run_advisor_pipeline(
+    analyst_output: str | dict[str, Any],
+    input_type: str = "pkg",
+) -> dict[str, Any]:
     """
     執行 Advisor Agent Pipeline（含 5 層 Harness 保障）。
 
@@ -602,7 +624,7 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
     logger.info("[START] Advisor Pipeline")
 
     # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
-    from core.config import mark_model_failed, get_current_model_name
+    from config import mark_model_failed, get_current_model_name
     MAX_LLM_RETRIES = 2
     excluded_models: list[str] = []
 
@@ -612,7 +634,7 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
     crew_success = False
 
     for attempt in range(MAX_LLM_RETRIES + 1):
-        agent = create_advisor_agent(excluded_models)
+        agent = create_advisor_agent(excluded_models, input_type=input_type)
         task = create_advisor_task(agent, analyst_str)
 
         # ── 執行 CrewAI ────────────────────────────────────────────
@@ -625,7 +647,7 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
             )
             logger.info("[START] Advisor Crew kickoff (attempt %d/%d)", attempt + 1, MAX_LLM_RETRIES + 1)
             try:
-                from core.checkpoint import recorder as _cp
+                from checkpoint import recorder as _cp
                 _adv_model = get_current_model_name(agent.llm)
                 _cp.llm_call("advisor", _adv_model, "openrouter", f"attempt={attempt+1}")
             except Exception:
@@ -658,7 +680,7 @@ def run_advisor_pipeline(analyst_output: str | dict[str, Any]) -> dict[str, Any]
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                from core.config import rate_limiter as _rl
+                from config import rate_limiter as _rl
                 _rl.on_429(retry_after=retry_after, caller="advisor")  # 最少 30s
                 continue
 

@@ -747,6 +747,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "prompt_guard"
+version = "0.1.0"
+
+[[package]]
 name = "psm"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"

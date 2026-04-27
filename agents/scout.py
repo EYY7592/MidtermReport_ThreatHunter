@@ -13,21 +13,18 @@
 import os
 import logging
 import time
+from typing import Any, TYPE_CHECKING
 
 import requests
 
-from crewai import Agent
+from config import get_llm
 
-from core.config import get_llm
-
-# LLM 延遲初始化：在 create_scout_agent() 中才呼叫 get_llm()
-from tools.nvd_tool import search_nvd
-from tools.osv_tool import search_osv       # OSV.dev — ecosystem-aware 精確查詢（主力）
-from tools.otx_tool import search_otx
-from tools.epss_tool import fetch_epss_score  # FIRST.org EPSS — 漏洞利用機率
-from tools.memory_tool import read_memory, write_memory, history_search
+# LLM 與 Tool 皆延遲初始化，避免純 helper / 測試 import 路徑觸發 CrewAI 副作用。
 
 logger = logging.getLogger("ThreatHunter")
+
+if TYPE_CHECKING:
+    from crewai import Agent
 
 # ══════════════════════════════════════════════════════════════
 # Skill 載入（Phase 4D：使用 SkillLoader 熱載入系統）
@@ -89,6 +86,145 @@ def _extract_ghsa_severity_from_osv(vuln_dict: dict) -> str:
     return "UNKNOWN"
 # ─────────────────────────────────────────────────────────────
 
+
+
+def _severity_from_cvss(cvss_score: float) -> str:
+    """將 CVSS 分數轉成標準 severity 字串。"""
+    if cvss_score >= 9.0:
+        return "CRITICAL"
+    if cvss_score >= 7.0:
+        return "HIGH"
+    if cvss_score >= 4.0:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _summarize_intel_fusion_for_task(intel_fusion_result: dict | None) -> str:
+    """將 Intel Fusion 結果壓縮成給 Scout 任務描述使用的摘要。"""
+    if not intel_fusion_result:
+        return ""
+
+    fusion_results = intel_fusion_result.get("fusion_results", [])
+    if not fusion_results:
+        return ""
+
+    lines: list[str] = [
+        "Layer 1 Intel Fusion evidence is available.",
+        "Reuse this enrichment instead of re-querying EPSS or OTX.",
+        "Use OSV/NVD only for CVE discovery, verification, or missing-package fallback.",
+        "Intel Fusion evidence:",
+    ]
+
+    for fusion in fusion_results[:8]:
+        dims = fusion.get("dimension_scores", {})
+        cve_id = fusion.get("cve_id", "UNKNOWN")
+        score = fusion.get("composite_score", "n/a")
+        kev = bool(dims.get("kev", False))
+        epss = dims.get("epss", "n/a")
+        ghsa = dims.get("ghsa_severity", "UNKNOWN")
+        otx = dims.get("otx_threat", "unknown")
+        lines.append(
+            f"- {cve_id}: composite={score}, kev={kev}, epss={epss}, ghsa={ghsa}, otx={otx}"
+        )
+
+    return "\n".join(lines)
+
+
+def _merge_intel_fusion_evidence(output: dict[str, Any], intel_fusion_result: dict | None) -> dict[str, Any]:
+    """把 Intel Fusion 的富化證據併入 Scout 最終漏洞清單。"""
+    if not intel_fusion_result:
+        return output
+
+    fusion_results = intel_fusion_result.get("fusion_results", [])
+    if not fusion_results:
+        return output
+
+    fusion_by_cve: dict[str, dict[str, Any]] = {}
+    for fusion in fusion_results:
+        cve_id = str(fusion.get("cve_id", "")).strip()
+        if cve_id:
+            fusion_by_cve[cve_id] = fusion
+
+    if not fusion_by_cve:
+        return output
+
+    vulnerabilities = output.setdefault("vulnerabilities", [])
+    seen_cves = {str(v.get("cve_id", "")).strip() for v in vulnerabilities}
+    merged_count = 0
+    injected_count = 0
+
+    for vuln in vulnerabilities:
+        cve_id = str(vuln.get("cve_id", "")).strip()
+        fusion = fusion_by_cve.get(cve_id)
+        if not fusion:
+            continue
+
+        dims = fusion.get("dimension_scores", {})
+        vuln["composite_score"] = fusion.get("composite_score", vuln.get("composite_score"))
+        vuln["intel_confidence"] = fusion.get("confidence", vuln.get("intel_confidence", ""))
+        vuln["dimensions_used"] = fusion.get("dimensions_used", vuln.get("dimensions_used", []))
+        vuln["weights_used"] = fusion.get("weights_used", vuln.get("weights_used", {}))
+
+        if dims.get("epss") is not None:
+            vuln["epss_score"] = dims.get("epss")
+        if "kev" in dims:
+            vuln["in_cisa_kev"] = bool(dims.get("kev"))
+        if dims.get("ghsa_severity"):
+            vuln["ghsa_severity"] = dims.get("ghsa_severity")
+        if dims.get("otx_threat"):
+            vuln["otx_threat"] = dims.get("otx_threat")
+
+        merged_count += 1
+
+    for cve_id, fusion in fusion_by_cve.items():
+        if cve_id in seen_cves:
+            continue
+
+        dims = fusion.get("dimension_scores", {})
+        cvss_score = float(dims.get("cvss", 0.0) or 0.0)
+        vulnerabilities.append({
+            "cve_id": cve_id,
+            "package": fusion.get("package", "unknown"),
+            "cvss_score": cvss_score,
+            "severity": _severity_from_cvss(cvss_score),
+            "description": fusion.get("description", ""),
+            "is_new": True,
+            "source": "INTEL_FUSION",
+            "composite_score": fusion.get("composite_score", 0.0),
+            "intel_confidence": fusion.get("confidence", ""),
+            "dimensions_used": fusion.get("dimensions_used", []),
+            "weights_used": fusion.get("weights_used", {}),
+            "epss_score": dims.get("epss"),
+            "in_cisa_kev": bool(dims.get("kev", False)),
+            "ghsa_severity": dims.get("ghsa_severity", "UNKNOWN"),
+            "otx_threat": dims.get("otx_threat", "unknown"),
+        })
+        injected_count += 1
+
+    output["_intel_fusion_applied"] = {
+        "merged_existing": merged_count,
+        "injected_missing": injected_count,
+        "fusion_count": len(fusion_by_cve),
+    }
+    return output
+
+
+def _reconcile_is_new_flags(output: dict[str, Any], historical_cves: set[str]) -> dict[str, Any]:
+    """依照歷史記憶重新校正所有漏洞的 is_new 旗標。"""
+    corrected = 0
+    for vuln in output.get("vulnerabilities", []):
+        cve_id = vuln.get("cve_id", "")
+        expected_is_new = cve_id not in historical_cves
+        if vuln.get("is_new") != expected_is_new:
+            vuln["is_new"] = expected_is_new
+            corrected += 1
+
+    summary = output.setdefault("summary", {})
+    summary["new_since_last_scan"] = sum(
+        1 for vuln in output.get("vulnerabilities", []) if vuln.get("is_new")
+    )
+    output["_is_new_corrected"] = corrected
+    return output
 
 
 def _load_skill(skill_filename: str = "threat_intel.md") -> str:
@@ -185,7 +321,7 @@ CONSTITUTION = """
 def create_scout_agent(
     excluded_models: list[str] | None = None,
     input_type: str = "pkg",
-) -> Agent:
+) -> "Agent":
     """
     Build Scout Agent with Path-Aware Skill SOP (v3.7).
 
@@ -208,7 +344,7 @@ def create_scout_agent(
 
     # Goal adapts to the input path
     _GOAL_MAP = {
-        "pkg":       "Collect known CVEs for the given package list from NVD/OTX, compare with history, output structured JSON.",
+        "pkg":       "Collect known CVEs for the given package list from OSV/NVD, merge Intel Fusion evidence when available, compare with history, and output structured JSON.",
         "code":      "Audit source code for OWASP Top10 / CWE vulnerabilities; extract package imports and scan NVD; output structured JSON.",
         "injection": "Classify and assess AI security threats (OWASP LLM Top10 / MITRE ATLAS) in the given input; output structured JSON with no CVE hallucination.",
         "config":    "Audit the given configuration file against CIS Benchmarks for misconfigurations and hardcoded secrets; output structured JSON.",
@@ -229,6 +365,12 @@ You MUST follow this Standard Operating Procedure for the current scan path ({in
 {skill_content}
 """
 
+    # 延遲匯入 CrewAI，避免純 helper / 測試路徑在 import 階段觸發本機儲存副作用。
+    from crewai import Agent
+    from tools.nvd_tool import search_nvd
+    from tools.osv_tool import search_osv
+    from tools.memory_tool import read_memory, write_memory, history_search
+
     llm = get_llm(exclude_models=excluded_models)
     scout = Agent(
         role="Threat Intelligence Scout",
@@ -237,8 +379,6 @@ You MUST follow this Standard Operating Procedure for the current scan path ({in
         tools=[
             search_osv,   # 主力：OSV.dev ecosystem-aware 精確查詢（不會返回無關 1999 CVE）
             search_nvd,   # 備用：NVD CPE 查詢（OSV 無結果時使用）
-            search_otx,
-            fetch_epss_score,  # EPSS：CVSS >= 7.0 的 CVE 查詢真實利用機率
             read_memory, write_memory, history_search,
         ],
         llm=llm,
@@ -260,13 +400,19 @@ You MUST follow this Standard Operating Procedure for the current scan path ({in
 # CrewAI Task 工廠函式（便利函式，供 main.py 使用）
 # ══════════════════════════════════════════════════════════════
 
-def create_scout_task(agent, tech_stack: str):
+def create_scout_task(
+    agent,
+    tech_stack: str,
+    intel_fusion_result: dict | None = None,
+):
     """
     v3.4: Scout Task - package-aware mode.
     When tech_stack is a short comma-separated package list (from PackageExtractor),
     explicitly enumerate each package for the LLM to query via search_nvd.
     """
     from crewai import Task
+
+    intel_summary = _summarize_intel_fusion_for_task(intel_fusion_result)
 
     # Detect if input is a clean package list or raw code/long text
     is_package_list = (
@@ -279,10 +425,10 @@ def create_scout_task(agent, tech_stack: str):
     if is_package_list:
         packages = [p.strip() for p in tech_stack.split(",") if p.strip()]
         packages_display = "\n".join(f"   {i+1}. {pkg}" for i, pkg in enumerate(packages))
-        nvd_calls = "\n".join(f"   - search_nvd(\'{pkg}\')" for pkg in packages[:8])
         task_desc = (
             f"You are analyzing security vulnerabilities for packages extracted from source code.\n\n"
             f"Package list to scan:\n{packages_display}\n\n"
+            f"{intel_summary + chr(10) + chr(10) if intel_summary else ''}"
             f"Steps to follow (MUST call tools in order):\n\n"
             f"Step 1: Call read_memory\n"
             f"   Action: read_memory\n"
@@ -290,12 +436,12 @@ def create_scout_task(agent, tech_stack: str):
             f"Step 2: For EACH package, call search_osv first (more precise), search_nvd as fallback:\n"
             f"{chr(10).join(f'   - search_osv(\'{ pkg }\')' for pkg in packages[:8])}\n"
             f"   If search_osv returns count=0, then try: search_nvd('<package>')\n\n"
-            f"Step 3: For CVEs with CVSS >= 7.0:\n"
-            f"   - Call fetch_epss_score('<CVE-ID1>,<CVE-ID2>') to get exploitation probability\n"
-            f"   - Call search_otx for the package to get threat intelligence\n\n"
+            f"Step 3: Reuse Intel Fusion evidence when available.\n"
+            f"   - Do NOT re-query EPSS or OTX from Scout.\n"
+            f"   - Prefer Intel Fusion values for composite_score, KEV, EPSS, GHSA, and OTX fields.\n"
+            f"   - If Intel Fusion has no matching CVE, continue with OSV/NVD-only evidence.\n\n"
             f"Step 4: Assemble JSON report from REAL tool results only\n"
             f"   - CVE IDs MUST come from search_osv or search_nvd output\n"
-            f"   - EPSS scores MUST come from fetch_epss_score output\n"
             f"   - Compare with read_memory history, mark is_new\n\n"
             f"Step 5: Call write_memory to save results\n"
             f"   Action: write_memory\n"
@@ -310,6 +456,7 @@ def create_scout_task(agent, tech_stack: str):
     else:
         task_desc = (
             f"You are analyzing security vulnerabilities in: {tech_stack[:800]}\n\n"
+            f"{intel_summary + chr(10) + chr(10) if intel_summary else ''}"
             f"Steps to follow (MUST call tools in order):\n\n"
             f"Step 1: Call read_memory\n"
             f"   Action: read_memory\n"
@@ -324,9 +471,10 @@ def create_scout_task(agent, tech_stack: str):
             f"   - const, let, var, function, class, async, await\n"
             f"   - req, res, app, user, input (these are variable names)\n"
             f"   If no require()/import found, output empty vulnerabilities list.\n\n"
-            f"Step 3: For CVEs with CVSS >= 7.0:\n"
-            f"   - Call fetch_epss_score('<CVE-ID1>,<CVE-ID2>') for exploitation probability\n"
-            f"   - Call search_otx for high-risk packages\n\n"
+            f"Step 3: Reuse Intel Fusion evidence when available.\n"
+            f"   - Do NOT re-query EPSS or OTX from Scout.\n"
+            f"   - Keep Scout focused on package extraction, OSV/NVD discovery, and schema output.\n"
+            f"   - If Intel Fusion has no matching CVE, continue with OSV/NVD-only evidence.\n\n"
             f"Step 4: Assemble JSON report from REAL tool results only\n\n"
             f"Step 5: Call write_memory\n"
             f"   Action: write_memory\n"
@@ -341,13 +489,17 @@ def create_scout_task(agent, tech_stack: str):
 
     return Task(
         description=task_desc,
-        expected_output="Structured JSON threat intel report with CVEs from search_osv (primary) or search_nvd (fallback) tool, with EPSS scores from fetch_epss_score.",
+        expected_output="Structured JSON threat intel report with CVEs from search_osv (primary) or search_nvd (fallback), ready for deterministic Intel Fusion evidence merge.",
         agent=agent,
     )
 
 
 
-def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
+def run_scout_pipeline(
+    tech_stack: str,
+    input_type: str = "pkg",
+    intel_fusion_result: dict | None = None,
+) -> dict:
     """
     Execute full Scout Pipeline with Harness code-level guarantees.
 
@@ -362,13 +514,15 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
     Args:
         tech_stack: User input (e.g. "Django 4.2, Redis 7.0" or source code)
         input_type: Path type (pkg/code/injection/config)
+        intel_fusion_result: Optional Layer 1 enrichment to merge into Scout output
 
     Returns:
         dict: Parsed Scout JSON report
     """
     import json
     from crewai import Crew, Process
-    from core.config import mark_model_failed, get_current_model_name, rate_limiter
+    from config import mark_model_failed, get_current_model_name, rate_limiter
+    from tools.memory_tool import write_memory
     # 新版 memory_tool 無 _write_memory_impl，使用公開 Tool 介面
 
     # ── Harness 0：OSV Batch 預熱快取（在 LLM 之前執行）───────────
@@ -397,13 +551,13 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
     for attempt in range(MAX_LLM_RETRIES + 1):
         # v3.7: pass input_type so agent loads the correct Skill SOP
         agent = create_scout_agent(excluded_models, input_type=input_type)
-        task = create_scout_task(agent, tech_stack)
+        task = create_scout_task(agent, tech_stack, intel_fusion_result=intel_fusion_result)
         crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=True)
 
         # 執行 Agent
         logger.info("[START] Scout Pipeline: %s (attempt %d/%d)", tech_stack, attempt + 1, MAX_LLM_RETRIES + 1)
         try:
-            from core.checkpoint import recorder as _cp
+            from checkpoint import recorder as _cp
             _current_model = get_current_model_name(agent.llm)
             _cp.llm_call("scout", _current_model, "openrouter", f"attempt={attempt+1}")
         except Exception:
@@ -704,6 +858,9 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
     if patched_count:
         logger.info("[OK] Patched %d CVE package fields", patched_count)
 
+    # 先合併 Intel Fusion 結果，再做歷史記憶校正，避免後補漏洞被誤標成新發現。
+    output = _merge_intel_fusion_evidence(output, intel_fusion_result)
+
     # ── Harness 保障 5：校正 is_new 標記 ──────────────────────
     # Agent 常常不正確比對歷史，程式碼代為校正
     try:
@@ -723,18 +880,9 @@ def run_scout_pipeline(tech_stack: str, input_type: str = "pkg") -> dict:
             for v in mem_data.get("latest", {}).get("vulnerabilities", []):
                 historical_cves.add(v.get("cve_id", ""))
 
-        corrected = 0
-        for vuln in output.get("vulnerabilities", []):
-            cve_id = vuln.get("cve_id", "")
-            expected_is_new = cve_id not in historical_cves
-            if vuln.get("is_new") != expected_is_new:
-                vuln["is_new"] = expected_is_new
-                corrected += 1
-
+        output = _reconcile_is_new_flags(output, historical_cves)
+        corrected = output.get("_is_new_corrected", 0)
         if corrected:
-            # 重算 summary
-            vulns = output.get("vulnerabilities", [])
-            output["summary"]["new_since_last_scan"] = sum(1 for v in vulns if v.get("is_new"))
             logger.info("[OK] Corrected %d CVE is_new flags", corrected)
     except Exception as e:
         logger.warning("[WARN] is_new correction failed: %s", e)

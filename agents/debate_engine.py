@@ -22,7 +22,7 @@ from typing import Any
 
 from crewai import Agent, Task, Crew, Process
 
-from core.config import SYSTEM_CONSTITUTION, get_llm, degradation_status
+from config import SYSTEM_CONSTITUTION, get_llm, degradation_status
 
 logger = logging.getLogger("ThreatHunter.debate_engine")
 
@@ -90,6 +90,7 @@ class DebateEngine:
 
     def __init__(self, max_rounds: int = MAX_DEBATE_ROUNDS):
         self.max_rounds = max_rounds
+        self.min_rounds_with_findings = min(2, max_rounds)
 
     def run_debate(
         self,
@@ -115,7 +116,9 @@ class DebateEngine:
         current_analyst_output = analyst_output
         consensus = False
         consensus_round = 0
+        early_stop_reason = ""
         final_critic_result: dict[str, Any] = {}
+        has_findings = self._has_findings(analyst_output)
 
         logger.info("[DEBATE] Starting %d-round debate (Du et al. 2023)", self.max_rounds)
 
@@ -168,8 +171,20 @@ class DebateEngine:
 
             # ── 共識判定 ────────────────────────────────────
             if self._check_consensus(current_analyst_output, critic_result):
+                if has_findings and round_num < self.min_rounds_with_findings and not critic_result.get("no_challenge"):
+                    logger.info(
+                        "[DEBATE] Consensus detected at round %d, continuing to minimum %d rounds because findings exist",
+                        round_num,
+                        self.min_rounds_with_findings,
+                    )
+                    if round_num < self.max_rounds:
+                        current_analyst_output = self._analyst_rebuttal(
+                            current_analyst_output, critic_result, round_num
+                        )
+                    continue
                 consensus = True
                 consensus_round = round_num
+                early_stop_reason = "consensus_after_min_rounds" if has_findings else "no_findings"
                 logger.info(
                     "[DEBATE] Consensus reached at round %d | "
                     "analyst_risk=%s | critic_verdict=%s",
@@ -200,6 +215,8 @@ class DebateEngine:
                 "total_rounds": round_num,
                 "elapsed_ms": elapsed_ms,
                 "method": "multiagent_debate_Du2023",
+                "early_stop_reason": early_stop_reason,
+                "rounds": self._summarize_rounds(history),
             }
             return result
         else:
@@ -239,6 +256,29 @@ class DebateEngine:
         # 其他情況（ESCALATE 等）—— 看分數
         score = critic_result.get("weighted_score", 70)
         return score >= 75
+
+    def _has_findings(self, analyst_output: dict[str, Any]) -> bool:
+        """判斷 Analyst 是否真的有發現項；有發現時至少需要第二輪交叉質疑。"""
+        for key in ("analysis", "vulnerabilities", "code_patterns", "code_patterns_summary"):
+            value = analyst_output.get(key)
+            if isinstance(value, list) and len(value) > 0:
+                return True
+        return False
+
+    def _summarize_rounds(self, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """產生輕量回合摘要，供 UI/測試確認辯論沒有被第一輪吞掉。"""
+        rounds = []
+        for entry in history:
+            critic = entry.get("critic", {})
+            analyst = entry.get("analyst", {})
+            rounds.append({
+                "round": entry.get("round"),
+                "analyst_risk": self._get_analyst_risk(analyst),
+                "critic_verdict": critic.get("verdict"),
+                "critic_score": critic.get("weighted_score"),
+                "challenge_count": len(critic.get("challenges", [])),
+            })
+        return rounds
 
     def _get_analyst_risk(self, analyst_output: dict) -> str:
         """從 Analyst 輸出提取整體風險等級"""
@@ -372,6 +412,7 @@ class DebateEngine:
                 "judge_elapsed_ms": judge_elapsed,
                 "total_elapsed_ms": elapsed_ms + judge_elapsed,
                 "method": "multiagent_debate_Du2023_with_judge",
+                "rounds": self._summarize_rounds(debate_history),
             }
             return judge_verdict
 
@@ -391,6 +432,7 @@ class DebateEngine:
                 "judge_error": str(e),
                 "total_elapsed_ms": elapsed_ms,
                 "method": "multiagent_debate_Du2023_judge_fallback",
+                "rounds": self._summarize_rounds(debate_history),
             }
             return fallback
 

@@ -31,11 +31,16 @@ SKILLS_DIR = PROJECT_ROOT / "skills"
 DOCS_DIR = PROJECT_ROOT / "docs"
 HARNESS_DIR = PROJECT_ROOT / "harness"
 TESTS_DIR = PROJECT_ROOT / "tests"
+CREWAI_STORAGE_DIR = PROJECT_ROOT / ".crewai_storage"
 
 # 確保執行時目錄存在
 MEMORY_DIR.mkdir(exist_ok=True)
 (MEMORY_DIR / "vector_store").mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
+CREWAI_STORAGE_DIR.mkdir(exist_ok=True)
+
+# 將 CrewAI 儲存路徑固定到專案內，避免測試或沙箱環境寫入使用者 AppData 失敗。
+os.environ.setdefault("CREWAI_STORAGE_DIR", str(CREWAI_STORAGE_DIR))
 
 # ── 日誌配置 ─────────────────────────────────────────────────
 LOG_FORMAT = "[%(asctime)s] %(levelname)-8s %(name)s: %(message)s"

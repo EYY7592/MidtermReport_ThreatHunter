@@ -6,6 +6,7 @@ members = [
     "url_builder",
     "checkpoint_writer",
     "prompt_sandbox",
+    "prompt_sandbox_guest",
 ]
 resolver = "2"
 

@@ -11,7 +11,7 @@ import json, logging, os, re, time
 from datetime import datetime, timezone
 from typing import Any
 from crewai import Agent, Task
-from core.config import ENABLE_CRITIC, MAX_DEBATE_ROUNDS, get_llm
+from config import ENABLE_CRITIC, MAX_DEBATE_ROUNDS, get_llm
 from tools.kev_tool import check_cisa_kev
 from tools.exploit_tool import search_exploits
 from tools.memory_tool import read_memory
@@ -29,12 +29,17 @@ CONSTITUTION = """
 7. Do not call the same Tool twice for the same data.
 """
 
-_SKILL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "skills", "debate_sop.md")
-try:
-    with open(_SKILL_PATH, "r", encoding="utf-8") as _f:
-        CRITIC_SKILL = _f.read()
-except FileNotFoundError:
-    CRITIC_SKILL = "## Skill: Debate SOP\nChallenge Analyst assumptions. Use tools to verify."
+def _load_skill(skill_filename: str = "debate_sop.md") -> str:
+    skill_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "skills",
+        skill_filename,
+    )
+    try:
+        with open(skill_path, "r", encoding="utf-8") as skill_file:
+            return skill_file.read()
+    except FileNotFoundError:
+        return "## Skill: Debate SOP\nChallenge Analyst assumptions. Use tools to verify."
 
 # v3.7: Path-Aware Skill Map（對應 main.py recorder.stage_enter 使用）
 SKILL_MAP: dict[str, str] = {
@@ -49,12 +54,18 @@ SCORECARD_FIELDS = ["evidence", "chain_completeness", "critique_quality", "defen
 WEIGHTS = {"evidence": 0.30, "chain_completeness": 0.25, "critique_quality": 0.20, "defense_quality": 0.15, "calibration": 0.10}
 
 
-def create_critic_agent(excluded_models: list[str] | None = None) -> Agent:
+def create_critic_agent(
+    excluded_models: list[str] | None = None,
+    input_type: str = "pkg",
+) -> Agent:
     """Build the Critic Agent (Devil's Advocate).
 
     Args:
         excluded_models: Models to skip (429 rate-limited models)
     """
+    skill_filename = SKILL_MAP.get(input_type, "debate_sop.md")
+    skill_content = _load_skill(skill_filename)
+
     return Agent(
         role="Security Debate Advisor (Critic / Devil's Advocate)",
         goal=(
@@ -66,14 +77,14 @@ def create_critic_agent(excluded_models: list[str] | None = None) -> Agent:
 
 {CONSTITUTION}
 
-## Debate SOP (from skills/debate_sop.md)
-{CRITIC_SKILL}
+## Debate SOP (from skills/{skill_filename})
+{skill_content}
 
 ## Output Specification (Critic Data Contract)
 Output ONLY the following JSON, no text outside it:
 ```json
 {{
-  "debate_rounds": 1,
+  "debate_rounds": 2,
   "challenges": ["Challenge 1: description (English)"],
   "scorecard": {{
     "evidence": 0.85, "chain_completeness": 0.80,
@@ -179,20 +190,24 @@ def _compute_weighted_score(scorecard: dict[str, Any]) -> float:
 def _build_fallback_output(analyst_data: dict[str, Any]) -> dict[str, Any]:
     """Harness guarantee: minimum viable debate report when LLM output unparseable."""
     analysis = analyst_data.get("analysis", analyst_data.get("vulnerabilities", []))
+    round_no = int(analyst_data.get("_debate_round", 1) or 1)
+    max_rounds = int(analyst_data.get("_debate_max_rounds", MAX_DEBATE_ROUNDS) or MAX_DEBATE_ROUNDS)
     challenges = [
-        f"Challenge: {item.get('cve_id', 'UNKNOWN')} chain prerequisites not fully verified."
+        f"Challenge: {item.get('cve_id') or item.get('cwe_id') or 'Evidence item'} chain prerequisites not fully verified."
         for item in analysis
         if item.get("chain_risk", {}).get("is_chain") and item.get("chain_risk", {}).get("confidence") == "HIGH"
     ] or ["No specific challenges raised (fallback mode)."]
     scorecard = {"evidence": 0.6, "chain_completeness": 0.5, "critique_quality": 0.6, "defense_quality": 0.7, "calibration": 0.7}
     weighted_score = _compute_weighted_score(scorecard)
     return {
-        "debate_rounds": 1, "challenges": challenges, "scorecard": scorecard,
+        "debate_rounds": round_no, "challenges": challenges, "scorecard": scorecard,
         "weighted_score": weighted_score,
         "verdict": "MAINTAIN" if weighted_score >= 50 else "DOWNGRADE",
         "reasoning": "Fallback evaluation: LLM output unavailable. Conservative scoring applied.",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "_harness_fallback": True,
+        "_critic_round": round_no,
+        "_max_rounds": max_rounds,
     }
 
 
@@ -299,7 +314,7 @@ def run_critic_pipeline(analyst_output: str | dict[str, Any], input_type: str = 
     logger.info("Critic Pipeline started (max rounds: %d)", MAX_DEBATE_ROUNDS)
 
     # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
-    from core.config import mark_model_failed, get_current_model_name
+    from config import mark_model_failed, get_current_model_name
     MAX_LLM_RETRIES = 2
     excluded_models: list[str] = []
 
@@ -307,14 +322,14 @@ def run_critic_pipeline(analyst_output: str | dict[str, Any], input_type: str = 
     crew_success = False
 
     for attempt in range(MAX_LLM_RETRIES + 1):
-        agent = create_critic_agent(excluded_models)
+        agent = create_critic_agent(excluded_models, input_type=input_type)
         task = create_critic_task(agent, analyst_str)
 
         try:
             crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=True)
             logger.info("Critic Crew kickoff (attempt %d/%d)", attempt + 1, MAX_LLM_RETRIES + 1)
             try:
-                from core.checkpoint import recorder as _cp
+                from checkpoint import recorder as _cp
                 _c_model = get_current_model_name(agent.llm)
                 _cp.llm_call("critic", _c_model, "openrouter", f"attempt={attempt+1}")
             except Exception:
@@ -347,7 +362,7 @@ def run_critic_pipeline(analyst_output: str | dict[str, Any], input_type: str = 
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                from core.config import rate_limiter as _rl
+                from config import rate_limiter as _rl
                 _rl.on_429(retry_after=retry_after, caller="critic")  # 最少 30s
                 continue
             logger.error("Critic CrewAI failed: %s", e)
@@ -370,6 +385,12 @@ def run_critic_pipeline(analyst_output: str | dict[str, Any], input_type: str = 
 
     _harness_repair_scorecard(output)     # Layer 2'
     _harness_validate_verdict(output)     # Layer 3
+
+    round_no = int(analyst_dict.get("_debate_round", output.get("debate_rounds", 1)) or 1)
+    max_rounds = int(analyst_dict.get("_debate_max_rounds", MAX_DEBATE_ROUNDS) or MAX_DEBATE_ROUNDS)
+    output["debate_rounds"] = max(int(output.get("debate_rounds", 0) or 0), round_no)
+    output["_critic_round"] = round_no
+    output["_max_rounds"] = max_rounds
 
     if "generated_at" not in output:
         output["generated_at"] = datetime.now(timezone.utc).isoformat()

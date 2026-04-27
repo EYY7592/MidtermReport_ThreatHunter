@@ -11,6 +11,21 @@ let currentSSE     = null;
 let scanStartTime  = null;
 let timerInterval  = null;
 
+const LAYER1_AGENTS = ['security_guard', 'intel_fusion'];
+const LAYER1_TERMINAL_STATES = new Set(['done', 'skipped', 'degraded', 'error']);
+const LAYER1_STATE_LABELS = {
+  pending: 'WAITING',
+  running: 'RUNNING',
+  done: 'COMPLETE',
+  skipped: 'SKIPPED',
+  degraded: 'DEGRADED',
+  error: 'ERROR',
+};
+const layer1VisualState = {
+  security_guard: { state: 'pending', detail: 'Awaiting launch' },
+  intel_fusion: { state: 'pending', detail: 'Awaiting launch' },
+};
+
 const EXAMPLE_CODE = {
   pkg: 'Django 4.2, Redis 7.0, nginx 1.24',
   python: `import os
@@ -241,13 +256,139 @@ const STEP_IDS = {
   critic:        'stepCritic',
   advisor:       'stepAdvisor',
 };
+function cap(s) {
+  // snake_case → PascalCase（例：security_guard → SecurityGuard）
+  return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+}
+function isLayer1Agent(agent) {
+  return LAYER1_AGENTS.includes(agent);
+}
+function getLayer1DefaultDetail(agent, state) {
+  const defaults = {
+    security_guard: {
+      pending: 'Awaiting isolated extraction',
+      running: 'Extracting risky code patterns',
+      done: 'Code surface extraction complete',
+      skipped: 'Skipped by scan path',
+      degraded: 'Extraction degraded',
+      error: 'Extraction error',
+    },
+    intel_fusion: {
+      pending: 'Awaiting intelligence fusion',
+      running: 'Correlating CVEs and threat signals',
+      done: 'Intelligence fusion complete',
+      skipped: 'Skipped by scan path',
+      degraded: 'Fusion degraded',
+      error: 'Fusion error',
+    },
+  };
+  return defaults[agent]?.[state] || 'Awaiting launch';
+}
+function deriveLayer1StepState() {
+  const states = LAYER1_AGENTS.map(agent => layer1VisualState[agent].state);
+  if (states.every(state => state === 'pending')) return 'pending';
+  if (states.some(state => state === 'running')) return 'running';
+  if (states.every(state => state === 'skipped')) return 'skipped';
+  if (states.every(state => LAYER1_TERMINAL_STATES.has(state))) {
+    return states.some(state => state === 'degraded' || state === 'error') ? 'degraded' : 'done';
+  }
+  return 'running';
+}
+function renderLayer1StepState(forcedState = '') {
+  const el = $('stepLayer1');
+  if (!el) return;
+
+  const visualState = forcedState || deriveLayer1StepState();
+  el.className = `pipeline-step pipeline-step-parallel step-${visualState}`;
+
+  const sgChip = $('stepChipSecurityGuard');
+  const ifChip = $('stepChipIntelFusion');
+  if (sgChip) sgChip.className = `parallel-step-chip state-${layer1VisualState.security_guard.state}`;
+  if (ifChip) ifChip.className = `parallel-step-chip state-${layer1VisualState.intel_fusion.state}`;
+}
+function updateParallelVisualizer() {
+  const root = $('parallelVisualizer');
+  if (!root) return;
+
+  const sgState = layer1VisualState.security_guard.state;
+  const ifState = layer1VisualState.intel_fusion.state;
+  const states = [sgState, ifState];
+  const anyStarted = states.some(state => state !== 'pending');
+  const anyRunning = states.some(state => state === 'running');
+  const anyDegraded = states.some(state => state === 'degraded' || state === 'error');
+  const allTerminal = states.every(state => LAYER1_TERMINAL_STATES.has(state));
+
+  let mergeState = 'pending';
+  let summary = 'Security Guard and Intel Fusion launch together, then merge into Scout.';
+  let mergeText = 'Awaiting dual-lane launch';
+
+  if (anyRunning) {
+    mergeState = 'running';
+    if (sgState === 'running' && ifState === 'running') {
+      summary = 'Both Layer 1 lanes are active and streaming results in parallel.';
+    } else if (sgState === 'running') {
+      summary = 'Security Guard is still extracting while Intel Fusion has already advanced.';
+    } else {
+      summary = 'Intel Fusion is still correlating while Security Guard has already advanced.';
+    }
+    mergeText = 'Live merge path warming for Scout';
+  } else if (allTerminal) {
+    if (anyDegraded) {
+      mergeState = 'degraded';
+      summary = 'Layer 1 completed with a degraded branch, but the pipeline can still continue.';
+      mergeText = 'Merged with degraded lane';
+    } else if (states.every(state => state === 'skipped')) {
+      mergeState = 'skipped';
+      summary = 'Layer 1 was skipped by the chosen scan path.';
+      mergeText = 'Parallel layer skipped';
+    } else {
+      mergeState = 'done';
+      summary = 'Both Layer 1 lanes finished and merged cleanly into Scout.';
+      mergeText = 'Merged into Scout';
+    }
+  } else if (anyStarted) {
+    mergeState = 'running';
+    summary = 'Layer 1 has started and is synchronizing branch output.';
+    mergeText = 'Synchronizing branch output';
+  }
+
+  root.classList.toggle('is-live', anyRunning);
+  renderLayer1StepState();
+
+  const badge = $('parallelMergeBadge');
+  if (badge) {
+    badge.className = `parallel-merge-badge state-${mergeState}`;
+    badge.textContent = mergeState === 'running' ? 'LIVE MERGE'
+      : mergeState === 'done' ? 'MERGED'
+      : mergeState === 'degraded' ? 'MERGED DEGRADED'
+      : mergeState === 'skipped' ? 'SKIPPED'
+      : 'SYNC PENDING';
+  }
+
+  const node = $('parallelMergeNode');
+  if (node) {
+    node.className = `parallel-merge-node state-${mergeState}`;
+    node.textContent = mergeText;
+  }
+
+  setText('parallelSummary', summary);
+}
 function setStepState(agent, state /* pending|running|done|skipped|degraded */) {
+  if (isLayer1Agent(agent)) {
+    layer1VisualState[agent].state = state;
+    renderLayer1StepState();
+    return;
+  }
   const stepId = STEP_IDS[agent];
   if (!stepId) return;
   const el = $(stepId);
   if (!el) return;
   // 勿令已完成的狀態被 "running" 覆蓋
   if (el.className.includes('step-done') && state === 'running') return;
+  if (agent === 'layer1_parallel') {
+    updateParallelVisualizer();
+    return;
+  }
   el.className = `pipeline-step step-${state}`;
 }
 
@@ -261,7 +402,10 @@ function setAgentState(agent, state, detail = '', errorMsg = '') {
   const status = $(`status${cap(agent)}`);
   const det    = $(`detail${cap(agent)}`);
   if (!card) return;
-  card.className   = `agent-card ${state}`;
+  const baseCardClasses = ['agent-card'];
+  if (card.classList.contains('parallel-agent')) baseCardClasses.push('parallel-agent');
+  baseCardClasses.push(state);
+  card.className = baseCardClasses.join(' ');
   status.className = `agent-status ${state}`;
   status.textContent = STATUS_LABELS[state] || state.toUpperCase();
   if (det) {
@@ -285,6 +429,23 @@ function setAgentState(agent, state, detail = '', errorMsg = '') {
     card.title = `☠️ DEGRADED: ${errorMsg}`;
   } else {
     card.title = '';
+  }
+
+  if (isLayer1Agent(agent)) {
+    const lane = $(`lane${cap(agent)}`);
+    const laneStatus = $(`laneStatus${cap(agent)}`);
+    const laneDetail = $(`laneDetail${cap(agent)}`);
+    const laneText = state === 'degraded' && errorMsg
+      ? errorMsg
+      : (detail || getLayer1DefaultDetail(agent, state));
+
+    layer1VisualState[agent] = { state, detail: laneText };
+
+    if (lane) lane.className = `parallel-lane state-${state}`;
+    if (laneStatus) laneStatus.textContent = LAYER1_STATE_LABELS[state] || state.toUpperCase();
+    if (laneDetail) laneDetail.textContent = laneText;
+
+    updateParallelVisualizer();
   }
 }
 function cap(s) {
@@ -311,6 +472,94 @@ function escapeHtml(str) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function isUnknownish(value) {
+  if (value == null) return true;
+  const text = String(value).trim();
+  if (!text) return true;
+  return ['unknown', 'n/a', 'na', 'none', 'null', 'undefined', '?', '??', 'cwe-???'].includes(text.toLowerCase());
+}
+
+function displayText(value, fallback) {
+  return isUnknownish(value) ? fallback : String(value);
+}
+
+function displaySeverity(value, fallback = 'MEDIUM') {
+  const sev = displayText(value, fallback).toUpperCase();
+  return ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'].includes(sev) ? sev : fallback;
+}
+
+function displayNumber(value, fallback = 'Pending') {
+  if (value == null || value === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function setRuntimeBadge(id, label, state, title = '') {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = label;
+  el.className = `runtime-badge state-${state}`;
+  el.title = title;
+}
+
+function renderRuntimeCapabilities(data) {
+  const checkpoint = data.checkpoint_writer || {};
+  const wasm = data.wasm_prompt_sandbox || {};
+  const docker = data.docker_sandbox || {};
+  const memory = data.memory_sanitizer || {};
+  const ast = data.ast_guard || {};
+
+  setRuntimeBadge(
+    'runtimeCheckpoint',
+    checkpoint.available ? 'RUST READY' : 'PY FALLBACK',
+    checkpoint.available ? 'ok' : 'warn',
+    `current=${checkpoint.current_backend || 'python_lock'}`
+  );
+  setRuntimeBadge(
+    'runtimeWasm',
+    wasm.status === 'enabled' ? 'ENABLED' : (wasm.status || 'fallback').toUpperCase(),
+    wasm.status === 'enabled' ? 'ok' : 'warn',
+    wasm.error || `fallback=${wasm.fallback || 'python_l0_filter'}`
+  );
+  setRuntimeBadge(
+    'runtimeDocker',
+    docker.status === 'enabled' ? 'ENABLED' : (docker.status || 'not_ready').toUpperCase(),
+    docker.status === 'enabled' ? 'ok' : (docker.enabled ? 'warn' : 'fail'),
+    docker.error || `image=${docker.image || 'threathunter-sandbox:latest'}`
+  );
+  setRuntimeBadge(
+    'runtimeMemory',
+    memory.active ? 'ACTIVE' : 'FAILED',
+    memory.active ? 'ok' : 'fail',
+    memory.error || memory.module || ''
+  );
+  setRuntimeBadge(
+    'runtimeAst',
+    ast.active ? 'ACTIVE' : 'FAILED',
+    ast.active ? 'ok' : 'fail',
+    ast.error || ast.module || ''
+  );
+
+  const notes = [];
+  notes.push(`Sandbox default: ${data.defaults?.sandbox_enabled ? 'enabled' : 'disabled'}.`);
+  if (docker.status !== 'enabled') notes.push('Docker falls back to in-process mode until daemon/image is ready.');
+  if (!checkpoint.available) notes.push('Rust checkpoint crate must be built before demo scoring.');
+  setText('runtimeProtectionNote', notes.join(' '));
+}
+
+async function loadRuntimeCapabilities() {
+  try {
+    const resp = await fetch('/api/runtime-capabilities');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    renderRuntimeCapabilities(data);
+  } catch (err) {
+    ['runtimeCheckpoint', 'runtimeWasm', 'runtimeDocker', 'runtimeMemory', 'runtimeAst']
+      .forEach(id => setRuntimeBadge(id, 'CHECK FAIL', 'fail', err.message));
+    setText('runtimeProtectionNote', `Runtime capability API failed: ${err.message}`);
+  }
+}
+
 /* ── UI Reset ───────────────────────────────────────── */
 function resetUIForScan(techStack) {
   // Clear report
@@ -320,15 +569,19 @@ function resetUIForScan(techStack) {
 
   // Show monitoring widgets
   show('pipelineBar');
+  show('parallelVisualizer');
   show('agentGrid');
   show('monitorLayout');
   show('btnClear');
 
   // Reset pipeline bar 項目（v3.1 全部 7 個）
   ['orchestrator', 'layer1_parallel', 'scout', 'analyst', 'critic', 'advisor'].forEach(a => setStepState(a, 'pending'));
+  layer1VisualState.security_guard = { state: 'pending', detail: getLayer1DefaultDetail('security_guard', 'pending') };
+  layer1VisualState.intel_fusion = { state: 'pending', detail: getLayer1DefaultDetail('intel_fusion', 'pending') };
 
   // Reset agent cards（v3.1 全部 7 個）
   ['orchestrator', 'security_guard', 'intel_fusion', 'scout', 'analyst', 'critic', 'advisor'].forEach(a => setAgentState(a, 'pending'));
+  updateParallelVisualizer();
 
   // Clear logs
   clearLog();
@@ -494,7 +747,7 @@ function openSSE(scanId) {
       setStepState(a, 'degraded');
       setAgentState(a, 'degraded');
     });
-    appendLog('log-fail', 'ERR', d.message || 'Unknown error');
+    appendLog('log-fail', 'ERR', d.message || 'Scan error without server detail');
     showError(`Pipeline error: ${d.message}`);
     setHeaderStatus('error');
     resetButtons();
@@ -526,12 +779,70 @@ function buildAgentDetail(agent, info) {
   }
 }
 
+function renderReportLineage(result) {
+  const sources = result.report_sources || {};
+  const chips = [];
+
+  const detailSource = displayText(sources.vulnerability_detail, 'pipeline_result');
+  if (detailSource === 'scout_final_output') {
+    chips.push({ label: 'Scout Final Output', cls: 'primary' });
+  } else if (detailSource === 'advisor_actions_fallback') {
+    chips.push({ label: 'Advisor Action Fallback', cls: 'fallback' });
+  } else if (detailSource === 'memory_or_actions_fallback') {
+    chips.push({ label: 'Memory or Action Fallback', cls: 'fallback' });
+  } else {
+    chips.push({ label: 'Pipeline Result', cls: 'neutral' });
+  }
+
+  const enrichedBy = sources.enriched_by || [];
+  if (enrichedBy.includes('intel_fusion')) {
+    chips.push({ label: 'Intel Fusion Enriched', cls: 'enriched' });
+  }
+
+  const fallbacks = sources.fallbacks || [];
+  if (fallbacks.includes('advisor_actions')) {
+    chips.push({ label: 'Action-only Detail', cls: 'fallback' });
+  }
+
+  if (sources.layer1_state === 'degraded') {
+    chips.push({ label: 'Layer 1 Degraded', cls: 'degraded' });
+  } else if (sources.layer1_state === 'merged') {
+    chips.push({ label: 'Layer 1 Merged', cls: 'primary' });
+  } else if (sources.layer1_state === 'skipped') {
+    chips.push({ label: 'Layer 1 Skipped', cls: 'neutral' });
+  }
+
+  const chipHtml = chips.map(chip =>
+    `<span class="lineage-chip ${chip.cls}">${escapeHtml(chip.label)}</span>`
+  ).join('');
+  setHTML('resultSourceChips', chipHtml || '<span class="lineage-chip neutral">No lineage metadata</span>');
+
+  let note = 'This report is bound to the current scan result.';
+  if (detailSource === 'scout_final_output') {
+    note = 'Vulnerability detail comes from the current Scout output and stays scoped to this scan.';
+  } else if (detailSource === 'advisor_actions_fallback') {
+    note = 'Scout did not provide vulnerability detail, so the UI reconstructed a minimal list from Advisor actions.';
+  } else if (detailSource === 'memory_or_actions_fallback') {
+    note = 'Legacy fallback path was used because scan-scoped vulnerability detail was unavailable.';
+  }
+
+  if (sources.layer1_state === 'degraded') {
+    note += ' One Layer 1 branch degraded during merge.';
+  }
+  if (enrichedBy.includes('intel_fusion')) {
+    note += ' Intel Fusion added threat context or scoring fields to the final CVE set.';
+  }
+
+  setText('resultLineageNote', note);
+}
+
 /* ── Render Full Report ───────────────────────────────────── */
 function renderReport(result) {
   show('reportSection');
 
   // Executive Summary
   setText('execSummary', result.executive_summary || '—');
+  renderReportLineage(result);
 
   // Metrics — 優先 vulnerability_summary，備援從 actions 計算
   const summary = result.vulnerability_summary || {};
@@ -577,9 +888,10 @@ function renderReport(result) {
   const cpUrgent    = codePatterns.filter(p => p.severity === 'CRITICAL').map(codePatternToAction);
   const cpImportant = codePatterns.filter(p => ['HIGH', 'MEDIUM'].includes(p.severity)).map(codePatternToAction);
 
-  renderActionList('urgentList',    [...(actions.urgent || []), ...cpUrgent],    'action-urgent');
-  renderActionList('importantList', [...(actions.important || []), ...cpImportant], 'action-important');
+  renderActionList('urgentList',    mergeActionItems(actions.urgent || [], cpUrgent),       'action-urgent');
+  renderActionList('importantList', mergeActionItems(actions.important || [], cpImportant), 'action-important');
   renderActionList('resolvedList',  actions.resolved  || [], 'action-resolved');
+  renderVulnerabilityGlossary(result);
 
   // Hide the standalone SECURITY GUARD section (no longer needed)
   const sgSection = document.getElementById('codePatternsCWESection');
@@ -588,6 +900,162 @@ function renderReport(result) {
 
 
 /* ══ Security Guard: Code Patterns with MITRE CWE Evidence ══════════════════ */
+const BASE_VULN_GLOSSARY = [
+  {
+    term: 'CWE',
+    title: 'Common Weakness Enumeration',
+    desc: 'Explains the weakness type in code, such as command injection or hardcoded secrets.',
+  },
+  {
+    term: 'CVSS',
+    title: 'Common Vulnerability Scoring System',
+    desc: 'Scores impact and exploitability from 0.0 to 10.0 so teams can prioritize fixes.',
+  },
+  {
+    term: 'NVD',
+    title: 'National Vulnerability Database',
+    desc: 'A public vulnerability database that publishes CVE details, severity, and references.',
+  },
+];
+
+const CWE_SHORT_DESCRIPTIONS = {
+  'CWE-22': 'Path traversal: user input can escape the intended folder and read or write unsafe files.',
+  'CWE-78': 'OS command injection: untrusted input reaches a shell command and can execute attacker-controlled commands.',
+  'CWE-79': 'Cross-site scripting: untrusted data becomes browser-executed script.',
+  'CWE-89': 'SQL injection: untrusted input is mixed into SQL and can change the query logic.',
+  'CWE-94': 'Code injection: untrusted input is evaluated as application code.',
+  'CWE-119': 'Buffer overflow: memory operations can read from or write past the intended buffer boundary.',
+  'CWE-120': 'Classic buffer overflow: copied input can exceed the destination buffer size.',
+  'CWE-134': 'Format string: attacker-controlled format strings can read or write unintended memory.',
+  'CWE-190': 'Integer overflow: arithmetic can wrap and produce unsafe sizes or indexes.',
+  'CWE-200': 'Information exposure: sensitive data can be revealed to someone who should not see it.',
+  'CWE-242': 'Dangerous function: inherently unsafe APIs can create memory corruption or command risks.',
+  'CWE-248': 'Uncaught exception: unexpected input can trigger a crash or denial of service.',
+  'CWE-287': 'Authentication weakness: identity checks can be bypassed or are incomplete.',
+  'CWE-327': 'Broken cryptography: weak or outdated crypto makes protected data easier to attack.',
+  'CWE-352': 'CSRF: a browser can be tricked into sending unwanted authenticated requests.',
+  'CWE-362': 'Race condition: timing gaps let concurrent operations break intended state checks.',
+  'CWE-377': 'Insecure temporary file: temporary files can be predicted, overwritten, or exposed.',
+  'CWE-415': 'Double free: memory is released more than once and can corrupt allocator state.',
+  'CWE-416': 'Use after free: code keeps using memory after it has been released.',
+  'CWE-434': 'Unrestricted file upload: uploaded files can become executable or unsafe server content.',
+  'CWE-476': 'NULL pointer dereference: code dereferences a null pointer and can crash.',
+  'CWE-502': 'Unsafe deserialization: crafted serialized data can trigger code execution or logic abuse.',
+  'CWE-611': 'XXE: XML parsing can read local files or make network requests through external entities.',
+  'CWE-798': 'Hardcoded credentials: secrets are stored directly in code or config.',
+};
+
+const CWE_DISPLAY_NAMES = {
+  'CWE-22': 'Path Traversal',
+  'CWE-78': 'OS Command Injection',
+  'CWE-79': 'Cross-Site Scripting',
+  'CWE-89': 'SQL Injection',
+  'CWE-94': 'Code Injection',
+  'CWE-119': 'Buffer Overflow',
+  'CWE-120': 'Buffer Copy without Checking Size of Input',
+  'CWE-134': 'Format String',
+  'CWE-190': 'Integer Overflow',
+  'CWE-200': 'Information Exposure',
+  'CWE-242': 'Use of Inherently Dangerous Function',
+  'CWE-248': 'Uncaught Exception',
+  'CWE-287': 'Authentication Weakness',
+  'CWE-327': 'Broken or Risky Cryptographic Algorithm',
+  'CWE-352': 'Cross-Site Request Forgery',
+  'CWE-362': 'Race Condition',
+  'CWE-377': 'Insecure Temporary File',
+  'CWE-415': 'Double Free',
+  'CWE-416': 'Use After Free',
+  'CWE-434': 'Unrestricted File Upload',
+  'CWE-476': 'NULL Pointer Dereference',
+  'CWE-502': 'Deserialization of Untrusted Data',
+  'CWE-611': 'XML External Entity',
+  'CWE-798': 'Hardcoded Credentials',
+  'CWE-918': 'Server-Side Request Forgery',
+  'CWE-943': 'NoSQL Injection',
+};
+
+function normalizeCweId(value) {
+  const text = displayText(value, '').toUpperCase();
+  const match = text.match(/CWE-\d+/);
+  return match ? match[0] : '';
+}
+
+function isGenericCweLabel(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return !text || text === 'code weakness' || text === 'cwe mapped issue' || text === '[cwe mapped issue] code weakness';
+}
+
+function cweDisplayName(cweId, fallback) {
+  const normalized = normalizeCweId(cweId);
+  if (!isGenericCweLabel(fallback)) return String(fallback);
+  return CWE_DISPLAY_NAMES[normalized] || 'Code weakness';
+}
+
+function shortCweDescription(cweId, cweRef = {}) {
+  const normalized = normalizeCweId(cweId);
+  if (normalized && CWE_SHORT_DESCRIPTIONS[normalized]) return CWE_SHORT_DESCRIPTIONS[normalized];
+  return displayText(
+    cweRef.summary || cweRef.description || cweRef.name,
+    'This CWE describes a source-code weakness that needs code-level remediation.'
+  );
+}
+
+function collectCweGlossaryEntries(result) {
+  const entries = new Map();
+  const patterns = result.code_patterns_summary || [];
+  const vulns = result.vulnerability_detail || [];
+
+  patterns.forEach(p => {
+    const cweRef = p.cwe_reference || {};
+    const cweId = normalizeCweId(p.cwe_id || p.cve_id || cweRef.id);
+    if (!cweId || entries.has(cweId)) return;
+    entries.set(cweId, {
+      id: cweId,
+      name: cweDisplayName(cweId, cweRef.name || p.pattern_type),
+      desc: shortCweDescription(cweId, cweRef),
+      severity: displaySeverity(cweRef.nist_severity || p.severity, 'MEDIUM'),
+    });
+  });
+
+  vulns.forEach(v => {
+    const cweId = normalizeCweId(v.cwe_id || v.cwe);
+    if (!cweId || entries.has(cweId)) return;
+    entries.set(cweId, {
+      id: cweId,
+      name: displayText(v.cwe_name, 'Vulnerability weakness'),
+      desc: shortCweDescription(cweId, {}),
+      severity: displaySeverity(v.severity, 'MEDIUM'),
+    });
+  });
+
+  return Array.from(entries.values()).slice(0, 6);
+}
+
+function renderVulnerabilityGlossary(result) {
+  const cweEntries = collectCweGlossaryEntries(result);
+  const baseHtml = BASE_VULN_GLOSSARY.map(item => `
+    <div class="glossary-card glossary-base-card">
+      <div class="glossary-term">${escapeHtml(item.term)}</div>
+      <div class="glossary-title">${escapeHtml(item.title)}</div>
+      <div class="glossary-desc">${escapeHtml(item.desc)}</div>
+    </div>
+  `).join('');
+
+  const cweHtml = cweEntries.length ? `
+    <div class="glossary-cwe-strip">
+      ${cweEntries.map(item => `
+        <div class="glossary-card glossary-cwe-card">
+          <div class="glossary-term">${escapeHtml(item.id)} <span class="badge badge-${escapeHtml(item.severity)}">${escapeHtml(item.severity)}</span></div>
+          <div class="glossary-title">${escapeHtml(item.name)}</div>
+          <div class="glossary-desc">${escapeHtml(item.desc)}</div>
+        </div>
+      `).join('')}
+    </div>` : `
+    <div class="glossary-hint">No code-level CWE was detected in this scan. The terms above explain how to read vulnerability evidence.</div>`;
+
+  setHTML('vulnGlossary', `<div class="glossary-grid">${baseHtml}</div>${cweHtml}`);
+}
+
 function renderCodePatternsWithCWE(patterns) {
   const container = document.getElementById('codePatternsCWEList');
   if (!container) return;
@@ -659,26 +1127,35 @@ function renderCodePatternsWithCWE(patterns) {
 /* Convert a code_patterns_summary entry into an action-item format */
 function codePatternToAction(p) {
   const cweRef = p.cwe_reference || {};
-  const cweName = cweRef.name || p.pattern_type || 'Unknown';
-  const cweId   = p.cwe_id || cweRef.id || '';
+  const cweId   = normalizeCweId(p.cwe_id || cweRef.id || p.cve_id);
+  const cweName = cweDisplayName(cweId, cweRef.name || p.pattern_type);
   const cweUrl  = cweRef.cwe_url || (cweId ? `https://cwe.mitre.org/data/definitions/${cweId.replace('CWE-','')}.html` : '');
-  const nist    = cweRef.nist_severity || p.severity || 'UNKNOWN';
+  const nist    = displaySeverity(cweRef.nist_severity || p.severity, 'MEDIUM');
   const cvss    = cweRef.cvss_base != null ? cweRef.cvss_base : null;
   const owasp   = cweRef.owasp_2021 || '';
   const remediation = cweRef.remediation_zh || cweRef.remediation_en || '';
   const repCves = cweRef.representative_cves || [];
   const disclaimer = cweRef.disclaimer || '';
-  const snippet = p.snippet || '';
-  const lineNo  = p.line_no ? ` (Line ${p.line_no})` : '';
+  const snippet = p.snippet || p.vulnerable_snippet || '';
+  const rawLineNo = p.line_no ?? p.source_line ?? null;
+  const lineNo = Number.isFinite(Number(rawLineNo)) && Number(rawLineNo) > 0 ? Number(rawLineNo) : null;
+  const rawSourceLocation = String(p.source_location || '');
+  const sourceLocation = lineNo != null
+    ? `L${lineNo}`
+    : (/^L0$/i.test(rawSourceLocation) ? 'Line not provided by scanner' : displayText(p.source_location, 'Line not provided by scanner'));
 
   return {
     finding_id:   p.finding_id,
-    cve_id:       cweId,                       // shown as "CWE-78" badge
-    package:      `Code${lineNo}`,
-    severity:     p.severity || 'HIGH',
-    action:       `[${cweId}] ${cweName}`,
+    cve_id:       cweId,                       // shown as CWE badge
+    package:      'Code finding',
+    severity:     displaySeverity(p.severity, 'HIGH'),
+    action:       cweId ? `[${cweId}] ${cweName}` : cweName,
     reason:       remediation || `${cweName} detected in source code`,
     command:      'Manual code fix required (see snippet below)',
+    line_no:      lineNo,
+    source_location: sourceLocation,
+    vulnerable_snippet: p.vulnerable_snippet || snippet,
+    fixed_snippet: p.fixed_snippet || '',
     // Extra fields for inline CWE rendering
     _is_code_pattern: true,
     _cwe_name:    cweName,
@@ -692,6 +1169,90 @@ function codePatternToAction(p) {
     _disclaimer:  disclaimer,
     _source:      cweRef.source || 'MITRE CWE v4.14',
   };
+}
+
+function actionMergeKey(item) {
+  if (!item) return '';
+  if (item.finding_id) return `finding:${String(item.finding_id).toUpperCase()}`;
+  if (item.cve_id && String(item.cve_id).startsWith('CWE-') && item.vulnerable_snippet) {
+    return `cwe-snippet:${String(item.cve_id).toUpperCase()}:${String(item.vulnerable_snippet).slice(0, 80)}`;
+  }
+  return '';
+}
+
+function hasUsefulValue(value) {
+  return value !== undefined && value !== null && value !== '' && value !== 'Line not provided by scanner';
+}
+
+function isUsefulLine(value) {
+  return Number.isFinite(Number(value)) && Number(value) > 0;
+}
+
+function isPlaceholderCodeAction(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return !text
+    || text === 'code remediation required'
+    || text === '[cwe mapped issue] code weakness'
+    || text.includes('cwe mapped issue')
+    || text === 'code weakness';
+}
+
+function normalizeSourceLocation(item, lineValue) {
+  if (isUsefulLine(lineValue)) return `L${Number(lineValue)}`;
+  const raw = String(item?.source_location || '');
+  if (!raw || /^L0$/i.test(raw)) return 'Line not provided by scanner';
+  return raw;
+}
+
+function mergeActionItem(base, extra) {
+  const merged = { ...extra, ...base };
+  for (const [key, value] of Object.entries(extra || {})) {
+    if (!hasUsefulValue(merged[key]) && hasUsefulValue(value)) {
+      merged[key] = value;
+    }
+  }
+
+  if (!isUsefulLine(merged.line_no) && isUsefulLine(extra?.line_no)) {
+    merged.line_no = Number(extra.line_no);
+    merged.source_location = `L${merged.line_no}`;
+  }
+  if (!hasUsefulValue(merged.source_location) && hasUsefulValue(extra?.source_location)) {
+    merged.source_location = extra.source_location;
+  }
+  if (isPlaceholderCodeAction(merged.action) && !isPlaceholderCodeAction(extra?.action)) {
+    merged.action = extra.action;
+  }
+  if (isGenericCweLabel(merged._cwe_name) && !isGenericCweLabel(extra?._cwe_name)) {
+    merged._cwe_name = extra._cwe_name;
+  }
+
+  // 同一個 CODE finding 只顯示一張卡；Advisor 修復片段優先，CWE/CVSS 證據由 code pattern 補齊。
+  merged._is_code_pattern = Boolean(base?._is_code_pattern || extra?._is_code_pattern || merged.finding_id);
+  return merged;
+}
+
+function mergeActionItems(primaryItems, fallbackItems) {
+  const merged = [];
+  const indexByKey = new Map();
+
+  for (const item of [...(primaryItems || []), ...(fallbackItems || [])]) {
+    const key = actionMergeKey(item);
+    if (!key) {
+      merged.push(item);
+      continue;
+    }
+
+    if (!indexByKey.has(key)) {
+      indexByKey.set(key, merged.length);
+      merged.push(item);
+      continue;
+    }
+
+    const idx = indexByKey.get(key);
+    merged[idx] = mergeActionItem(merged[idx], item);
+  }
+
+  return merged;
 }
 
 function renderActionList(containerId, items, cls) {
@@ -711,9 +1272,15 @@ function renderActionList(containerId, items, cls) {
     const isCodePattern = hasFindingId || hasCweId || isNullCveWithSnippet || isNullCveWithCodePkg;
 
     const cveDisplay = isCodePattern
-      ? escapeHtml(item.finding_id || item.cve_id || 'CODE')
-      : escapeHtml(item.cve_id || 'UNKNOWN');
+      ? escapeHtml(displayText(item.finding_id || item.cve_id, 'CODE finding'))
+      : escapeHtml(displayText(item.cve_id, 'External vulnerability'));
     const cveCls = isCodePattern ? 'action-cwe' : '';
+    const rawLineValue = item.line_no ?? item.source_line ?? item.line;
+    const lineValue = Number.isFinite(Number(rawLineValue)) && Number(rawLineValue) > 0 ? Number(rawLineValue) : null;
+    const sourceLocation = normalizeSourceLocation(item, lineValue);
+    const affectedLineHtml = isCodePattern
+      ? `<div class="affected-line"><span>Affected line</span><strong>${escapeHtml(sourceLocation)}</strong></div>`
+      : '';
 
     // Build CWE inline evidence block for code patterns
     const cweInlineHtml = item._is_code_pattern ? (() => {
@@ -736,9 +1303,9 @@ function renderActionList(containerId, items, cls) {
         </div>`;
     })() : '';
 
-    const pkg   = escapeHtml(item.package  || 'unknown');
-    const sev   = escapeHtml(item.severity || 'MEDIUM');
-    const desc  = escapeHtml(item.action   || '');
+    const pkg   = escapeHtml(displayText(item.package, isCodePattern ? 'Code finding' : 'Package not provided'));
+    const sev   = escapeHtml(displaySeverity(item.severity, 'MEDIUM'));
+    const desc  = escapeHtml(displayText(item.action, isCodePattern ? 'Code remediation required' : 'Action pending'));
 
     // v5.1: 過濾不當 command（如 PHP 程式碼顯示 pip install）
     let cmdHtml = '';
@@ -780,6 +1347,7 @@ function renderActionList(containerId, items, cls) {
         <span class="action-pkg">${pkg}</span>
         <span class="badge badge-${sev}">${sev}</span>
       </div>
+      ${affectedLineHtml}
       <div class="action-desc">${desc}</div>
       ${snippetHtml}
       ${cmdHtml}
@@ -798,13 +1366,28 @@ function renderCveTable(vulns) {
     const cvss  = parseFloat(v.cvss_score || 0);
     const color = cvss >= 9 ? 'var(--red)' : cvss >= 7 ? 'var(--orange)' : cvss >= 4 ? 'var(--yellow)' : 'var(--text-muted)';
     const newTag = v.is_new ? '<span class="new-tag">NEW</span>' : '';
+    const cveId = displayText(v.cve_id, 'External vulnerability');
+    const pkg = displayText(v.package, 'Package not provided');
+    const sev = displaySeverity(v.severity, 'LOW');
+    const desc = displayText(v.description, 'No short description provided by source');
+    const sourceTags = [];
+    if ((v.source || 'SCOUT') === 'INTEL_FUSION') {
+      sourceTags.push('<span class="cve-source-tag fusion">Intel Fusion</span>');
+    } else if ((v.source || 'SCOUT') === 'ADVISOR_ACTIONS') {
+      sourceTags.push('<span class="cve-source-tag fallback">Fallback</span>');
+    } else {
+      sourceTags.push('<span class="cve-source-tag scout">Scout</span>');
+    }
+    if (Array.isArray(v.enriched_by) && v.enriched_by.includes('INTEL_FUSION') && (v.source || 'SCOUT') !== 'INTEL_FUSION') {
+      sourceTags.push('<span class="cve-source-tag fusion">IF Enriched</span>');
+    }
     return `
     <tr>
       <td class="cve-id">${escapeHtml(v.cve_id||'—')}</td>
       <td style="font-family:var(--mono);font-size:0.78rem;color:var(--accent)">${escapeHtml(v.package||'—')}</td>
       <td class="cvss" style="color:${color}">${cvss.toFixed(1)}</td>
-      <td><span class="badge badge-${v.severity||'LOW'}">${escapeHtml(v.severity||'LOW')}</span></td>
-      <td class="cve-desc" title="${escapeHtml(v.description||'')}">${escapeHtml((v.description||'').slice(0,80))}${newTag}</td>
+      <td><span class="badge badge-${sev}">${escapeHtml(sev)}</span></td>
+      <td class="cve-desc" title="${escapeHtml(v.description||'')}">${escapeHtml((v.description||'').slice(0,80))}${newTag}<span class="cve-source-tags">${sourceTags.join('')}</span></td>
     </tr>`;
   }).join('');
   setHTML('cveTableBody', rows);
@@ -831,6 +1414,7 @@ function clearResults() {
   stopTimer();
   closeThinking();   // v3.6: 關閉 Thinking Path Drawer
   hide('pipelineBar');
+  hide('parallelVisualizer');
   hide('agentGrid');
   hide('monitorLayout');
   hide('reportSection');
@@ -841,6 +1425,8 @@ function clearResults() {
   const badge = $('thinkingBadgeNew');
   if (badge) badge.style.display = 'none';
   clearLog();
+  layer1VisualState.security_guard = { state: 'pending', detail: getLayer1DefaultDetail('security_guard', 'pending') };
+  layer1VisualState.intel_fusion = { state: 'pending', detail: getLayer1DefaultDetail('intel_fusion', 'pending') };
   resetButtons();
   setHeaderStatus('idle');
   setText('metaDuration', '—');
@@ -926,6 +1512,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const d = await r.json();
     appendLog('log-ok', 'OK', `Server online · pipeline_version=${d.pipeline_version}`);
     show('monitorLayout');
+    await loadRuntimeCapabilities();
   } catch {
     /* silent */
   }
@@ -1098,6 +1685,7 @@ function renderThinkingPath(data) {
         </div>
       </button>
       <div class="tp-agent-steps" id="${agentId}">
+        ${renderAgentRecord(agentData.agent_record)}
         ${renderAgentSteps(steps)}
       </div>
     </div>`;
@@ -1140,6 +1728,60 @@ function renderSkillBadge(applied, skillName, inputType) {
 }
 
 /* ── 渲染 Agent 步驟列表 ─────────────────────────────────── */
+function summarizeRecordObject(value) {
+  if (value == null) return 'No data captured';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return 'Record data could not be serialized';
+  }
+}
+
+function renderRecordList(title, items, emptyText) {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) {
+    return `<div class="tp-record-empty">${escapeHtml(emptyText)}</div>`;
+  }
+  return `
+    <details class="tp-record-details">
+      <summary>${escapeHtml(title)} (${safeItems.length})</summary>
+      ${safeItems.map(item => `
+        <pre class="tp-record-pre">${escapeHtml(summarizeRecordObject(item))}</pre>
+      `).join('')}
+    </details>`;
+}
+
+function renderAgentRecord(record) {
+  if (!record) return '';
+  const status = displayText(record.status, 'RUNNING');
+  const statusCls = record.degraded ? 'tp-status-err' : (status === 'SUCCESS' ? 'tp-status-ok' : 'tp-status-warn');
+  const duration = record.duration_ms ? `${record.duration_ms}ms` : 'Duration pending';
+  const reason = record.degraded ? displayText(record.degradation_reason, 'Degraded without checkpoint reason') : '';
+
+  return `
+    <div class="tp-record">
+      <div class="tp-record-head">
+        <span class="tp-detail-label">Agent Record</span>
+        <span class="tp-status-badge ${statusCls}">${escapeHtml(status)}</span>
+        <span class="tp-mono">${escapeHtml(duration)}</span>
+      </div>
+      ${reason ? `<div class="tp-error-text">${escapeHtml(reason)}</div>` : ''}
+      <div class="tp-record-grid">
+        <details class="tp-record-details">
+          <summary>Input</summary>
+          <pre class="tp-record-pre">${escapeHtml(summarizeRecordObject(record.input))}</pre>
+        </details>
+        <details class="tp-record-details">
+          <summary>Output</summary>
+          <pre class="tp-record-pre">${escapeHtml(summarizeRecordObject(record.output))}</pre>
+        </details>
+      </div>
+      ${renderRecordList('LLM Calls', record.llm_calls, 'No LLM call captured for this agent')}
+      ${renderRecordList('Tool Calls', record.tool_calls, 'No tool call captured for this agent')}
+    </div>`;
+}
+
 function renderAgentSteps(steps) {
   if (!steps.length) return '<div class="tp-step-empty">此 Agent 無詳細步驟記錄</div>';
 

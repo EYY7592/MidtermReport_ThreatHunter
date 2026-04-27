@@ -521,7 +521,6 @@ ThreatHunter/
 ├── docs/                      # 架構與設計文件
 ├── memory/                    # 雙層記憶持久化與向量快取
 ├── data/                      # NVD/KEV 等離線快取
-├── tests/                     # pytest 測試套件（180+ 個測試）
 ├── ui/
 │   ├── server.py              # FastAPI + SSE 即時串流後端
 │   └── static/

@@ -21,7 +21,6 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use pyo3::prelude::*;
 use sha2::{Digest, Sha256};
@@ -36,6 +35,7 @@ const CODE_ALLOW:    u32 = 0;
 const CODE_BLOCK:    u32 = 1;
 const CODE_SANITIZE: u32 = 2;
 const CODE_TRUNCATE: u32 = 3;
+const WASM_IO_BUFFER_BYTES: usize = 1_048_576;
 
 // ── 預設 .wasm 路徑（相對於此 crate 目錄，在 build_rust_crates.py 複製）──
 fn default_wasm_path() -> PathBuf {
@@ -135,7 +135,6 @@ impl WasmSandbox {
         }
 
         // ── WASM 路徑 ────────────────────────────────────────────
-        let t0 = Instant::now();
         match self.eval_wasm(input, max_bytes) {
             Ok(r) => {
                 if r.code != CODE_ALLOW {
@@ -156,7 +155,7 @@ impl WasmSandbox {
         }
     }
 
-    fn eval_wasm(&self, input: &str, max_bytes: usize) -> Result<EvalResult, String> {
+    fn eval_wasm(&self, input: &str, _max_bytes: usize) -> Result<EvalResult, String> {
         let module = self.module.as_ref().unwrap();
         let mut store = Store::new(&self.engine, ());
 
@@ -185,32 +184,35 @@ impl WasmSandbox {
             .map_err(|e| format!("get_result_len: {e}"))?;
 
         // 截斷輸入（max_bytes）
-        let input_bytes = if input.len() > max_bytes {
-            &input.as_bytes()[..max_bytes]
-        } else {
-            input.as_bytes()
-        };
+        if input.len() > WASM_IO_BUFFER_BYTES {
+            return Ok(make_result(CODE_TRUNCATE, "TRUNCATE", "input_too_large", "wasm"));
+        }
+        let input_bytes = input.as_bytes();
         let input_len = input_bytes.len() as i32;
 
         // 取 buffer 指標，寫入輸入資料
         let buf_ptr = get_buffer_ptr.call(&mut store, ())
             .map_err(|e| format!("get_buffer_ptr call: {e}"))?;
-        let offset = buf_ptr as usize;
+        let offset = buf_ptr as u32 as usize;
 
         // 寫入 WASM 線性記憶體
         let mem_data = memory.data_mut(&mut store);
         let end = offset + input_bytes.len();
         if end > mem_data.len() {
-            return Err(format!("WASM memory too small: need {end}, have {}", mem_data.len()));
+            let missing = end - mem_data.len();
+            let pages = ((missing + 65_535) / 65_536) as u64;
+            memory.grow(&mut store, pages)
+                .map_err(|e| format!("WASM memory grow failed: {e}"))?;
         }
+        let mem_data = memory.data_mut(&mut store);
         mem_data[offset..end].copy_from_slice(input_bytes);
 
         // 呼叫評估函式
-        let code = eval_input.call(&mut store, (buf_ptr, input_len))
+        let code = eval_input.call(&mut store, (0, input_len))
             .map_err(|e| format!("eval_input call: {e}"))?;
 
         // 讀取結果 JSON
-        let res_ptr = get_result_ptr.call(&mut store, ()).map_err(|e| format!("get_result_ptr call: {e}"))? as usize;
+        let res_ptr = get_result_ptr.call(&mut store, ()).map_err(|e| format!("get_result_ptr call: {e}"))? as u32 as usize;
         let res_len = get_result_len.call(&mut store, ()).map_err(|e| format!("get_result_len call: {e}"))? as usize;
 
         let mem_data = memory.data(&store);

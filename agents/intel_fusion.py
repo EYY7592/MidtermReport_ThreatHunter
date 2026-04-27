@@ -22,7 +22,7 @@ from typing import Any, Callable
 
 from crewai import Agent, Task
 
-from core.config import SKILLS_DIR, SYSTEM_CONSTITUTION, degradation_status, get_llm
+from config import SKILLS_DIR, SYSTEM_CONSTITUTION, degradation_status, get_llm
 from tools.kev_tool import check_cisa_kev
 from tools.memory_tool import read_memory, write_memory
 from tools.nvd_tool import search_nvd
@@ -418,7 +418,7 @@ def run_intel_fusion(
 
     for attempt in range(MAX_RETRIES + 1):
         try:
-            from core.config import get_current_model_name, mark_model_failed
+            from config import get_current_model_name, mark_model_failed
             from crewai import Crew, Process
 
             agent = build_intel_fusion_agent(excluded_models=excluded_models)
@@ -511,8 +511,8 @@ def run_intel_fusion(
                 verbose=True,
             )
             try:
-                from core.checkpoint import recorder as _cp
-                from core.config import get_current_model_name as _gcmn
+                from checkpoint import recorder as _cp
+                from config import get_current_model_name as _gcmn
                 _if_model = _gcmn(agent.llm)
                 _cp.llm_call("intel_fusion", _if_model, "openrouter", f"attempt={attempt+1}")
             except Exception:
@@ -600,7 +600,7 @@ def run_intel_fusion(
         except Exception as e:
             error_str = str(e)
             if "429" in error_str and attempt < MAX_RETRIES:
-                from core.config import get_current_model_name, mark_model_failed
+                from config import get_current_model_name, mark_model_failed
                 try:
                     current_model = get_current_model_name(agent.llm)
                     mark_model_failed(current_model)
@@ -611,12 +611,12 @@ def run_intel_fusion(
                     logger.warning("[INTEL] 429 on %s (attempt %d/%d), api_retry_after=%.0fs",
                                   current_model, attempt + 1, MAX_RETRIES, retry_after)
                     try:
-                        from core.checkpoint import recorder as _cp2
+                        from checkpoint import recorder as _cp2
                         _cp2.llm_retry("intel_fusion", current_model, error_str[:200],
                                        attempt + 1, "next_in_waterfall")
                     except Exception:
                         pass
-                    from core.config import rate_limiter as _rl
+                    from config import rate_limiter as _rl
                     _rl.on_429(retry_after=retry_after, caller="intel_fusion")  # 最少 30s
                     continue
                 except Exception:

@@ -97,19 +97,22 @@ def _get_cache_path(package_name: str) -> str:
     return os.path.join(CACHE_DIR, f"nvd_cache_{package_name}_{safe_name}.json")
 
 
-def _read_cache(package_name: str) -> dict | None:
-    """讀取離線快取，過期或不存在回傳 None"""
+def _read_cache(package_name: str, allow_stale: bool = False) -> dict | None:
+    """讀取離線快取，過期或不存在回傳 None。"""
     cache_path = _get_cache_path(package_name)
     try:
         if os.path.exists(cache_path):
             with open(cache_path, "r", encoding="utf-8") as f:
                 cached = json.load(f)
             cached_time = cached.get("_cached_at", 0)
-            if time.time() - cached_time < CACHE_TTL:
+            cache_age = time.time() - cached_time
+            if cache_age < CACHE_TTL:
                 logger.info("[OK] NVD cache hit: %s", package_name)
                 return cached
-            else:
-                logger.info("[INFO] NVD cache expired: %s", package_name)
+            if allow_stale:
+                logger.warning("[WARN] NVD stale cache fallback: %s (age=%.0fs)", package_name, cache_age)
+                return cached
+            logger.info("[INFO] NVD cache expired: %s", package_name)
     except (json.JSONDecodeError, IOError) as e:
         logger.warning("[WARN] NVD cache read failed: %s", e)
     return None
@@ -476,10 +479,11 @@ def _search_nvd_impl(package_name: str) -> str:
                     return json.dumps(result, ensure_ascii=False, indent=2)
                 logger.info("[INFO] NVD keyword no results for: %s, trying next alias", keyword)
                 continue
-            cached = _read_cache(keyword)
+            cached = _read_cache(keyword, allow_stale=True)
             if cached:
                 cached.pop("_cached_at", None)
                 cached["fallback_used"] = True
+                cached["cache_stale"] = True
                 cached["error"] = f"NVD API unavailable, using cached data for '{keyword}'"
                 return json.dumps(cached, ensure_ascii=False, indent=2)
 

@@ -20,7 +20,7 @@ from typing import Any
 
 from crewai import Agent, Task
 
-from core.config import get_llm, LLM_RPM
+from config import get_llm, LLM_RPM
 from tools.kev_tool import check_cisa_kev
 from tools.exploit_tool import search_exploits
 from tools.memory_tool import read_memory, write_memory, history_search
@@ -60,7 +60,12 @@ SKILL_MAP: dict[str, str] = {
     "config":    "config_chain_analysis.md", # Path C: config chain
 }
 
-def _load_skill() -> str:
+def _resolve_skill_path(skill_filename: str) -> str:
+    """Return the absolute path for the requested Analyst skill file."""
+    return os.path.join(PROJECT_ROOT, "skills", skill_filename)
+
+
+def _load_skill(skill_filename: str = "chain_analysis.md") -> str:
     """
     載入 Skill SOP 文件內容。
 
@@ -68,18 +73,20 @@ def _load_skill() -> str:
       - 檔案不存在 → 使用內嵌的精簡版 Skill（Graceful Degradation）
       - 編碼錯誤 → 嘗試 utf-8-sig → 仍失敗 → 內嵌版
     """
+    skill_path = _resolve_skill_path(skill_filename)
+
     for encoding in ("utf-8", "utf-8-sig", "latin-1"):
         try:
-            if os.path.exists(SKILL_PATH):
-                with open(SKILL_PATH, "r", encoding=encoding) as f:
+            if os.path.exists(skill_path):
+                with open(skill_path, "r", encoding=encoding) as f:
                     content = f.read().strip()
                 if content:
-                    logger.info("[OK] Skill loaded: %s (%d chars)", SKILL_PATH, len(content))
+                    logger.info("[OK] Skill loaded: %s (%d chars)", skill_path, len(content))
                     return content
         except (IOError, UnicodeDecodeError):
             continue
 
-    logger.warning("[WARN] Skill file load failed, using fallback: %s", SKILL_PATH)
+    logger.warning("[WARN] Skill file load failed, using fallback: %s", skill_path)
     return _FALLBACK_SKILL
 
 
@@ -109,9 +116,10 @@ _FALLBACK_SKILL = """
 # 第二部份：Agent 工廠函式
 # ══════════════════════════════════════════════════════════════
 
-def _build_analyst_backstory() -> str:
+def _build_analyst_backstory(input_type: str = "pkg") -> str:
     """建立共用的 Analyst backstory（系統憲法 + Skill SOP）"""
-    skill_content = _load_skill()
+    skill_filename = SKILL_MAP.get(input_type, "chain_analysis.md")
+    skill_content = _load_skill(skill_filename)
     return f"""You are a senior vulnerability analyst specializing in attack chain analysis
 and exploit intelligence. You are precise, methodical, and never fabricate data.
 
@@ -127,7 +135,10 @@ The following is your standard operating procedure for vulnerability chain analy
 """
 
 
-def create_analyst_agent(excluded_models: list[str] | None = None) -> Agent:
+def create_analyst_agent(
+    excluded_models: list[str] | None = None,
+    input_type: str = "pkg",
+) -> Agent:
     """
     建立 Analyst Agent 實例（完整工具版，供 main.py 使用）。
 
@@ -137,7 +148,7 @@ def create_analyst_agent(excluded_models: list[str] | None = None) -> Agent:
     Returns:
         CrewAI Agent 實例，可直接用於 Task 和 Crew
     """
-    backstory = _build_analyst_backstory()
+    backstory = _build_analyst_backstory(input_type=input_type)
 
     analyst = Agent(
         role="漏洞連鎖分析師 (Analyst)",
@@ -155,7 +166,8 @@ def create_analyst_agent(excluded_models: list[str] | None = None) -> Agent:
     )
 
     logger.info(
-        "[OK] Analyst Agent created | tools=%s | max_iter=%s | llm=%s",
+        "[OK] Analyst Agent created | input_type=%s | tools=%s | max_iter=%s | llm=%s",
+        input_type,
         [t.name for t in analyst.tools],
         analyst.max_iter,
         analyst.llm.model if hasattr(analyst.llm, 'model') else 'unknown'
@@ -738,6 +750,7 @@ def _build_fallback_output(scout_data: dict[str, Any]) -> dict[str, Any]:
     根據 Scout 輸出建立最小可行的 Analyst 報告。
     """
     vulns = scout_data.get("vulnerabilities", [])
+    code_patterns = scout_data.get("code_patterns", [])
     analysis = []
 
     for v in vulns:
@@ -747,6 +760,8 @@ def _build_fallback_output(scout_data: dict[str, Any]) -> dict[str, Any]:
 
         analysis.append({
             "cve_id": cve_id,
+            "package": v.get("package", "unknown"),
+            "severity": severity,
             "original_cvss": cvss,
             "adjusted_risk": severity,
             "in_cisa_kev": False,
@@ -760,11 +775,48 @@ def _build_fallback_output(scout_data: dict[str, Any]) -> dict[str, Any]:
             "reasoning": f"Fallback analysis: CVSS {cvss:.1f} ({severity}), KEV/Exploit status unknown (Harness fallback)",
         })
 
+    for pattern in code_patterns:
+        severity = pattern.get("severity", "MEDIUM")
+        if severity == "CRITICAL":
+            cvss_equivalent = 9.0
+        elif severity == "HIGH":
+            cvss_equivalent = 7.5
+        elif severity == "MEDIUM":
+            cvss_equivalent = 5.0
+        else:
+            cvss_equivalent = 2.5
+
+        analysis.append({
+            "finding_id": pattern.get("finding_id", "CODE-000"),
+            "cve_id": None,
+            "pattern_type": pattern.get("pattern_type", "UNKNOWN"),
+            "cwe_id": pattern.get("cwe_id", "CWE-unknown"),
+            "owasp_category": pattern.get("owasp_category", ""),
+            "severity": severity,
+            "snippet": pattern.get("snippet", ""),
+            "line_no": pattern.get("line_no", 0),
+            "original_cvss": cvss_equivalent,
+            "adjusted_risk": severity,
+            "in_cisa_kev": False,
+            "exploit_available": False,
+            "chain_risk": {
+                "is_chain": False,
+                "chain_with": [],
+                "chain_description": "Deterministic code pattern preserved in Analyst fallback.",
+                "confidence": "HIGH",
+            },
+            "reasoning": (
+                f"Fallback analysis: deterministic {pattern.get('pattern_type', 'UNKNOWN')} "
+                f"pattern confirmed by Security Guard ({pattern.get('cwe_id', 'CWE-unknown')})."
+            ),
+        })
+
     # 計算風險分數
     weight_map = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0.5}
     risk_score = min(100, int(sum(
-        float(v.get("cvss_score", 0)) * weight_map.get(v.get("severity", "LOW"), 1)
-        for v in vulns
+        float(item.get("original_cvss", 0))
+        * weight_map.get(item.get("adjusted_risk", item.get("severity", "LOW")), 1)
+        for item in analysis
     )))
 
     now = datetime.now(timezone.utc)
@@ -828,7 +880,7 @@ def run_analyst_pipeline(scout_output: str | dict, input_type: str = "pkg") -> d
     pre_mtime = os.path.getmtime(memory_path_check) if os.path.exists(memory_path_check) else 0
 
     # 429 自動輪替：最多重試 MAX_LLM_RETRIES 次（每次切換模型）
-    from core.config import mark_model_failed, get_current_model_name
+    from config import mark_model_failed, get_current_model_name
     MAX_LLM_RETRIES = 2
     excluded_models: list[str] = []
 
@@ -857,7 +909,7 @@ def run_analyst_pipeline(scout_output: str | dict, input_type: str = "pkg") -> d
             )
             logger.info("[START] Analyst Crew kickoff (attempt %d/%d)", attempt + 1, MAX_LLM_RETRIES + 1)
             try:
-                from core.checkpoint import recorder as _cp
+                from checkpoint import recorder as _cp
                 _a_model = get_current_model_name(collector.llm)
                 _cp.llm_call("analyst", _a_model, "openrouter", f"3-task-split attempt={attempt+1}")
             except Exception:
@@ -892,7 +944,7 @@ def run_analyst_pipeline(scout_output: str | dict, input_type: str = "pkg") -> d
                                   attempt + 1, "next_in_waterfall")
                 except Exception:
                     pass
-                from core.config import rate_limiter as _rl
+                from config import rate_limiter as _rl
                 _rl.on_429(retry_after=retry_after, caller="analyst")  # 最少 30s
                 continue
 

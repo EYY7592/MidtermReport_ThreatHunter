@@ -1,32 +1,55 @@
-# ThreatHunter Tools 模組
-# CrewAI @tool 裝飾器函式集合
+# ThreatHunter tools package
+# 保留 package-level export 契約，但以 proxy 方式延後真正 import，
+# 避免單純 `import tools` / `hasattr(tools, "...")` 就觸發 CrewAI 副作用。
 
-from tools.nvd_tool import search_nvd
-from tools.osv_tool import search_osv, search_osv_batch
-from tools.otx_tool import search_otx
-from tools.kev_tool import check_cisa_kev
-from tools.exploit_tool import search_exploits
-from tools.epss_tool import fetch_epss_score, get_epss_score
-from tools.attck_tool import lookup_attck_by_cwe, lookup_attck_by_description, get_attck_for_cve
-from tools.memory_tool import read_memory, write_memory, history_search
+from importlib import import_module
+from typing import Any
 
-__all__ = [
-    # 漏洞查詢（OSV 為主力，NVD 為 fallback）
-    "search_nvd",
-    "search_osv",
-    "search_osv_batch",    # 批量查詢多套件
-    "search_otx",
-    "check_cisa_kev",
-    "search_exploits",
-    # EPSS — 六維分析 EPSS 維度（30% 權重），真實 API
-    "fetch_epss_score",
-    "get_epss_score",      # 程式碼層直接使用
-    # ATT&CK — 六維分析 ATT&CK 維度（10% 權重），CWE->CAPEC->ATT&CK 映射
-    "lookup_attck_by_cwe",
-    "lookup_attck_by_description",
-    "get_attck_for_cve",   # Intel Fusion 直接調用
-    # 記憶系統
-    "read_memory",
-    "write_memory",
-    "history_search",
-]
+
+class _LazyToolProxy:
+    def __init__(self, module_name: str, attr_name: str) -> None:
+        self._module_name = module_name
+        self._attr_name = attr_name
+        self._loaded: Any | None = None
+
+    def _load(self) -> Any:
+        if self._loaded is None:
+            module = import_module(self._module_name)
+            self._loaded = getattr(module, self._attr_name)
+        return self._loaded
+
+    def __call__(self, *args, **kwargs):
+        return self._load()(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._load(), name)
+
+    def __repr__(self) -> str:
+        return f"<LazyToolProxy {self._module_name}:{self._attr_name}>"
+
+
+_EXPORTS = {
+    "search_nvd": ("tools.nvd_tool", "search_nvd"),
+    "search_osv": ("tools.osv_tool", "search_osv"),
+    "search_osv_batch": ("tools.osv_tool", "search_osv_batch"),
+    "search_otx": ("tools.otx_tool", "search_otx"),
+    "check_cisa_kev": ("tools.kev_tool", "check_cisa_kev"),
+    "search_exploits": ("tools.exploit_tool", "search_exploits"),
+    "fetch_epss_score": ("tools.epss_tool", "fetch_epss_score"),
+    "get_epss_score": ("tools.epss_tool", "get_epss_score"),
+    "lookup_attck_by_cwe": ("tools.attck_tool", "lookup_attck_by_cwe"),
+    "lookup_attck_by_description": ("tools.attck_tool", "lookup_attck_by_description"),
+    "get_attck_for_cve": ("tools.attck_tool", "get_attck_for_cve"),
+    "read_memory": ("tools.memory_tool", "read_memory"),
+    "write_memory": ("tools.memory_tool", "write_memory"),
+    "history_search": ("tools.memory_tool", "history_search"),
+}
+
+__all__ = list(_EXPORTS)
+
+for _name, (_module_name, _attr_name) in _EXPORTS.items():
+    globals()[_name] = _LazyToolProxy(_module_name, _attr_name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

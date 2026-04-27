@@ -21,11 +21,11 @@
 | 領域 | 路徑 | 職責 |
 |---|---|---|
 | 配置 | `config.py` | LLM 切換 + API Key + 降級瀑布 |
-| 工具 | `tools/` | CrewAI @tool 函式（NVD/OTX/KEV/Exploit/Memory） |
-| Agent | `agents/` | Agent 定義（Scout/Analyst/Advisor/Critic） |
+| 工具 | `tools/` | CrewAI @tool 函式（NVD/OSV/GHSA/OTX/EPSS/KEV/Exploit/Memory） |
+| Agent | `agents/` | Agent 定義（Orchestrator/Security Guard/Intel Fusion/Scout/Analyst/Advisor/Critic） |
 | Skill | `skills/` | Agent SOP 文件（.md） |
 | 記憶 | `memory/` | 雙層持久化（JSON + LlamaIndex） |
-| UI | `ui/` | Streamlit 介面 |
+| UI | `ui/` | FastAPI + SSE + static dashboard |
 | Harness | `harness/` | 三柱架構基礎設施 |
 | 測試 | `tests/` | pytest 測試 |
 
@@ -62,8 +62,8 @@ harness/entropy/    （第 3 層）← 可引用 context 和 constraints
 → 參考：`docs/data_contracts.md`（輸出格式）
 
 ### 如果你的任務是「修改 UI」
-→ 路徑：`ui/app.py`
-→ 啟動：`streamlit run ui/app.py`
+→ 路徑：`ui/server.py`、`ui/static/`
+→ 啟動：`uv run python ui/server.py`
 
 ### 如果你的任務是「修改 main.py Pipeline」
 → 路徑：`main.py`

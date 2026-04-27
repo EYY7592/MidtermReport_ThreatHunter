@@ -1,0 +1,17 @@
+{
+  "execution_time_seconds": 514.745,
+  "iterations_per_agent": 10000,
+  "total_test_cases": 20000,
+  "advisor": {
+    "success": 7500,
+    "fallback": 2500,
+    "exception_escaped": 0
+  },
+  "advisor_defects_found": {},
+  "critic": {
+    "success": 0,
+    "fallback": 10000,
+    "exception_escaped": 0
+  },
+  "critic_defects_found": {}
+}

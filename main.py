@@ -47,7 +47,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any
 
-from core.config import (
+from config import (
     ENABLE_CRITIC,
     degradation_status,
     rate_limiter,
@@ -62,7 +62,7 @@ import os  # noqa: E402 (import after logger for ordering clarity)
 # (comment encoding corrupted)
 # (comment encoding corrupted)
 # (comment encoding corrupted)
-SANDBOX_ENABLED = os.getenv("SANDBOX_ENABLED", "false").lower() == "true"
+SANDBOX_ENABLED = os.getenv("SANDBOX_ENABLED", "true").lower() == "true"
 
 try:
     from sandbox.docker_sandbox import run_in_sandbox, is_docker_available
@@ -129,7 +129,11 @@ class StepLogger:
 # ======================================================================
 
 
-def stage_scout(tech_stack: str, input_type: str = "pkg") -> tuple[dict[str, Any], StepLogger]:
+def stage_scout(
+    tech_stack: str,
+    input_type: str = "pkg",
+    intel_fusion_result: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], StepLogger]:
     """
     Stage 1: Scout Agent 萄瞍瘣
     雿輻 agents/scout.py 撖血祕雿
@@ -147,7 +151,11 @@ def stage_scout(tech_stack: str, input_type: str = "pkg") -> tuple[dict[str, Any
 
     t0 = time.time()
     try:
-        result = run_scout_pipeline(tech_stack, input_type=input_type)
+        result = run_scout_pipeline(
+            tech_stack,
+            input_type=input_type,
+            intel_fusion_result=intel_fusion_result,
+        )
 
         duration_ms = int((time.time() - t0) * 1000)
         vuln_count = len(result.get("vulnerabilities", []))
@@ -534,7 +542,7 @@ def _build_code_patterns_summary(sg_result: dict) -> list[dict]:
     確定性抽出 + MITRE CWE v4.14 佐証注入。
     LLM に依存しない。
     """
-    _DEFAULT_META = ("CWE-UNKNOWN", "A03:2021-Injection", "MEDIUM")
+    _DEFAULT_META = ("CWE-unknown", "A03:2021-Injection", "MEDIUM")
     _SEVERITY_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
 
     _PATTERN_META: dict[str, tuple[str, str, str]] = {
@@ -665,6 +673,123 @@ def _build_code_patterns_summary(sg_result: dict) -> list[dict]:
     )
     return code_patterns
 
+
+def _summarize_vulnerabilities(vulnerabilities: list[dict[str, Any]]) -> dict[str, int]:
+    """根據漏洞清單建立前端可直接使用的摘要數字。"""
+    summary = {
+        "total": 0,
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "new": 0,
+        "new_since_last_scan": 0,
+    }
+
+    for vuln in vulnerabilities:
+        summary["total"] += 1
+        severity = str(vuln.get("severity", "LOW")).upper()
+        if severity == "CRITICAL":
+            summary["critical"] += 1
+        elif severity == "HIGH":
+            summary["high"] += 1
+        elif severity == "MEDIUM":
+            summary["medium"] += 1
+        else:
+            summary["low"] += 1
+
+        if vuln.get("is_new"):
+            summary["new"] += 1
+            summary["new_since_last_scan"] += 1
+
+    return summary
+
+
+def _build_scan_report_payload(
+    scout_output: dict[str, Any],
+    advisor_output: dict[str, Any],
+    layer1_results: dict[str, Any],
+) -> dict[str, Any]:
+    """整理本次 scan 專屬的漏洞明細，避免 UI 回頭讀取全域記憶。"""
+    intel_applied = scout_output.get("_intel_fusion_applied", {})
+    vulnerabilities: list[dict[str, Any]] = []
+
+    for vuln in scout_output.get("vulnerabilities", []):
+        entry = dict(vuln)
+        entry.setdefault("source", "SCOUT")
+
+        enriched_by = list(entry.get("enriched_by", []))
+        if intel_applied and entry.get("source") != "INTEL_FUSION":
+            if any(
+                field in entry
+                for field in (
+                    "composite_score",
+                    "epss_score",
+                    "ghsa_severity",
+                    "otx_threat",
+                    "intel_confidence",
+                    "dimensions_used",
+                    "weights_used",
+                    "in_cisa_kev",
+                )
+            ):
+                if "INTEL_FUSION" not in enriched_by:
+                    enriched_by.append("INTEL_FUSION")
+
+        if enriched_by:
+            entry["enriched_by"] = enriched_by
+        vulnerabilities.append(entry)
+
+    detail_source = "scout_final_output"
+    if vulnerabilities:
+        summary = dict(scout_output.get("summary", {}))
+        summary.setdefault("new", summary.get("new_since_last_scan", 0))
+        summary.setdefault("new_since_last_scan", summary.get("new", 0))
+    else:
+        detail_source = "advisor_actions_fallback"
+        for level in ("urgent", "important", "resolved"):
+            for item in advisor_output.get("actions", {}).get(level, []):
+                vulnerabilities.append({
+                    "cve_id": item.get("cve_id", ""),
+                    "package": item.get("package", "unknown"),
+                    "cvss_score": item.get("cvss_score", 0),
+                    "severity": item.get("severity", "MEDIUM"),
+                    "description": item.get("action", ""),
+                    "is_new": item.get("is_new", False),
+                    "source": "ADVISOR_ACTIONS",
+                    "report_level": level.upper(),
+                })
+        summary = _summarize_vulnerabilities(vulnerabilities)
+
+    layer1_agents = [name for name in ("security_guard", "intel_fusion") if name in layer1_results]
+    degraded_agents = [
+        name for name in layer1_agents
+        if isinstance(layer1_results.get(name), dict) and layer1_results[name].get("_degraded")
+    ]
+    if not layer1_agents:
+        layer1_state = "skipped"
+    elif degraded_agents:
+        layer1_state = "degraded"
+    else:
+        layer1_state = "merged"
+
+    report_sources: dict[str, Any] = {
+        "vulnerability_detail": detail_source,
+        "enriched_by": ["intel_fusion"] if intel_applied else [],
+        "fallbacks": ["advisor_actions"] if detail_source == "advisor_actions_fallback" else [],
+        "layer1_state": layer1_state,
+    }
+    if degraded_agents:
+        report_sources["degraded_agents"] = degraded_agents
+    if intel_applied:
+        report_sources["intel_fusion_applied"] = intel_applied
+
+    return {
+        "vulnerability_detail": vulnerabilities,
+        "vulnerability_summary": summary,
+        "report_sources": report_sources,
+    }
+
 def _run_layer1_parallel(
     tech_stack: str,
     task_plan: dict,
@@ -731,72 +856,83 @@ def _run_layer1_parallel(
                 "_degraded": True, "_error": str(e),
             })
 
-    # (comment encoding corrupted)
-    # (comment encoding corrupted)
-    # (comment encoding corrupted)
-    extracted_packages: list[str] = []
-
-    if "security_guard" in parallel_agents:
-        rate_limiter.wait_if_needed("security_guard")
-        _, sg_result = _run_security_guard()
-        layer1_results["security_guard"] = sg_result
-        logger.info("[LAYER1] security_guard complete")
-
-        # (comment encoding corrupted)
+    def _extract_packages_from_sg_result(sg_result: dict[str, Any]) -> list[str]:
+        """從 Security Guard 結果萃取第三方套件，供後續 Scout 使用。"""
         try:
             from tools.package_extractor import packages_from_security_guard
-            extracted_packages = packages_from_security_guard(sg_result)
+
+            extracted = packages_from_security_guard(sg_result)
             logger.info(
                 "[LAYER1] PackageExtractor: %d packages extracted from imports: %s",
-                len(extracted_packages), extracted_packages,
+                len(extracted), extracted,
             )
+            return extracted
         except Exception as pe:
             logger.warning("[LAYER1] PackageExtractor failed (fallback to raw input): %s", pe)
-            extracted_packages = []
+            return []
 
-    if "intel_fusion" in parallel_agents:
-        rate_limiter.wait_if_needed("intel_fusion")
-
-        # (comment encoding corrupted)
-        # (comment encoding corrupted)
-        # (comment encoding corrupted)
-        # (comment encoding corrupted)
-        # (comment encoding corrupted)
+    def _extract_cwe_targets_from_sg_result(sg_result: dict[str, Any]) -> list[str]:
+        """從 Security Guard patterns 中整理 CWE targets，供 observability 與 fallback 使用。"""
+        sg_patterns = sg_result.get("patterns", [])
+        seen_cwe: set[str] = set()
         cwe_targets: list[str] = []
-        if not extracted_packages and "security_guard" in layer1_results:
-            sg_patterns = layer1_results["security_guard"].get("patterns", [])  # SG output key is "patterns"
-            seen_cwe: set[str] = set()
-            for pattern in sg_patterns:
-                cwe = pattern.get("cwe_id", "")
-                # (comment encoding corrupted)
-                if cwe and cwe.startswith("CWE-") and cwe not in seen_cwe:
-                    seen_cwe.add(cwe)
-                    cwe_targets.append(cwe)
-            if cwe_targets:
-                logger.info(
-                    "[LAYER1] Intel Fusion: extracted_packages empty, "
-                    "using %d CWE targets from Security Guard: %s",
-                    len(cwe_targets), cwe_targets,
-                )
+        for pattern in sg_patterns:
+            cwe = pattern.get("cwe_id", "")
+            if cwe and cwe.startswith("CWE-") and cwe not in seen_cwe:
+                seen_cwe.add(cwe)
+                cwe_targets.append(cwe)
+        return cwe_targets
 
-        # (comment encoding corrupted)
-        if extracted_packages:
-            intel_input: list | str = extracted_packages
-            logger.info("[LAYER1] Intel Fusion input: %d packages", len(intel_input))
-        elif cwe_targets:
-            intel_input = cwe_targets  #  CWE ID 亥岷 NVD
-            logger.info("[LAYER1] Intel Fusion input: %d CWE targets (no packages detected)", len(intel_input))
-        else:
-            intel_input = tech_stack
-            logger.info("[LAYER1] Intel Fusion input: raw tech_stack (fallback)")
+    extracted_packages: list[str] = []
+    cwe_targets: list[str] = []
+    requested_workers = [
+        agent_name
+        for agent_name in ("security_guard", "intel_fusion")
+        if agent_name in parallel_agents
+    ]
 
-        _, if_result = _run_intel_fusion(intel_input)
-        # (comment encoding corrupted)
-        if_result["_extracted_packages"] = extracted_packages
+    if not requested_workers:
+        return layer1_results
+
+    futures: dict[Any, str] = {}
+    max_workers = len(requested_workers)
+
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="layer1") as executor:
+        if "security_guard" in requested_workers:
+            rate_limiter.wait_if_needed("security_guard")
+            futures[executor.submit(_run_security_guard)] = "security_guard"
+
+        if "intel_fusion" in requested_workers:
+            rate_limiter.wait_if_needed("intel_fusion")
+            intel_input: list | str = tech_stack
+            logger.info("[LAYER1] Intel Fusion input: raw tech_stack (parallel start)")
+            futures[executor.submit(_run_intel_fusion, intel_input)] = "intel_fusion"
+
+        for future in as_completed(futures):
+            agent_name = futures[future]
+            try:
+                result_name, result_payload = future.result()
+            except Exception as exc:
+                logger.error("[LAYER1] %s future failed unexpectedly: %s", agent_name, exc)
+                degradation_status.degrade(agent_name, str(exc))
+                continue
+
+            layer1_results[result_name] = result_payload
+            logger.info("[LAYER1] %s complete", result_name)
+
+            if result_name == "security_guard":
+                extracted_packages = _extract_packages_from_sg_result(result_payload)
+                cwe_targets = _extract_cwe_targets_from_sg_result(result_payload)
+                if cwe_targets:
+                    logger.info(
+                        "[LAYER1] Security Guard produced %d CWE targets: %s",
+                        len(cwe_targets), cwe_targets,
+                    )
+
+    if "intel_fusion" in layer1_results:
+        layer1_results["intel_fusion"]["_extracted_packages"] = extracted_packages
         if cwe_targets:
-            if_result["_cwe_targets"] = cwe_targets
-        layer1_results["intel_fusion"] = if_result
-        logger.info("[LAYER1] intel_fusion complete")
+            layer1_results["intel_fusion"]["_cwe_targets"] = cwe_targets
 
     return layer1_results
 
@@ -887,7 +1023,7 @@ def run_pipeline_with_callback(
     logger.info("=" * 60)
 
     # (comment encoding corrupted)
-    from core.checkpoint import recorder
+    from checkpoint import recorder
     recorder.start_scan(f"pipe_{int(pipeline_start)}")
 
     # (comment encoding corrupted)
@@ -895,7 +1031,7 @@ def run_pipeline_with_callback(
     l0_report: dict[str, Any] = {}
     sanitized_stack: str = tech_stack
     try:
-        from core.input_sanitizer import sanitize_input, format_l0_report
+        from input_sanitizer import sanitize_input, format_l0_report
         san_result = sanitize_input(tech_stack)
         l0_report = format_l0_report(san_result)
 
@@ -1038,8 +1174,12 @@ def run_pipeline_with_callback(
     else:
         scout_input = tech_stack
         logger.info("[PIPELINE] Scout using raw tech_stack (no packages extracted)")
-    scout_output, scout_sl = stage_scout(scout_input, input_type=input_type)
-    # (comment encoding corrupted)
+    scout_output, scout_sl = stage_scout(
+        scout_input,
+        input_type=input_type,
+        intel_fusion_result=layer1_results.get("intel_fusion"),
+    )
+    # 保留原始 Layer 1 情報，方便 UI 與除錯觀察。
     if "intel_fusion" in layer1_results:
         scout_output["intel_fusion_result"] = layer1_results["intel_fusion"]
 
@@ -1231,7 +1371,12 @@ def run_pipeline_with_callback(
     # _sg_code_patterns 由 _build_code_patterns_summary() 生成，含 MITRE CWE 定義。
     # Advisor LLM 從不接收 code_patterns，因此必須在 return 前直接合併。
     # 確保無論掃描路徑（A/B/C）都能在 API response 中看到 CWE 佐證。
-    final_output: dict[str, Any] = {**advisor_output, "pipeline_meta": pipeline_meta}
+    report_payload = _build_scan_report_payload(scout_output, advisor_output, layer1_results)
+    final_output: dict[str, Any] = {
+        **advisor_output,
+        **report_payload,
+        "pipeline_meta": pipeline_meta,
+    }
     if _sg_code_patterns:
         existing_cps = final_output.get("code_patterns_summary", [])
         final_output["code_patterns_summary"] = existing_cps + _sg_code_patterns

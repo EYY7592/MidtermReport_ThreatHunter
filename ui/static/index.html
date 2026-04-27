@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="ThreatHunter — 多 Agent 資安威脅情報平台，即時漏洞掃描與行動報告" />
   <title>ThreatHunter — Security Intelligence Platform</title>
-  <link rel="stylesheet" href="/static/style.css?v=5.1" />
+  <link rel="stylesheet" href="/static/style.css?v=5.2" />
 </head>
 <body>
 <div id="app">
@@ -139,7 +139,13 @@
     <div id="pipelineBar" class="pipeline-bar hidden">
       <span id="stepOrchestrator" class="pipeline-step step-pending">Orch</span>
       <span class="step-arrow">→</span>
-      <span id="stepLayer1" class="pipeline-step step-pending">Guard</span>
+      <div id="stepLayer1" class="pipeline-step pipeline-step-parallel step-pending">
+        <span class="parallel-step-title">L1 Parallel</span>
+        <span class="parallel-step-chips">
+          <span id="stepChipSecurityGuard" class="parallel-step-chip state-pending">SG</span>
+          <span id="stepChipIntelFusion" class="parallel-step-chip state-pending">IF</span>
+        </span>
+      </div>
       <span class="step-arrow">→</span>
       <span id="stepScout" class="pipeline-step step-pending">Scout</span>
       <span class="step-arrow">→</span>
@@ -148,6 +154,52 @@
       <span id="stepCritic" class="pipeline-step step-pending">Critic</span>
       <span class="step-arrow">→</span>
       <span id="stepAdvisor" class="pipeline-step step-pending">Advisor</span>
+    </div>
+
+    <div id="parallelVisualizer" class="parallel-visualizer hidden">
+      <div class="parallel-visualizer-header">
+        <div>
+          <div class="parallel-visualizer-title">Layer 1 Parallel Runtime</div>
+          <div id="parallelSummary" class="parallel-visualizer-subtitle">
+            Security Guard and Intel Fusion launch together, then merge into Scout.
+          </div>
+        </div>
+        <span id="parallelMergeBadge" class="parallel-merge-badge state-pending">SYNC PENDING</span>
+      </div>
+
+      <div class="parallel-lane-grid">
+        <div id="laneSecurityGuard" class="parallel-lane state-pending">
+          <div class="parallel-lane-top">
+            <span class="parallel-lane-name">Security Guard</span>
+            <span id="laneStatusSecurityGuard" class="parallel-lane-status">WAITING</span>
+          </div>
+          <div class="parallel-track">
+            <span class="parallel-track-line"></span>
+            <span class="parallel-packet packet-1"></span>
+            <span class="parallel-packet packet-2"></span>
+            <span class="parallel-packet packet-3"></span>
+          </div>
+          <div id="laneDetailSecurityGuard" class="parallel-lane-detail">Awaiting launch</div>
+        </div>
+
+        <div id="laneIntelFusion" class="parallel-lane state-pending">
+          <div class="parallel-lane-top">
+            <span class="parallel-lane-name">Intel Fusion</span>
+            <span id="laneStatusIntelFusion" class="parallel-lane-status">WAITING</span>
+          </div>
+          <div class="parallel-track">
+            <span class="parallel-track-line"></span>
+            <span class="parallel-packet packet-1"></span>
+            <span class="parallel-packet packet-2"></span>
+            <span class="parallel-packet packet-3"></span>
+          </div>
+          <div id="laneDetailIntelFusion" class="parallel-lane-detail">Awaiting launch</div>
+        </div>
+      </div>
+
+      <div class="parallel-merge-row">
+        <div id="parallelMergeNode" class="parallel-merge-node state-pending">Awaiting dual-lane launch</div>
+      </div>
     </div>
 
     <!-- Agent Status Cards -->
@@ -168,7 +220,7 @@
           <div class="agent-detail" id="detailOrchestrator">—</div>
         </div>
       </div>
-      <div class="agent-card" id="cardSecurityGuard">
+      <div class="agent-card parallel-agent" id="cardSecurityGuard">
         <div class="agent-icon-wrap">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -184,7 +236,7 @@
           <div class="agent-detail" id="detailSecurityGuard">—</div>
         </div>
       </div>
-      <div class="agent-card" id="cardIntelFusion">
+      <div class="agent-card parallel-agent" id="cardIntelFusion">
         <div class="agent-icon-wrap">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/>
@@ -288,6 +340,30 @@
           <div class="meta-row"><span class="meta-label">Critic Score</span><span class="meta-value" id="metaScore">—</span></div>
           <div class="meta-row"><span class="meta-label">Degradation</span><span class="meta-value" id="metaDeg">—</span></div>
         </div>
+        <div class="section-label runtime-label">Runtime Protection</div>
+        <div id="runtimeProtectionPanel" class="runtime-panel">
+          <div class="runtime-row" id="runtimeCheckpointRow">
+            <span class="runtime-name">Rust Checkpoint Writer</span>
+            <span class="runtime-badge state-loading" id="runtimeCheckpoint">CHECKING</span>
+          </div>
+          <div class="runtime-row" id="runtimeWasmRow">
+            <span class="runtime-name">WASM Prompt Sandbox</span>
+            <span class="runtime-badge state-loading" id="runtimeWasm">CHECKING</span>
+          </div>
+          <div class="runtime-row" id="runtimeDockerRow">
+            <span class="runtime-name">Docker Sandbox</span>
+            <span class="runtime-badge state-loading" id="runtimeDocker">CHECKING</span>
+          </div>
+          <div class="runtime-row" id="runtimeMemoryRow">
+            <span class="runtime-name">Memory Sanitizer</span>
+            <span class="runtime-badge state-loading" id="runtimeMemory">CHECKING</span>
+          </div>
+          <div class="runtime-row" id="runtimeAstRow">
+            <span class="runtime-name">AST Guard</span>
+            <span class="runtime-badge state-loading" id="runtimeAst">CHECKING</span>
+          </div>
+          <div class="runtime-note" id="runtimeProtectionNote">Runtime capability check runs automatically.</div>
+        </div>
       </div>
     </div>
 
@@ -304,6 +380,16 @@
       <div class="section-label">Executive Summary</div>
       <div class="exec-summary">
         <div class="exec-text" id="execSummary">—</div>
+      </div>
+
+      <div class="section-label">Result Lineage</div>
+      <div id="resultLineage" class="result-lineage">
+        <div id="resultSourceChips" class="lineage-chip-row">
+          <span class="lineage-chip neutral">Awaiting scan result</span>
+        </div>
+        <div id="resultLineageNote" class="lineage-note">
+          Scan-scoped evidence lineage will appear here after the pipeline completes.
+        </div>
       </div>
 
       <!-- Metric Cards -->
@@ -369,6 +455,12 @@
         </div>
       </div>
 
+      <!-- Vulnerability Glossary -->
+      <div class="section-label">VULNERABILITY GLOSSARY</div>
+      <div id="vulnGlossary" class="vuln-glossary">
+        <div class="report-empty">Run a scan to see CWE, CVSS, and NVD explanations.</div>
+      </div>
+
       <!-- Security Guard: Code Pattern CWE Evidence -->
       <div id="codePatternsCWESection" style="display:none;margin-top:1.5rem;">
         <div class="report-card" style="border:1px solid rgba(248,81,73,0.3);background:rgba(248,81,73,0.04);">
@@ -420,6 +512,6 @@
   </div>
 </aside>
 
-<script src="/static/app.js?v=5.1"></script>
+<script src="/static/app.js?v=5.2"></script>
 </body>
 </html>
